@@ -1,0 +1,78 @@
+{
+  "common": {
+    "dashboard": "لوحة القيادة",
+    "jobs": "الوظائف",
+    "clients": "العملاء",
+    "employees": "الموظفين",
+    "services": "الخدمات",
+    "finance": "المالية",
+    "notifications": "الإشعارات",
+    "settings": "الإعدادات",
+    "audit_logs": "سجلات التدقيق",
+    "search": "بحث",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "close": "إغلاق",
+    "actions": "الإجراءات",
+    "logout": "تسجيل الخروج",
+    "collapse": "طي",
+    "expand": "توسيع",
+    "status": {
+      "active": "نشط",
+      "completed": "مكتمل",
+      "pending": "قيد الانتظار",
+      "on_hold": "متوقف مؤقتاً",
+      "awaiting_govt": "في انتظار الحكومة"
+    }
+  },
+  "sidebar": {
+    "home": "الرئيسية",
+    "employees": "الموظفين",
+    "clients": "العملاء",
+    "services": "الخدمات",
+    "jobs": "الوظائف",
+    "approvals": "مركز الموافقات",
+    "finance": "المالية",
+    "audit": "تدقيق النظام",
+    "my_tasks": "مهامي",
+    "notifications": "الإشعارات",
+    "profile": "الحساب والأمان",
+    "support": "مركز الدعم"
+  },
+  "admin": {
+
+    "settings": {
+      "title": "إعدادات النظام",
+      "tabs": {
+        "company": "الشركة",
+        "notifications": "الإشعارات",
+        "templates": "قوالب البريد",
+        "integrations": "التكاملات",
+        "security": "الأمان"
+      },
+      "company": {
+        "identity": "الهوية والعلامة التجارية",
+        "name": "اسم الشركة",
+        "email": "البريد الرئيسي",
+        "address": "عنوان المكتب"
+      }
+    },
+    "audit": {
+      "title": "خزنة التدقيق",
+      "subtitle": "سجل غير قابل للتغيير لجميع أحداث النظام.",
+      "actor": "القائم بالإجراء",
+      "action": "الإجراء",
+      "target": "الهدف",
+      "timestamp": "الطابع الزمني"
+    }
+  },
+  "finance": {
+    "title": "الذكاء المالي",
+    "total_revenue": "إجمالي الإيرادات",
+    "monthly_revenue": "هذا الشهر",
+    "net_profit": "صافي الربح",
+    "outstanding": "المبالغ المستحقة"
+  }
+}

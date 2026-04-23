@@ -1,0 +1,219 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, AlertCircle, Clock, CheckCircle2, ChevronRight, Plus } from 'lucide-react';
+import { useEmployeeJobs } from '../../hooks/shared/useJobs';
+import CreateJobModal from '../../components/jobs/CreateJobModal';
+import { useAuth } from '../../contexts/AuthContext';
+import Skeleton from '../../components/ui/Skeleton';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+const MyJobs = () => {
+  const navigate = useNavigate();
+  const { profile } = useAuth();
+  const { data: jobs, isLoading } = useEmployeeJobs(profile?.id || '');
+  
+  const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'on_hold'>('active');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isCreateJobOpen, setIsCreateJobOpen] = useState(false);
+
+  const filteredJobs = jobs?.filter(job => {
+    // 1. Filter by Status
+    let matchStatus = true;
+    if (filter === 'active') matchStatus = job.status === 'active' || job.status === 'in_progress' || job.status === 'awaiting_govt' || job.status === 'pending';
+    else if (filter === 'completed') matchStatus = job.status === 'completed';
+    else if (filter === 'on_hold') matchStatus = job.status === 'on_hold';
+
+    // 2. Filter by Search Query
+    const matchSearch = 
+      job.job_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.client_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.service_name.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchStatus && matchSearch;
+  });
+
+  const stats = {
+    active: jobs?.filter(j => j.status === 'active' || j.status === 'in_progress' || j.status === 'awaiting_govt' || j.status === 'pending').length || 0,
+    completed: jobs?.filter(j => j.status === 'completed').length || 0,
+    issues: jobs?.filter(j => j.status === 'on_hold').length || 0
+  };
+
+  return (
+    <div className="space-y-8 pb-16 max-w-7xl mx-auto">
+      {/* Header & Stats */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-syne font-bold text-foreground mb-1">My Assigned Jobs</h1>
+          <p className="text-sm text-muted-foreground/60">Manage your active service workflows</p>
+        </div>
+        <button 
+          onClick={() => setIsCreateJobOpen(true)}
+          className="group relative bg-primary hover:bg-gold transition-all px-6 py-3 rounded-2xl flex items-center gap-3 shadow-[0_0_30px_rgba(212,175,55,0.15)] hover:shadow-[0_0_40px_rgba(212,175,55,0.25)] active:scale-[0.98]"
+        >
+          <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
+          <div className="w-10 h-10 rounded-[0.9rem] bg-[#0A0F1E]/10 flex items-center justify-center text-[#0A0F1E] border border-[#0A0F1E]/5">
+             <Plus size={20} strokeWidth={3} />
+          </div>
+          <div className="flex flex-col items-start pr-2">
+             <span className="text-[#0A0F1E] font-syne font-black text-xs uppercase tracking-tight leading-none">Initiate</span>
+             <span className="text-[#0A0F1E]/60 font-bold text-[10px] uppercase tracking-widest mt-0.5">New Job Bundle</span>
+          </div>
+        </button>
+      </div>
+        
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1">Active Workload</p>
+            <p className="text-2xl font-bold text-foreground">{stats.active}</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+            <Clock size={20} />
+          </div>
+        </div>
+        
+        <div className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1">Completed (Month)</p>
+            <p className="text-2xl font-bold text-foreground">{stats.completed}</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+            <CheckCircle2 size={20} />
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:border-gold/30 transition-colors" onClick={() => setFilter('on_hold')}>
+          <div>
+            <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1">Attention Needed</p>
+            <p className="text-2xl font-bold text-amber-500">{stats.issues}</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+            <AlertCircle size={20} />
+          </div>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-background border border-border p-2 rounded-2xl flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="flex bg-white/5 p-1 rounded-xl w-full sm:w-auto">
+          {['active', 'completed', 'on_hold', 'all'].map(f => (
+            <button 
+              key={f}
+              onClick={() => setFilter(f as any)} 
+              className={cn("px-4 py-2 flex-1 sm:flex-none rounded-lg text-xs font-bold uppercase tracking-wider transition-colors", filter === f ? "bg-white/10 text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}
+            >
+              {f.replace('_', ' ')}
+            </button>
+          ))}
+        </div>
+        
+        <div className="flex-1 w-full sm:w-auto relative max-w-sm">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+          <input 
+            type="text" 
+            placeholder="Search my jobs..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white/5 border-none outline-none pl-10 pr-4 py-2.5 rounded-xl text-foreground placeholder:text-muted-foreground/60 text-sm"
+          />
+        </div>
+      </div>
+
+      {/* Grid */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Skeleton height={200} rounded="xl" />
+          <Skeleton height={200} rounded="xl" />
+          <Skeleton height={200} rounded="xl" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimatePresence>
+            {filteredJobs?.map(job => {
+               const progressRaw = (job.completed_steps / job.total_steps) * 100;
+               return (
+                 <motion.div 
+                   layout
+                   initial={{ opacity: 0, scale: 0.9 }}
+                   animate={{ opacity: 1, scale: 1 }}
+                   exit={{ opacity: 0, scale: 0.9 }}
+                   key={job.id} 
+                   className="bg-card border border-border rounded-2xl p-5 shadow-xl hover:border-primary/30 transition-all flex flex-col cursor-pointer group"
+                   onClick={() => navigate(`/employee/my-jobs/${job.id}`)}
+                 >
+                    <div className="flex items-start justify-between mb-4">
+                       <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-xl bg-white/5 border border-border flex items-center justify-center text-foreground font-bold font-syne text-lg">
+                           {job.client_name[0]}
+                         </div>
+                         <div>
+                           <h3 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">{job.client_name}</h3>
+                           <p className="text-[10px] text-muted-foreground/60 font-mono">{job.job_code}</p>
+                         </div>
+                       </div>
+                       <div className={cn(
+                          "px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border",
+                          job.status === 'in_progress' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : 
+                          job.status === 'awaiting_govt' ? "bg-amber-500/10 text-amber-500 border-amber-500/20" : 
+                          job.status === 'completed' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                          "bg-white/5 text-muted-foreground border-border"
+                       )}>
+                          {job.status === 'completed' && <CheckCircle2 size={10} className="inline mr-1" />}
+                          {job.status.replace('_', ' ')}
+                       </div>
+                    </div>
+
+                    <div className="mb-4">
+                       <p className="text-xs text-muted-foreground line-clamp-1 mb-1">{job.service_name}</p>
+                       <div className="flex items-center gap-2">
+                         <span className="text-[10px] bg-white/5 border border-border px-2 py-0.5 rounded text-muted-foreground/60 font-mono">STEP {job.completed_steps + 1} OF {job.total_steps}</span>
+                         <span className="text-[10px] text-muted-foreground/60">{Math.round(progressRaw)}%</span>
+                       </div>
+                       <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden mt-2">
+                         <div className="h-full bg-gold transition-all" style={{ width: `${progressRaw}%` }} />
+                       </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                       {job.advance_paid ? (
+                         <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Advance Paid</span>
+                       ) : (
+                         <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-red-500/10 text-red-400 border border-red-500/20">Advance Pending</span>
+                       )}
+                       
+                       {!job.remaining_paid && job.remaining_due_amount > 0 && (
+                         <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-amber-500 border border-amber-500/20">Balance Due</span>
+                       )}
+                    </div>
+
+                    <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between text-muted-foreground group-hover:text-foreground transition-colors">
+                       <span className="text-xs font-bold text-muted-foreground/60 flex items-center gap-1.5"><Clock size={12} /> {job.days_active} Days Active</span>
+                       <span className="text-xs font-medium flex items-center gap-1">Open Job <ChevronRight size={14} /></span>
+                    </div>
+                 </motion.div>
+               )
+            })}
+          </AnimatePresence>
+          {filteredJobs?.length === 0 && (
+            <div className="col-span-full py-12 text-center border-2 border-dashed border-white/5 rounded-2xl">
+               <p className="text-muted-foreground/60 font-bold">No jobs found matching the current criteria.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <CreateJobModal 
+        isOpen={isCreateJobOpen}
+        onClose={() => setIsCreateJobOpen(false)}
+      />
+    </div>
+  );
+};
+
+export default MyJobs;

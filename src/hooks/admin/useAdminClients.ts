@@ -1,0 +1,266 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../../lib/supabase';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+export interface Client {
+  id: string;
+  client_code: string | null;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  nationality?: string;
+  id_number?: string;
+  id_expiry?: string;
+  active_jobs: number;
+  total_paid: number;
+  is_active: boolean;
+  created_at: string;
+  avatar_url?: string | null;
+  total_ministry_spent?: number;
+  jobs?: any[];
+}
+
+// ─── List All Clients ─────────────────────────────────────────────────────────
+export const useAdminClients = () => {
+  return useQuery({
+    queryKey: ['admin', 'clients'],
+    queryFn: async (): Promise<Client[]> => {
+      const { data, error } = await db
+        .from('profiles')
+        .select('*')
+        .eq('role', 'client')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data ?? []).map((p: any) => ({
+        id: p.id,
+        client_code: p.client_code,
+        full_name: p.full_name ?? 'Unknown',
+        email: p.email ?? '',
+        phone: p.phone,
+        is_active: p.is_active ?? true,
+        created_at: p.created_at ?? new Date().toISOString(),
+        avatar_url: p.avatar_url,
+        active_jobs: 0,
+        total_paid: 0,
+      }));
+    },
+  });
+};
+
+// ─── List Employee-Specific Clients ──────────────────────────────────────────
+export const useEmployeeClients = (employeeId?: string) => {
+  return useQuery({
+    queryKey: ['employee', 'clients', employeeId],
+    enabled: !!employeeId,
+    queryFn: async (): Promise<Client[]> => {
+      // Step A: Get clients linked via jobs
+      const { data: jobClients } = await db
+        .from('jobs')
+        .select('client_id')
+        .eq('employee_id', employeeId);
+      
+      const jobClientIds = (jobClients ?? []).map((j: any) => j.client_id);
+
+      // Step B: Fetch profiles
+      let query = db
+        .from('profiles')
+        .select('*')
+        .eq('role', 'client');
+
+      if (jobClientIds.length > 0) {
+        query = query.or(`created_by.eq.${employeeId},id.in.(${jobClientIds.join(',')})`);
+      } else {
+        query = query.eq('created_by', employeeId);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data ?? []).map((p: any) => ({
+        id: p.id,
+        client_code: p.client_code,
+        full_name: p.full_name ?? 'Unknown',
+        email: p.email ?? '',
+        phone: p.phone,
+        is_active: p.is_active ?? true,
+        created_at: p.created_at ?? new Date().toISOString(),
+        avatar_url: p.avatar_url,
+        active_jobs: 0,
+        total_paid: 0,
+      }));
+    },
+  });
+};
+
+// ─── Single Client ────────────────────────────────────────────────────────────
+export const useAdminClient = (id?: string) => {
+  return useQuery({
+    queryKey: ['admin', 'client', id],
+    enabled: !!id,
+    queryFn: async (): Promise<Client & { assigned_employee_name?: string; assigned_employee_id?: string; status: string }> => {
+      // 1. Fetch profile
+      const { data: profile, error: profileError } = await db
+        .from('profiles')
+        .select('*')
+        .eq('id', id!)
+        .single();
+
+      if (profileError) throw profileError;
+
+      // 2. Fetch active job count and total fees
+      const { data: jobs, error: jobsError } = await db
+        .from('jobs')
+        .select(`
+          id, 
+          status, 
+          total_fee, 
+          advance_amount,
+          advance_paid,
+          remaining_amount,
+          remaining_paid,
+          employee_id,
+          employee:profiles!employee_id(full_name, avatar_url)
+        `)
+        .eq('client_id', id!);
+
+      if (jobsError) throw jobsError;
+
+      // 3. Fetch all step expenses for these jobs
+      const jobIds = jobs?.map((j: any) => j.id) || [];
+      let totalMinistrySpent = 0;
+      
+      if (jobIds.length > 0) {
+        const { data: stepExpenses } = await db
+          .from('job_steps')
+          .select('actual_gov_fee')
+          .in('job_id', jobIds);
+        
+        totalMinistrySpent = stepExpenses?.reduce((sum: number, s: any) => sum + (Number(s.actual_gov_fee) || 0), 0) || 0;
+      }
+
+      const activeJobsCount = jobs?.filter((j: any) => j.status === 'active').length || 0;
+      const totalAmountPaid = jobs?.reduce((sum: number, j: any) => {
+        const advance = j.advance_paid ? (j.advance_amount || 0) : 0;
+        const remaining = j.remaining_paid ? (j.remaining_amount || 0) : 0;
+        return sum + advance + remaining;
+      }, 0) || 0;
+      
+      // 3. Find latest assigned employee
+      const latestJob = jobs && jobs.length > 0 ? jobs[0] : null;
+
+      return {
+        id: profile.id,
+        client_code: profile.client_code,
+        full_name: profile.full_name ?? 'Unknown',
+        email: profile.email ?? '',
+        phone: profile.phone,
+        is_active: profile.is_active ?? true,
+        status: profile.is_active ? 'active' : 'archived',
+        created_at: profile.created_at ?? new Date().toISOString(),
+        avatar_url: profile.avatar_url,
+        active_jobs: activeJobsCount,
+        total_paid: totalAmountPaid,
+        total_ministry_spent: totalMinistrySpent,
+        assigned_employee_name: latestJob?.employee?.full_name || 'No Assignment',
+        assigned_employee_id: latestJob?.employee_id,
+        jobs: jobs || []
+      };
+    },
+  });
+};
+
+// ─── Create Client ────────────────────────────────────────────────────────────
+export const useCreateClient = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (newClient: {
+      phone?: string;
+      password: string;
+      created_by?: string;
+    }) => {
+      // Step A: Create a temporary Supabase client that DOES NOT save to localStorage.
+      const { createClient } = await import('@supabase/supabase-js');
+      const authClient = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_ANON_KEY,
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false
+          }
+        }
+      );
+
+      // Step B: Create the auth user
+      const { data: authData, error: authError } = await authClient.auth.signUp({
+        email: newClient.email,
+        password: newClient.password,
+        options: {
+          data: { 
+            full_name: newClient.full_name, 
+            role: 'client' 
+          }
+        }
+      });
+
+      if (authError) throw new Error(authError.message);
+      if (!authData.user) throw new Error('Client creation failed');
+
+      const userId = authData.user.id;
+      const clientCode = `CLT-${Date.now().toString().slice(-7)}`;
+
+      const { data: profile, error: profileError } = await db
+        .from('profiles')
+        .upsert({
+          id: userId,
+          full_name: newClient.full_name,
+          email: newClient.email,
+          phone: newClient.phone ?? null,
+          role: 'client',
+          client_code: clientCode,
+          is_active: true,
+          created_by: newClient.created_by,
+        }, { onConflict: 'id' })
+        .select()
+        .single();
+
+      if (profileError) throw new Error(profileError.message);
+      return { ...profile, password: newClient.password }; // Return password for one-time display
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'clients'] });
+      queryClient.invalidateQueries({ queryKey: ['employee', 'clients'] });
+    },
+  });
+};
+
+// ─── Update Client ────────────────────────────────────────────────────────────
+export const useUpdateClient = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Client> }) => {
+      const { data, error } = await db
+        .from('profiles')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'clients'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'client', id] });
+    },
+  });
+};

@@ -1,0 +1,37 @@
+{
+  "common": {
+    "login": "تسجيل الدخول",
+    "logout": "تسجيل الخروج",
+    "dashboard": "لوحة القيادة",
+    "settings": "الإعدادات",
+    "notifications": "الإشعارات",
+    "search": "بحث...",
+    "language": "اللغة",
+    "admin": "مسؤول",
+    "employee": "موظف",
+    "client": "عميل",
+    "status": "الحالة",
+    "actions": "الإجراءات"
+  },
+  "auth": {
+    "welcome": "مرحباً بعودتك",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "signIn": "دخول",
+    "forgotPassword": "نسيت كلمة المرور؟"
+  },
+  "sidebar": {
+    "home": "الرئيسية",
+    "employees": "الموظفين",
+    "clients": "العملاء",
+    "services": "الخدمات",
+    "jobs": "الطلبات",
+    "finance": "المالية",
+    "audit": "سجل التدقيق",
+    "dashboard": "لوحة القيادة",
+    "my_tasks": "مهامي",
+    "notifications": "الإشعارات",
+    "profile": "الحساب والأمان",
+    "support": "الدعم الفني"
+  }
+}

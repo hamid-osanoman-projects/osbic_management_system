@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Syne:wght@400..800&display=swap');
+
+/* --- IRONCLAD HEX THEME ENGINE --- */
+:root {
+  color-scheme: dark;
+  --background: #0F172A;
+  --foreground: #F8FAFC;
+  --card: #1E293B;
+  --card-foreground: #F8FAFC;
+  --popover: #1E293B;
+  --popover-foreground: #F8FAFC;
+  --primary: #D4AF37;
+  --primary-foreground: #0F172A;
+  --secondary: #334155;
+  --secondary-foreground: #F8FAFC;
+  --muted: #1E293B;
+  --muted-foreground: #94A3B8;
+  --accent: #3B82F6;
+  --accent-foreground: #F8FAFC;
+  --destructive: #EF4444;
+  --destructive-foreground: #F8FAFC;
+  --border: #334155;
+  --input: #334155;
+  --ring: #D4AF37;
+  --sidebar: #0F172A;
+  --radius: 1rem;
+}
+
+html.light, body.light, .light {
+  color-scheme: light !important;
+  --background: #F1F5F9;
+  --foreground: #1E293B;
+  --card: #FFFFFF;
+  --card-foreground: #1E293B;
+  --popover: #FFFFFF;
+  --popover-foreground: #1E293B;
+  --primary: #0077B6;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F8FAFC;
+  --secondary-foreground: #1E293B;
+  --muted: #E2E8F0;
+  --muted-foreground: #64748B;
+  --accent: #0077B6;
+  --accent-foreground: #FFFFFF;
+  --border: #CBD5E1;
+  --input: #CBD5E1;
+  --ring: #0077B6;
+  --sidebar: #FFFFFF;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background) !important;
+    color: var(--foreground) !important;
+    @apply font-sans antialiased;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+/* Page Transitions */
+.page-transition-enter { opacity: 0; }
+.page-transition-enter-active { opacity: 1; transition: opacity 300ms; }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--background); }
+::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 99px; }

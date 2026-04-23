@@ -1,0 +1,37 @@
+{
+  "common": {
+    "login": "Login",
+    "logout": "Logout",
+    "dashboard": "Dashboard",
+    "settings": "Settings",
+    "notifications": "Notifications",
+    "search": "Search...",
+    "language": "Language",
+    "admin": "Admin",
+    "employee": "Employee",
+    "client": "Client",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "auth": {
+    "welcome": "Welcome back",
+    "email": "Email address",
+    "password": "Password",
+    "signIn": "Sign In",
+    "forgotPassword": "Forgot password?"
+  },
+  "sidebar": {
+    "home": "Home",
+    "employees": "Employees",
+    "clients": "Clients",
+    "services": "Services",
+    "jobs": "Jobs",
+    "finance": "Finance",
+    "audit": "Audit Log",
+    "dashboard": "Dashboard",
+    "my_tasks": "My Tasks",
+    "notifications": "Notifications",
+    "profile": "Profile & Security",
+    "support": "Support Center"
+  }
+}

@@ -1,0 +1,463 @@
+import { useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { 
+  ChevronLeft, Edit3, Key, Ban, Mail, Phone, Calendar, 
+  Clock, CheckCircle, TrendingUp,
+  FileText, Activity, UserCheck, AlertCircle, Trash2, ChevronRight
+} from 'lucide-react';
+import { 
+  useAdminEmployee, 
+  useUpdateEmployee, 
+  useResetEmployeePassword, 
+  useToggleEmployeeStatus,
+  useDeleteEmployee,
+  useEmployeeActivity
+} from '../../hooks/admin/useAdminEmployees';
+import EditEmployeeSlideOver from '../../components/admin/EditEmployeeSlideOver';
+import ResetPasswordModal from '../../components/admin/ResetPasswordModal';
+import ConfirmStatusModal from '../../components/admin/ConfirmStatusModal';
+import DeleteEmployeeModal from '../../components/admin/DeleteEmployeeModal';
+import Skeleton from '../../components/ui/Skeleton';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import toast from 'react-hot-toast';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+const EmployeeDetail = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
+  const { data: employee, isLoading } = useAdminEmployee(id);
+  const { data: activityLogs } = useEmployeeActivity(id!);
+  const { mutate: toggleStatus, isPending: isToggling } = useToggleEmployeeStatus();
+  const { mutate: resetPassword, isPending: isResetting } = useResetEmployeePassword();
+  const { mutate: deleteEmployee, isPending: isDeleting } = useDeleteEmployee();
+
+  const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'performance' | 'audit'>('active');
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 p-6">
+        <Skeleton height={40} width={200} rounded="lg" />
+        <Skeleton height={200} rounded="xl" />
+        <Skeleton height={400} rounded="xl" />
+      </div>
+    );
+  }
+
+  if (!employee) return (
+    <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+      <div className="w-20 h-20 bg-red-400/10 rounded-3xl flex items-center justify-center text-red-400 mb-6">
+        <AlertCircle size={40} />
+      </div>
+      <h2 className="text-2xl font-syne font-bold text-foreground mb-2">Employee Not Found</h2>
+      <p className="text-muted-foreground mb-8 max-w-sm">The employee you are looking for might have been removed or the ID is incorrect.</p>
+      <Link to="/admin/employees" className="flex items-center gap-2 bg-muted/50 border border-border px-6 py-3 rounded-xl text-foreground font-bold hover:bg-muted/50 transition-all">
+        <ChevronLeft size={20} />
+        <span>Back to Employees</span>
+      </Link>
+    </div>
+  );
+
+  const emp = employee as any;
+  const isEmployeeActive = emp.is_active !== false;
+  const jobs = emp.jobs || [];
+  const activeJobsList = jobs.filter((j: any) => j.status === 'active');
+  const completedJobsList = jobs.filter((j: any) => j.status === 'completed');
+
+  const handleConfirmStatus = () => {
+    const newStatus = !isEmployeeActive;
+    toggleStatus({ id: emp.id, is_active: newStatus }, {
+      onSuccess: () => {
+        toast.success(`Employee ${newStatus ? 'activated' : 'deactivated'} successfully`);
+        setIsStatusOpen(false);
+      }
+    });
+  };
+
+  const handleConfirmReset = () => {
+    if (emp.email) {
+      resetPassword(emp.email, {
+        onSuccess: () => {
+          setIsResetOpen(false);
+        }
+      });
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (emp.id) {
+      deleteEmployee(emp.id, {
+        onSuccess: () => {
+          setIsDeleteOpen(false);
+          navigate('/admin/employees');
+        }
+      });
+    }
+  };
+
+  const tabs = [
+    { id: 'active', label: 'Active Jobs', icon: Clock, count: emp.active_jobs || 0 },
+    { id: 'completed', label: 'Completed Jobs', icon: CheckCircle, count: emp.total_jobs || 0 },
+    { id: 'performance', label: 'Performance Analytics', icon: TrendingUp },
+    { id: 'audit', label: 'Activity Log', icon: Activity },
+  ];
+
+  return (
+    <div className="space-y-6 pb-16">
+      {/* Header Navigation */}
+      <div className="flex items-center gap-3">
+        <Link to="/admin/employees" className="p-2 rounded-xl bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+          <ChevronLeft size={20} />
+        </Link>
+        <div className="text-sm">
+          <Link to="/admin/employees" className="text-muted-foreground hover:text-foreground transition-colors">Employees</Link>
+          <span className="text-muted-foreground/60 mx-2">/</span>
+          <span className="text-foreground font-medium">{emp.full_name}</span>
+        </div>
+      </div>
+
+      {/* Top Profile Card */}
+      <div className="bg-card border border-border rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+        {/* Decorative elements */}
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/[0.03] rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gold/30 to-transparent" />
+
+        <div className="flex flex-col md:flex-row gap-8 relative z-10">
+          {/* Avatar side */}
+          <div className="flex flex-col items-center gap-4 shrink-0">
+            <div className="w-32 h-32 rounded-3xl bg-primary/5 border border-gold/10 flex items-center justify-center text-4xl font-syne font-bold text-primary overflow-hidden relative group shadow-inner">
+              {emp.avatar_url ? (
+                <img src={emp.avatar_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span>{emp.full_name?.[0]}</span>
+              )}
+              <div 
+                onClick={() => setIsEditOpen(true)}
+                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer backdrop-blur-md"
+              >
+                <div className="bg-white/10 p-2 rounded-full border border-white/20">
+                  <Edit3 size={20} className="text-foreground" />
+                </div>
+              </div>
+            </div>
+            <div className={cn(
+              "px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border",
+              isEmployeeActive ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
+            )}>
+              <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isEmployeeActive ? "bg-emerald-400" : "bg-red-400")} />
+              {isEmployeeActive ? 'Active' : 'Inactive'}
+            </div>
+          </div>
+
+          {/* Info side */}
+          <div className="flex-1 flex flex-col justify-between">
+            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+              <div className="flex-1">
+                <h1 className="text-3xl font-syne font-bold text-foreground mb-2">{emp.full_name}</h1>
+                <p className="text-muted-foreground font-mono tracking-widest text-xs uppercase bg-muted/50 px-2 py-1 rounded inline-block">{emp.employee_code}</p>
+                
+                <div className="flex flex-wrap items-center gap-6 mt-6">
+                  <div className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer group">
+                    <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all">
+                      <Mail size={14} />
+                    </div>
+                    {emp.email}
+                  </div>
+                  <div className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer group">
+                    <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all">
+                      <Phone size={14} />
+                    </div>
+                    {emp.phone || 'No phone'}
+                  </div>
+                  <div className="flex items-center gap-2.5 text-sm text-muted-foreground group">
+                    <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center">
+                      <Calendar size={14} />
+                    </div>
+                    Joined {new Date(emp.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                <button 
+                  onClick={() => setIsEditOpen(true)}
+                  className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-muted/50 border border-border text-foreground font-bold hover:bg-muted/50 transition-all flex items-center justify-center gap-2 text-xs"
+                >
+                  <Edit3 size={14} /> <span>Edit</span>
+                </button>
+                <button 
+                  onClick={() => setIsResetOpen(true)}
+                  className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-muted/50 border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all flex items-center justify-center gap-2 text-xs"
+                >
+                  <Key size={14} /> <span>Reset</span>
+                </button>
+                <button 
+                  onClick={() => setIsStatusOpen(true)}
+                  className={cn(
+                    "flex-1 md:flex-none px-4 py-2.5 rounded-xl border font-bold transition-all flex items-center justify-center gap-2 text-xs shadow-lg",
+                    isEmployeeActive 
+                      ? "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-[#0A0F1E] shadow-amber-500/5" 
+                      : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-[#0A0F1E] shadow-emerald-500/5"
+                  )}
+                >
+                  {isEmployeeActive ? <Ban size={14} /> : <UserCheck size={14} />}
+                  <span>{isEmployeeActive ? 'Deactivate' : 'Activate'}</span>
+                </button>
+                <button 
+                  onClick={() => setIsDeleteOpen(true)}
+                  className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 font-bold hover:bg-red-500 hover:text-foreground transition-all flex items-center justify-center gap-2 text-xs"
+                >
+                  <Trash2 size={14} /> <span>Delete</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-10 pt-8 border-t border-border">
+               <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-gold/20 transition-all group">
+                 <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1 group-hover:text-primary transition-colors">Total Jobs</p>
+                 <p className="text-3xl font-mono font-bold text-foreground">{emp.total_jobs || 0}</p>
+               </div>
+               <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-accent/20 transition-all group">
+                 <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1 group-hover:text-accent transition-colors">Active Now</p>
+                 <p className="text-3xl font-mono font-bold text-accent">{emp.active_jobs || 0}</p>
+               </div>
+               <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-white/20 transition-all group">
+                 <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1">Completed (Mo)</p>
+                 <p className="text-3xl font-mono font-bold text-foreground">{emp.completed_month || 0}</p>
+               </div>
+               <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-white/20 transition-all group">
+                 <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1">Avg Completion</p>
+                 <p className="text-3xl font-mono font-bold text-foreground">{emp.avg_completion_days || 0} <span className="text-sm font-normal text-muted-foreground/60">days</span></p>
+               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-border px-2 overflow-x-auto no-scrollbar scroll-smooth">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={cn(
+              "flex items-center gap-2.5 px-6 py-5 border-b-2 text-sm font-bold transition-all whitespace-nowrap relative",
+              activeTab === tab.id 
+                ? "border-gold text-primary" 
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <tab.icon size={16} />
+            <span>{tab.label}</span>
+            {tab.count !== undefined && (
+              <span className={cn(
+                "px-2 py-0.5 rounded-lg text-[10px] font-bold shadow-sm border",
+                activeTab === tab.id 
+                  ? "bg-primary/10 text-primary border-gold/20" 
+                  : "bg-muted/50 text-muted-foreground/60 border-border"
+              )}>
+                {tab.count}
+              </span>
+            )}
+            {activeTab === tab.id && (
+              <motion.div 
+                layoutId="activeTabUnderline"
+                className="absolute inset-x-0 bottom-0 h-0.5 bg-primary shadow-[0_0_10px_rgba(251,191,36,0.5)]" 
+              />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        className="bg-card border border-border rounded-3xl p-8 shadow-2xl min-h-[500px] relative overflow-hidden"
+      >
+        <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-gold/20 via-transparent to-transparent opacity-30" />
+        
+        {activeTab === 'active' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-syne font-bold text-foreground flex items-center gap-3">
+                <Clock className="text-primary" size={24} />
+                Currently Processing ({activeJobsList.length})
+              </h3>
+            </div>
+            
+            {activeJobsList.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {activeJobsList.map((job: any) => (
+                  <Link key={job.id} to={`/admin/jobs/${job.id}`} className="group p-4 rounded-2xl bg-muted/30 border border-border hover:border-gold/30 hover:bg-muted/50 transition-all flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
+                      <FileText size={20} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                       <p className="text-xs font-mono text-primary font-bold mb-0.5">{job.job_code}</p>
+                       <p className="text-sm font-bold text-foreground truncate">{isRtl ? job.service?.name_ar : job.service?.name_en}</p>
+                       <p className="text-[10px] text-muted-foreground truncate">Client: {job.client?.full_name}</p>
+                    </div>
+                    <ChevronRight size={16} className="text-muted-foreground/30 group-hover:text-primary transition-colors" />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-24 bg-black/20 border border-border rounded-3xl text-center px-6">
+                <div className="w-20 h-20 bg-muted/50 rounded-3xl flex items-center justify-center text-[#222B45] mb-6 relative">
+                   <FileText size={40} className="opacity-20" />
+                </div>
+                <h4 className="text-foreground font-bold mb-2">No active jobs found</h4>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'completed' && (
+          <div className="space-y-6">
+            <h3 className="text-xl font-syne font-bold text-foreground flex items-center gap-3">
+              <CheckCircle className="text-emerald-400" size={24} />
+              Historical Jobs History ({completedJobsList.length})
+            </h3>
+            
+            {completedJobsList.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {completedJobsList.map((job: any) => (
+                  <Link key={job.id} to={`/admin/jobs/${job.id}`} className="group p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 hover:border-emerald-500/30 transition-all flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20 shrink-0">
+                      <CheckCircle size={20} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                       <p className="text-xs font-mono text-emerald-400 font-bold mb-0.5">{job.job_code}</p>
+                       <p className="text-sm font-bold text-foreground truncate">{isRtl ? job.service?.name_ar : job.service?.name_en}</p>
+                       <p className="text-[10px] text-muted-foreground">Finished {new Date(job.completed_at).toLocaleDateString()}</p>
+                    </div>
+                    <ChevronRight size={16} className="text-muted-foreground/30" />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-24 bg-black/20 border border-border rounded-3xl text-center px-6">
+                <CheckCircle size={40} className="text-[#222B45] opacity-20 mb-6" />
+                <h4 className="text-foreground font-bold mb-2">No completed records</h4>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'performance' && (
+          <div className="space-y-6">
+            <h3 className="text-xl font-syne font-bold text-foreground flex items-center gap-3">
+              <TrendingUp className="text-accent" size={24} />
+              Efficiency Analytics
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+               <div className="p-6 rounded-3xl bg-muted/30 border border-border">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Delivery Speed</p>
+                  <p className="text-4xl font-mono font-bold text-foreground mb-1">{emp.avg_completion_days} <span className="text-sm font-normal text-muted-foreground/60">Days</span></p>
+                  <p className="text-[10px] text-emerald-500 font-bold">Standard target: 5 Days</p>
+               </div>
+               <div className="p-6 rounded-3xl bg-muted/30 border border-border">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Volume (Month)</p>
+                  <p className="text-4xl font-mono font-bold text-foreground mb-1">{emp.completed_month}</p>
+                  <p className="text-[10px] text-primary font-bold">In-Month Fulfillment</p>
+               </div>
+               <div className="p-6 rounded-3xl bg-primary/5 border border-gold/20">
+                  <p className="text-xs font-bold text-primary uppercase tracking-widest mb-4">Trust Level</p>
+                  <p className="text-4xl font-syne font-bold text-foreground mb-1">Excellent</p>
+                  <p className="text-[10px] text-primary/60 font-bold">System Reliability Rating</p>
+               </div>
+            </div>
+            <div className="py-12 bg-black/20 border border-border rounded-3xl text-center text-muted-foreground/40 text-xs font-bold uppercase tracking-widest">
+               Advanced Trend Charts will appear as more jobs are completed
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'audit' && (
+          <div className="space-y-6">
+             <h3 className="text-xl font-syne font-bold text-foreground flex items-center gap-3">
+              <Activity className="text-primary" size={24} />
+              System Activity Log
+            </h3>
+            
+            {activityLogs && activityLogs.length > 0 ? (
+              <div className="space-y-3">
+                {activityLogs.map((log: any) => (
+                  <div key={log.id} className="p-4 rounded-xl bg-muted/30 border border-border flex items-center justify-between group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                        <Activity size={14} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{log.action}</p>
+                        <p className="text-[10px] text-muted-foreground">Entity: {log.entity_name} • {log.details || 'No additional details'}</p>
+                      </div>
+                    </div>
+                    <p className="text-[9px] font-mono text-muted-foreground/60">{new Date(log.created_at).toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-24 bg-black/20 border border-border rounded-3xl text-center px-6">
+                <Activity size={40} className="text-[#222B45] opacity-20 mb-6" />
+                <h4 className="text-foreground font-bold mb-2">Log is empty</h4>
+                <p className="text-muted-foreground/60 text-sm max-w-xs px-2">System events and admin changes will be tracked here for security auditing.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </motion.div>
+
+      {/* Modals & Slide-overs */}
+      <EditEmployeeSlideOver 
+        isOpen={isEditOpen} 
+        onClose={() => setIsEditOpen(false)} 
+        employee={emp} 
+      />
+      
+      <ResetPasswordModal 
+        isOpen={isResetOpen} 
+        onClose={() => setIsResetOpen(false)} 
+        onConfirm={handleConfirmReset} 
+        employeeName={emp.full_name || ''} 
+        isPending={isResetting}
+      />
+
+      <ConfirmStatusModal 
+        isOpen={isStatusOpen}
+        onClose={() => setIsStatusOpen(false)}
+        onConfirm={handleConfirmStatus}
+        employeeName={emp.full_name || ''}
+        isActivating={!isEmployeeActive}
+        isPending={isToggling}
+      />
+
+      <DeleteEmployeeModal 
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        onConfirm={handleConfirmDelete}
+        employeeName={emp.full_name || ''}
+        isPending={isDeleting}
+      />
+    </div>
+  );
+};
+
+export default EmployeeDetail;

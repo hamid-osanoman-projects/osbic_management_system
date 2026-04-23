@@ -1,0 +1,78 @@
+{
+  "common": {
+    "dashboard": "Dashboard",
+    "jobs": "Jobs",
+    "clients": "Clients",
+    "employees": "Employees",
+    "services": "Services",
+    "finance": "Finance",
+    "notifications": "Notifications",
+    "settings": "Settings",
+    "audit_logs": "Audit Logs",
+    "search": "Search",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "actions": "Actions",
+    "logout": "Logout",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "status": {
+      "active": "Active",
+      "completed": "Completed",
+      "pending": "Pending",
+      "on_hold": "On Hold",
+      "awaiting_govt": "Awaiting Govt"
+    }
+  },
+  "sidebar": {
+    "home": "Dashboard",
+    "employees": "Employees",
+    "clients": "Clients",
+    "services": "Services",
+    "jobs": "Jobs",
+    "approvals": "Approval Hub",
+    "finance": "Finance",
+    "audit": "System Audit",
+    "my_tasks": "My Tasks",
+    "notifications": "Notifications",
+    "profile": "Profile & Security",
+    "support": "Support Center"
+  },
+  "admin": {
+
+    "settings": {
+      "title": "System Settings",
+      "tabs": {
+        "company": "Company",
+        "notifications": "Notifications",
+        "templates": "Email Templates",
+        "integrations": "Integrations",
+        "security": "Security"
+      },
+      "company": {
+        "identity": "Identity & Branding",
+        "name": "Company Name",
+        "email": "Primary Email",
+        "address": "Office Address"
+      }
+    },
+    "audit": {
+      "title": "System Audit Vault",
+      "subtitle": "Immutable record of all system events.",
+      "actor": "Actor",
+      "action": "Action",
+      "target": "Target",
+      "timestamp": "Timestamp"
+    }
+  },
+  "finance": {
+    "title": "Financial Intelligence",
+    "total_revenue": "Total Revenue",
+    "monthly_revenue": "This Month",
+    "net_profit": "Net Profit",
+    "outstanding": "Outstanding"
+  }
+}
