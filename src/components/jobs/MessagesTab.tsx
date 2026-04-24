@@ -55,6 +55,30 @@ const MessagesTab = ({ jobId, messages, isAdmin, currentUserType }: Props) => {
     }
   }, [messages]);
 
+  // Mark as read when messages are viewed
+  useEffect(() => {
+    const markAsRead = async () => {
+      if (!profile?.id || !messages.length) return;
+
+      const unreadIds = messages
+        .filter(m => m.sender_id !== profile.id && !m.is_read)
+        .map(m => m.id);
+
+      if (unreadIds.length === 0) return;
+
+      const { error } = await (supabase.from('messages') as any)
+        .update({ is_read: true })
+        .in('id', unreadIds);
+
+      if (!error) {
+        // Invalidate global unread count
+        qc.invalidateQueries({ queryKey: ['client', 'unread-messages', profile.id] });
+      }
+    };
+
+    markAsRead();
+  }, [messages, profile?.id, qc]);
+
   const handleSend = () => {
     const cleanContent = content.trim();
     if (!cleanContent || isSending) return;

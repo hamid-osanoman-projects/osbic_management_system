@@ -31,7 +31,7 @@ export interface Job {
   advance_receipt_url?: string;
   remaining_due_amount: number;
   remaining_receipt_url?: string;
-  documents?: any[];
+  documents?: JobDocument[];
 }
 
 export interface JobStep {
@@ -76,6 +76,7 @@ export interface JobMessage {
   sender_type: 'employee' | 'client' | 'admin';
   sender_name: string;
   content: string;
+  is_read: boolean;
   created_at: string;
 }
 
@@ -354,6 +355,7 @@ export const useJobDetail = (jobId: string) => {
         sender_type: m.sender?.role || 'client',
         sender_name: m.sender?.full_name ?? 'Unknown',
         content: m.content,
+        is_read: m.is_read ?? true,
         created_at: m.created_at,
       }));
 
@@ -959,6 +961,42 @@ export const useUploadJobDocument = () => {
   });
 };
 
+export const useUpdateDocumentStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ docId, status, rejectionReason }: { docId: string; status: 'approved' | 'rejected' | 'pending'; rejectionReason?: string }) => {
+      const { error } = await supabase
+        .from('documents')
+        .update({ 
+          status, 
+          rejection_reason: rejectionReason || null,
+          is_client_visible: status === 'approved' // Auto-reveal on approval
+        } as any)
+        .eq('id', docId);
+      
+      if (error) throw error;
+      return docId;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['job'] });
+    },
+  });
+};
+
+export const useDeleteDocument = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (docId: string) => {
+      const { error } = await (supabase.from('documents') as any).delete().eq('id', docId);
+      if (error) throw error;
+      return docId;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['job'] });
+    },
+  });
+};
+
 // ─── Admin: Delete Job ────────────────────────────────────────────────────────
 export const useAdminDeleteJob = () => {
   const qc = useQueryClient();
@@ -1074,5 +1112,38 @@ export const useSendMessage = () => {
       // Optmistically invalidate the job detail to show the new message
       qc.invalidateQueries({ queryKey: ['job', data.job_id] });
     },
+  });
+};
+
+// ─── Unread Message Count (Client) ───────────────────────────────────────────────────
+export const useUnreadMessageCount = (clientId?: string) => {
+  return useQuery({
+    queryKey: ['client', 'unread-messages', clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      // 1. Get all job IDs for this client
+      const { data: jobs, error: jobsError } = await supabase
+        .from('jobs')
+        .select('id')
+        .eq('client_id', clientId!);
+
+      if (jobsError) throw jobsError;
+      if (!jobs || jobs.length === 0) return 0;
+
+      const jobIds = jobs.map(j => j.id);
+
+      // 2. Count messages in those jobs that are not from this client and are unread
+      // Note: We use head: true to only get count, not data.
+      const { count, error } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .in('job_id', jobIds)
+        .eq('is_read', false)
+        .neq('sender_id', clientId!);
+
+      if (error) throw error;
+      return count || 0;
+    },
+    refetchInterval: 30000, // Refresh every 30s for the badge
   });
 };

@@ -16,13 +16,16 @@ function cn(...inputs: ClassValue[]) {
 }
 
 import { useAuth } from '../contexts/AuthContext';
+import { useUnreadMessageCount } from '../hooks/shared/useJobs';
 
 const ClientLayout: React.FC = () => {
   const { i18n } = useTranslation();
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, profile } = useAuth();
   const isRtl = i18n.dir() === 'rtl';
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const { data: unreadCount } = useUnreadMessageCount(profile?.id);
 
   // Prompt PWA install after 3rd load
   useEffect(() => {
@@ -36,82 +39,24 @@ const ClientLayout: React.FC = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans selection:bg-gold/30 selection:text-white" dir={isRtl ? 'rtl' : 'ltr'}>
       
-      {/* Mobile Header */}
-      <header className="lg:hidden h-16 bg-sidebar border-b border-border flex items-center justify-between px-4 sticky top-0 z-50">
+      {/* Mobile Header (Fixed) */}
+      <header className="lg:hidden h-14 bg-background/80 backdrop-blur-xl border-b border-border flex items-center justify-between px-6 sticky top-0 z-[100]">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center font-syne font-bold text-gold">O</div>
-          <span className="font-syne font-bold text-white tracking-widest text-sm uppercase">OSBIC</span>
+          <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center font-syne font-bold text-primary text-xs shadow-sm">O</div>
+          <span className="font-syne font-bold text-foreground tracking-[0.2em] text-[10px] uppercase">OSBIC OS</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <ThemeToggle />
           <LanguageToggle variant="minimal" />
-          <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-[#94A3B8]">
-             <Menu size={20} />
-          </button>
         </div>
       </header>
 
-      {/* Mobile Sidebar Overlay */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] lg:hidden"
-            />
-            <motion.aside 
-              initial={{ x: isRtl ? '100%' : '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: isRtl ? '100%' : '-100%' }}
-              className="fixed top-0 bottom-0 left-0 right-0 w-[280px] bg-sidebar z-[70] lg:hidden flex flex-col p-6 pointer-events-auto"
-              style={isRtl ? { left: 'auto', right: 0 } : { right: 'auto', left: 0 }}
-            >
-               <div className="flex justify-between items-center mb-8">
-                 <div className="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center font-syne font-bold text-gold">O</div>
-                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-[#94A3B8]"><X size={20} /></button>
-               </div>
-               <nav className="space-y-2">
-                 {[
-                   { label: 'Dashboard', icon: LayoutDashboard, path: '/portal' },
-                   { label: 'Service Catalog', icon: Boxes, path: '/portal/services' },
-                   { label: 'Service History', icon: FolderOpen, path: '/portal/history' },
-                   { label: 'Messages', icon: MessageSquare, path: '/portal/messages', badge: '2' },
-                   { label: 'Profile', icon: User, path: '/portal/profile' }
-                 ].map((item, i) => (
-                   <Link 
-                     key={i} 
-                     to={item.path}
-                     className={cn(
-                       "flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all",
-                       location.pathname === item.path ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-white/5 active:scale-95"
-                     )}
-                   >
-                     <item.icon size={20} />
-                     {item.label}
-                   </Link>
-                 ))}
-                  <button 
-                    onClick={() => signOut()}
-                    className="flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-bold text-destructive hover:bg-destructive/10 transition-all mt-auto"
-                  >
-                    <LogOut size={20} />
-                    Sign Out
-                  </button>
-               </nav>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-
-      <div className="flex-1 flex overflow-hidden">
-        {/* Desktop Sidebar */}
+      <div className="flex-1 flex overflow-hidden lg:static">
+        {/* Desktop Sidebar (Unchanged) */}
         <aside className="hidden lg:flex w-72 bg-sidebar border-r border-border flex flex-col h-screen sticky top-0 shrink-0">
           <div className="p-8">
             <div className="flex items-center gap-3 mb-12">
-               <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center font-syne font-bold text-primary text-xl shadow-[0_0_15px_rgba(212,175,55,0.2)] shadow-primary/20">O</div>
+               <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center font-syne font-bold text-primary text-xl shadow-[0_0_15px_rgba(212,175,55,0.2)]">O</div>
                <div>
                  <span className="font-syne font-bold text-foreground tracking-[0.2em] text-lg uppercase block leading-none">OSBIC</span>
                  <span className="text-[10px] text-primary font-bold uppercase tracking-widest mt-1 opacity-60">Client Portal</span>
@@ -123,7 +68,7 @@ const ClientLayout: React.FC = () => {
                     { label: 'Dashboard', icon: LayoutDashboard, path: '/portal' },
                     { label: 'Service Catalog', icon: Boxes, path: '/portal/services' },
                     { label: 'Service History', icon: FolderOpen, path: '/portal/history' },
-                    { label: 'Messages', icon: MessageSquare, path: '/portal/messages', badge: '2' },
+                    { label: 'Messages', icon: MessageSquare, path: '/portal/messages', badge: unreadCount && unreadCount > 0 ? unreadCount.toString() : null },
                     { label: 'Profile', icon: User, path: '/portal/profile' }
                 ].map((item, i) => (
                  <Link 
@@ -136,7 +81,15 @@ const ClientLayout: React.FC = () => {
                  >
                    <item.icon size={18} className={cn("transition-colors", location.pathname === item.path ? "text-primary" : "text-muted-foreground opacity-60 group-hover:opacity-100")} />
                    {item.label}
-                   {item.badge && <span className="ms-auto w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] flex items-center justify-center font-bold font-sans">{item.badge}</span>}
+                   {item.badge && (
+                     <motion.span 
+                       initial={{ scale: 0 }}
+                       animate={{ scale: 1 }}
+                       className="ms-auto w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] flex items-center justify-center font-bold font-sans shadow-[0_0_10px_rgba(212,175,55,0.2)]"
+                     >
+                       {item.badge}
+                     </motion.span>
+                   )}
                  </Link>
                ))}
             </nav>
@@ -161,8 +114,8 @@ const ClientLayout: React.FC = () => {
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto no-scrollbar bg-background relative">
-           <div className="p-4 sm:p-8 lg:p-12 max-w-6xl mx-auto h-full">
+        <main className="flex-1 overflow-y-auto no-scrollbar bg-background relative selection:bg-primary/30">
+           <div className="p-4 sm:p-8 lg:p-12 max-w-6xl mx-auto h-full mb-20 lg:mb-0">
              <AnimatePresence mode="wait">
                <motion.div
                  key={location.pathname}
@@ -178,6 +131,50 @@ const ClientLayout: React.FC = () => {
            </div>
         </main>
       </div>
+
+      <nav className="lg:hidden fixed bottom-6 left-6 right-6 z-[100] flex items-center justify-around p-2 bg-foreground/90 backdrop-blur-xl rounded-[2.5rem] border border-border shadow-2xl shadow-black/40 h-20">
+        {[
+          { icon: LayoutDashboard, path: '/portal', label: 'Home' },
+          { icon: Boxes, path: '/portal/services', label: 'Packages' },
+          { icon: MessageSquare, path: '/portal/messages', label: 'Chat', badge: unreadCount && unreadCount > 0 ? unreadCount.toString() : null },
+          { icon: FolderOpen, path: '/portal/history', label: 'Files' },
+          { icon: User, path: '/portal/profile', label: 'Me' }
+        ].map((item, i) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <Link 
+              key={i} 
+              to={item.path}
+              className="relative flex flex-col items-center justify-center w-full h-full group"
+            >
+              {isActive && (
+                <motion.div 
+                  layoutId="activeTab"
+                  className="absolute inset-0 bg-primary/10 rounded-[2rem] border border-primary/20 m-1"
+                />
+              )}
+              <item.icon 
+                size={22} 
+                className={cn(
+                  "transition-all duration-300 relative z-10",
+                  isActive ? "text-primary scale-110 -translate-y-1" : "text-white/40 group-active:scale-95"
+                )} 
+              />
+              {item.badge && !isActive && (
+                <span className="absolute top-2 right-1/4 w-4 h-4 bg-primary text-[#0A0F1E] text-[8px] font-black rounded-full flex items-center justify-center shadow-lg border border-foreground">
+                  {item.badge}
+                </span>
+              )}
+              <span className={cn(
+                "text-[8px] font-black uppercase tracking-widest mt-1 relative z-10 transition-all duration-300",
+                isActive ? "text-primary opacity-100" : "text-white/20 opacity-0"
+              )}>
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 };

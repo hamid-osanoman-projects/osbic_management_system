@@ -1,8 +1,13 @@
 import { useState } from 'react';
-import { FileText, Download, Trash2, XCircle, UploadCloud, Eye } from 'lucide-react';
+import { FileText, Download, Trash2, XCircle, UploadCloud, Eye, CheckCircle2 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { type JobDocument, useUploadJobDocument } from '../../hooks/shared/useJobs';
+import { 
+  type JobDocument, 
+  useUploadJobDocument, 
+  useUpdateDocumentStatus, 
+  useDeleteDocument 
+} from '../../hooks/shared/useJobs';
 import toast from 'react-hot-toast';
 
 function cn(...inputs: ClassValue[]) {
@@ -26,6 +31,8 @@ const DocumentsTab = ({ jobId, documents, isEmployee, isAdmin }: Props) => {
   const [fileUrl, setFileUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { mutate: uploadDoc, isPending } = useUploadJobDocument();
+  const { mutate: updateStatus } = useUpdateDocumentStatus();
+  const { mutate: deleteDoc } = useDeleteDocument();
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (acceptedFiles) => {
@@ -56,6 +63,29 @@ const DocumentsTab = ({ jobId, documents, isEmployee, isAdmin }: Props) => {
         setFileName('');
         setFileUrl('');
         setSelectedFile(null);
+      }
+    });
+  };
+
+  const handleStatusUpdate = (docId: string, status: 'approved' | 'rejected') => {
+    let reason = '';
+    if (status === 'rejected') {
+      reason = window.prompt('Enter rejection reason:') || '';
+      if (!reason) return;
+    }
+    
+    updateStatus({ docId, status, rejectionReason: reason }, {
+      onSuccess: () => {
+        toast.success(`Document marked as ${status}`);
+      }
+    });
+  };
+
+  const handleDelete = (docId: string) => {
+    if (!window.confirm('Permanently purge this artifact from the vault?')) return;
+    deleteDoc(docId, {
+      onSuccess: () => {
+        toast.success('Artifact purged from system records');
       }
     });
   };
@@ -256,27 +286,44 @@ const DocumentsTab = ({ jobId, documents, isEmployee, isAdmin }: Props) => {
                   </span>
 
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                     {(isAdmin || isEmployee) && doc.status === 'pending' && (
-                       <button className="text-muted-foreground hover:text-red-400 p-1.5 transition-colors" title="Reject Document">
-                         <XCircle size={14} />
-                       </button>
-                     )}
-                     <button 
-                      onClick={() => setPreviewDoc(doc)}
-                      className="text-muted-foreground hover:text-primary p-1.5 transition-colors" 
-                      title="View Preview"
-                     >
-                       <Eye size={14} />
-                     </button>
-                     <button className="text-muted-foreground hover:text-foreground p-1.5 transition-colors" title="Download">
-                       <Download size={14} />
-                     </button>
-                     {(isAdmin || isEmployee) && (
-                       <button className="text-muted-foreground hover:text-red-400 p-1.5 transition-colors" title="Delete">
-                         <Trash2 size={14} />
-                       </button>
-                     )}
-                  </div>
+                      {(isAdmin || isEmployee) && doc.status === 'pending' && (
+                        <>
+                          <button 
+                            onClick={() => handleStatusUpdate(doc.id, 'approved')}
+                            className="text-emerald-500 hover:text-emerald-400 p-1.5 transition-colors" 
+                            title="Approve Document"
+                          >
+                            <CheckCircle2 size={14} />
+                          </button>
+                          <button 
+                            onClick={() => handleStatusUpdate(doc.id, 'rejected')}
+                            className="text-muted-foreground hover:text-red-400 p-1.5 transition-colors" 
+                            title="Reject Document"
+                          >
+                            <XCircle size={14} />
+                          </button>
+                        </>
+                      )}
+                      <button 
+                       onClick={() => setPreviewDoc(doc)}
+                       className="text-muted-foreground hover:text-primary p-1.5 transition-colors" 
+                       title="View Preview"
+                      >
+                        <Eye size={14} />
+                      </button>
+                      <button className="text-muted-foreground hover:text-foreground p-1.5 transition-colors" title="Download">
+                        <Download size={14} />
+                      </button>
+                      {(isAdmin || isEmployee) && (
+                        <button 
+                          onClick={() => handleDelete(doc.id)}
+                          className="text-muted-foreground hover:text-red-400 p-1.5 transition-colors" 
+                          title="Delete"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                   </div>
                </div>
             </div>
           ))}

@@ -9,6 +9,7 @@ import { useJobDetail } from '../../hooks/shared/useJobs';
 import PizzaTracker from '../../components/client/PizzaTracker';
 import Skeleton from '../../components/ui/Skeleton';
 import MessagesTab from '../../components/jobs/MessagesTab'; 
+import ClientDocumentsTab from '../../components/client/ClientDocumentsTab';
 import { downloadInvoice } from '../../utils/invoiceGenerator';
 import confetti from 'canvas-confetti';
 import { useEffect } from 'react';
@@ -190,47 +191,9 @@ const ClientJobDetail = () => {
              </div>
            )}
 
-           {/* —— DOCUMENTS TAB —— */}
+           {/* —— DOCUMENTS TAB (Actionable Vault) —— */}
            {activeTab === 'documents' && (
-             <div className="bg-card border border-border rounded-[2.5rem] p-6 sm:p-10 shadow-2xl shadow-black/5">
-                <div className="flex justify-between items-center mb-10">
-                   <h2 className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-[0.2em] flex items-center gap-2">
-                     <FolderOpen size={14} className="text-primary" /> Multi-tier Vault
-                   </h2>
-                   <div className="text-[9px] font-bold bg-muted/50 text-muted-foreground border border-border px-4 py-1.5 rounded-full flex items-center gap-2 uppercase tracking-widest">
-                     <Lock size={12} className="text-emerald-500" /> End-to-End Encrypted
-                   </div>
-                </div>
-
-                {clientDocs.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                     {clientDocs.map((doc) => (
-                       <div key={doc.id} className="bg-muted/20 border border-border rounded-3xl p-6 hover:border-primary/40 hover:bg-card hover:shadow-xl shadow-black/5 transition-all group">
-                         <div className="flex items-start gap-4 mb-6">
-                           <div className="w-12 h-12 rounded-2xl bg-card border border-border text-muted-foreground flex items-center justify-center shrink-0 shadow-sm group-hover:text-primary transition-colors">
-                             <FolderOpen size={20} />
-                           </div>
-                           <div>
-                             <p className="text-[13px] font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">{doc.file_name}</p>
-                             <p className="text-[9px] font-bold text-muted-foreground/60 mt-2 uppercase tracking-widest">Dated: {new Date(doc.uploaded_at).toLocaleDateString()}</p>
-                           </div>
-                         </div>
-                         <button className="w-full flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background rounded-2xl py-3.5 text-[10px] font-extrabold uppercase tracking-widest transition-all shadow-md active:scale-95">
-                           <Download size={14} /> Download File
-                         </button>
-                       </div>
-                     ))}
-                  </div>
-                ) : (
-                  <div className="py-24 text-center border-2 border-dashed border-border rounded-[2rem] bg-muted/10">
-                     <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-border">
-                       <FolderOpen size={32} className="text-muted-foreground/20" />
-                     </div>
-                     <p className="text-foreground font-extrabold uppercase tracking-widest text-[11px] mb-2">Vault Empty</p>
-                     <p className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-widest max-w-[200px] mx-auto leading-relaxed">Official certifications will materialize here upon SLA fulfillment.</p>
-                  </div>
-                )}
-             </div>
+             <ClientDocumentsTab jobId={id || ''} steps={steps} documents={documents} />
            )}
 
            {/* —— MESSAGES TAB —— */}
