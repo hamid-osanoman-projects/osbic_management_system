@@ -13,8 +13,12 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       workbox: {
+        // ADD THIS LINE BELOW
+        maximumFileSizeToCacheInBytes: 5000000,
+
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
+          // ... (keep your existing Supabase and Image caching rules exactly the same)
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/,
             handler: 'NetworkFirst',
@@ -22,7 +26,7 @@ export default defineConfig({
               cacheName: 'supabase-api-cache',
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 // 24 hours
+                maxAgeSeconds: 60 * 60 * 24
               },
               cacheableResponse: {
                 statuses: [0, 200]
@@ -36,13 +40,14 @@ export default defineConfig({
               cacheName: 'images-cache',
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
           }
         ]
       },
       manifest: {
+        // ... (keep your existing manifest settings the same)
         name: 'OSBIC OS',
         short_name: 'OSBIC',
         description: 'Elite Service Lifecycle Management for OSBIC',
