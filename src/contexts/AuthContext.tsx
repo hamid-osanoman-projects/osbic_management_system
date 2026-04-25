@@ -98,10 +98,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .select('*')
         .eq('id', userId)
         .single();
-      if (error) throw error;
-      setProfile(data);
+      
+      if (error) {
+        // If profile doesn't exist but user does, it's a broken session
+        console.error('Profile fetch failed:', error);
+        setProfile(null);
+      } else {
+        setProfile(data);
+      }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('Critical Auth Error:', error);
+      setProfile(null);
     } finally {
       setLoading(false);
     }
@@ -112,13 +119,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) return { error: error.message };
     
     // Fetch the role immediately for the caller
-    const { data: profile } = await supabase
+    const { data: profileData } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', data.user.id)
       .single();
 
-    return { error: null, role: profile?.role };
+    return { error: null, role: (profileData as any)?.role };
   };
 
   const devLogin = (role: 'admin' | 'employee' | 'client') => {

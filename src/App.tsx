@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -64,13 +64,21 @@ const DashboardPlaceholder = ({ title }: { title: string }) => (
 );
 
 const LoginPage = () => {
-  const { devLogin, isDevMode, signIn } = useAuth();
+  const { devLogin, isDevMode, signIn, user, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Auto-redirect if already logged in
+    if (!authLoading && user && role) {
+      const path = role === 'admin' ? '/admin' : role === 'employee' ? '/employee' : '/portal';
+      navigate(path, { replace: true });
+    }
+  }, [user, role, authLoading, navigate]);
 
   const handleDevLogin = (role: 'admin' | 'employee' | 'client') => {
     if (devLogin) {
@@ -95,6 +103,8 @@ const LoginPage = () => {
     const path = userRole === 'admin' ? '/admin' : userRole === 'employee' ? '/employee' : '/portal';
     navigate(path, { replace: true });
   };
+
+  if (authLoading) return null;
 
   return (
     <div className="h-screen w-full flex items-center justify-center bg-background relative overflow-hidden">
