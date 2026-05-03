@@ -23,6 +23,7 @@ import { useNotifications } from '../../hooks/shared/useNotifications';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useOperationalRequests } from '../../hooks/shared/useJobs';
+import { useAdminSettings } from '../../hooks/admin/useAdminSettings';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -41,6 +42,7 @@ const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const { data: requests } = useOperationalRequests();
   const { useNotificationsList } = useNotifications();
   const { data: notifications } = useNotificationsList();
+  const { logo } = useAdminSettings();
 
   const pendingRequestsCount = requests?.filter(r => r.status === 'pending').length || 0;
   const unreadNotifsCount = notifications?.filter(n => !n.is_read).length || 0;
@@ -85,8 +87,12 @@ const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
       {/* Logo Section */}
       <div className="flex h-20 items-center px-6 overflow-hidden">
         <div className="flex items-center gap-3 shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-            <span className="text-xl font-syne font-bold text-primary">O</span>
+          <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
+            {logo ? (
+              <img src={logo} alt="Logo" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xl font-syne font-bold text-primary">O</span>
+            )}
           </div>
           {!collapsed && (
             <motion.div

@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Eye, EyeOff } from 'lucide-react';
+import { useAdminSettings } from './hooks/admin/useAdminSettings';
+import ThemeToggle from './components/ThemeToggle';
 
 
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -71,6 +73,7 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { logo } = useAdminSettings();
 
   useEffect(() => {
     // Auto-redirect if already logged in
@@ -108,10 +111,19 @@ const LoginPage = () => {
 
   return (
     <div className="h-screen w-full flex items-center justify-center bg-background relative overflow-hidden">
+      <div className="absolute top-8 right-8 z-50">
+        <ThemeToggle />
+      </div>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
       <div className="relative z-10 w-full max-w-md mx-4">
         <div className="text-center mb-10">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center font-bold text-primary text-3xl mx-auto mb-4 shadow-[0_0_40px_rgba(var(--primary),0.15)]">O</div>
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center font-bold text-primary text-3xl mx-auto mb-4 shadow-[0_0_40px_rgba(var(--primary),0.15)] overflow-hidden">
+            {logo ? (
+              <img src={logo} alt="Logo" className="w-full h-full object-cover" />
+            ) : (
+              "O"
+            )}
+          </div>
           <h1 className="text-3xl font-bold text-foreground tracking-widest uppercase" style={{ fontFamily: 'Syne, sans-serif' }}>OSBIC OS</h1>
           <p className="text-muted-foreground text-sm mt-2">Service Lifecycle Management Platform</p>
         </div>

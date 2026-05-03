@@ -3,12 +3,14 @@ import {
   Building2, Bell, Mail, Link as LinkIcon, Shield, 
   Save, Upload, Check, AlertCircle, RefreshCw, Smartphone, Globe
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import Placeholder from '@tiptap/extension-placeholder';
 import StarterKit from '@tiptap/starter-kit';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+
+import { useAdminSettings } from '../../hooks/admin/useAdminSettings';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -46,6 +48,16 @@ const Settings = () => {
   const [activeTab, setActiveTab] = useState('company');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const { settings, logo: logoPreview, updateSettings, uploadLogo, isLoading } = useAdminSettings();
+  const [localSettings, setLocalSettings] = useState<any>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync settings to local state on load
+  useEffect(() => {
+    if (settings) {
+      setLocalSettings(settings);
+    }
+  }, [settings]);
 
   const editor = useEditor({
     extensions: [
@@ -62,14 +74,33 @@ const Settings = () => {
     },
   });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await updateSettings.mutateAsync(localSettings);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    }, 1200);
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsSaving(true);
+      try {
+        await uploadLogo.mutateAsync(file);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } catch (error) {
+        console.error('Logo upload failed:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    }
   };
 
   const tabs = [
@@ -143,19 +174,21 @@ const Settings = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="flex flex-col gap-2">
                        <label className="text-xs font-bold text-muted-foreground/60 uppercase tracking-wider">Company Name</label>
-                       <input 
-                         type="text" 
-                         defaultValue="OSBIC Services"
-                         className="bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-gold outline-none transition-all focus:ring-4 focus:ring-gold/5" 
-                       />
+                        <input 
+                          type="text" 
+                          value={localSettings.company_name || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, company_name: e.target.value })}
+                          className="bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-gold outline-none transition-all focus:ring-4 focus:ring-gold/5" 
+                        />
                     </div>
                     <div className="flex flex-col gap-2">
                        <label className="text-xs font-bold text-muted-foreground/60 uppercase tracking-wider">Primary Email</label>
-                       <input 
-                         type="email" 
-                         defaultValue="operations@osbic.com"
-                         className="bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-gold outline-none" 
-                       />
+                        <input 
+                          type="email" 
+                          value={localSettings.company_email || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, company_email: e.target.value })}
+                          className="bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-gold outline-none" 
+                        />
                     </div>
                   </div>
                 </section>
@@ -163,12 +196,26 @@ const Settings = () => {
                 <section>
                   <h3 className="text-lg font-bold text-foreground mb-4">Official Logo</h3>
                   <div className="flex items-center gap-6 p-6 border-2 border-dashed border-border rounded-2xl bg-white/[0.02]">
-                    <div className="w-24 h-24 rounded-2xl bg-primary/10 border border-gold/20 flex items-center justify-center font-syne font-bold text-3xl text-primary">
-                       O
+                    <div className="w-24 h-24 rounded-2xl bg-primary/10 border border-gold/20 flex items-center justify-center font-syne font-bold text-3xl text-primary overflow-hidden">
+                       {logoPreview ? (
+                         <img src={logoPreview} alt="Logo Preview" className="w-full h-full object-cover" />
+                       ) : (
+                         "O"
+                       )}
                     </div>
                     <div className="space-y-4">
                       <p className="text-xs text-muted-foreground">Preferred format: SVG or transparent PNG (400x400px)</p>
-                      <button className="flex items-center gap-2 px-4 py-2 bg-muted/50 border border-border rounded-xl text-xs font-bold text-foreground hover:bg-muted transition-colors">
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleLogoChange} 
+                        accept="image/*" 
+                        className="hidden" 
+                      />
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-2 px-4 py-2 bg-muted/50 border border-border rounded-xl text-xs font-bold text-foreground hover:bg-muted transition-colors"
+                      >
                          <Upload size={14} /> Replace Logo
                       </button>
                     </div>
@@ -180,11 +227,12 @@ const Settings = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="flex flex-col gap-2">
                        <label className="text-xs font-bold text-muted-foreground/60 uppercase tracking-wider">WhatsApp Business</label>
-                       <input 
-                         type="text" 
-                         defaultValue="+968 9000 0000"
-                         className="bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-gold outline-none" 
-                       />
+                        <input 
+                          type="text" 
+                          value={localSettings.company_phone || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, company_phone: e.target.value })}
+                          className="bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-gold outline-none" 
+                        />
                     </div>
                     <div className="flex flex-col gap-2">
                        <label className="text-xs font-bold text-muted-foreground/60 uppercase tracking-wider">VAT Number</label>
@@ -196,11 +244,12 @@ const Settings = () => {
                     </div>
                     <div className="sm:col-span-2 flex flex-col gap-2">
                        <label className="text-xs font-bold text-muted-foreground/60 uppercase tracking-wider">Office Address</label>
-                       <textarea 
-                         rows={2}
-                         defaultValue="Ruwi, Muscat, Sultanate of Oman - Block 102, Plaza Center"
-                         className="bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-gold outline-none resize-none" 
-                       />
+                        <textarea 
+                          rows={2}
+                          value={localSettings.company_address || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, company_address: e.target.value })}
+                          className="bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-gold outline-none resize-none" 
+                        />
                     </div>
                   </div>
                 </section>

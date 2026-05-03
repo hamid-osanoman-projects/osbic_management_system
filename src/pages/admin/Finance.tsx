@@ -46,8 +46,8 @@ const Finance = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-syne font-bold text-foreground mb-2">Command & Capital</h1>
-          <p className="text-muted-foreground font-medium">Real-time financial synthesis across all active service trajectories.</p>
+          <h1 className="text-3xl font-syne font-bold text-foreground mb-2">Financial Dashboard</h1>
+          <p className="text-muted-foreground font-medium">Live tracking of all earnings, profits, and unpaid balances.</p>
         </div>
         <button 
            onClick={() => refetch()}
@@ -60,26 +60,26 @@ const Finance = () => {
       {/* Primary Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard 
-          title="Total Gross Revenue" 
+          title="Total Money In" 
           amount={metrics?.totalRevenue} 
           trend={12.4} 
-          subtext="Total value of all launched jobs"
+          subtext="The total price of all projects started."
           icon={DollarSign}
           color="blue"
         />
         <StatCard 
-          title="Net Center Profit" 
+          title="Our Actual Profit" 
           amount={metrics?.netProfit} 
           trend={8.2} 
-          subtext="Aggregate work fees retained"
+          subtext="The money the center keeps as profit."
           icon={TrendingUp}
           color="emerald"
         />
         <StatCard 
-          title="Ministry Escrow" 
+          title="Government Fees" 
           amount={metrics?.ministryHeld} 
           trend={-2.1} 
-          subtext="Fees earmarked for government entities"
+          subtext="Money held to pay for registrations."
           icon={Wallet}
           color="amber"
         />
@@ -87,26 +87,26 @@ const Finance = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard 
-          title="Outstanding Advances" 
+          title="Unpaid Deposits" 
           amount={metrics?.advancesUnpaid} 
           trend={15.3} 
-          subtext="Unpaid job startup fees"
+          subtext="Money clients owe for job startups."
           icon={CreditCard}
           color="red"
         />
         <StatCard 
-          title="Total Receivables" 
+          title="Money Clients Owe Us" 
           amount={metrics?.remainingUnpaid} 
           trend={5.9} 
-          subtext="Unpaid remaining balances"
+          subtext="Total amount still waiting to be collected."
           icon={BarChart3}
           color="amber"
         />
         <StatCard 
-          title="Monthly Delta" 
+          title="This Month's Growth" 
           amount={metrics?.monthlyRevenue} 
           trend={22.1} 
-          subtext="New revenue generated this month"
+          subtext="New money made during this month."
           icon={PieChart}
           color="emerald"
         />
@@ -117,7 +117,7 @@ const Finance = () => {
         <div className="bg-card border border-border rounded-[32px] p-8">
           <div className="flex items-center justify-between mb-8">
              <h3 className="text-xl font-bold text-foreground flex items-center gap-3">
-               <Users className="text-primary" size={24} /> Employee Capital Delta
+               <Users className="text-primary" size={24} /> Employee Performance
              </h3>
           </div>
           <div className="space-y-6">
@@ -147,7 +147,7 @@ const Finance = () => {
         <div className="bg-card border border-border rounded-[32px] p-8">
            <div className="flex items-center justify-between mb-8">
              <h3 className="text-xl font-bold text-foreground flex items-center gap-3">
-               <BarChart3 className="text-primary" size={24} /> Service Profit Matrix
+               <BarChart3 className="text-primary" size={24} /> Profit by Category
              </h3>
            </div>
            

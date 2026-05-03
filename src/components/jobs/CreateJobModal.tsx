@@ -181,7 +181,7 @@ const CreateJobModal = ({ isOpen, onClose, preSelectedClientId }: Props) => {
               </h2>
               <p className="text-xs text-muted-foreground/60 font-bold uppercase tracking-[0.2em] mt-1">Smart Orchestration System</p>
             </div>
-            <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground/60 hover:text-foreground transition-colors">
+            <button onClick={onClose} className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground/60 hover:text-foreground transition-colors">
               <X size={20} />
             </button>
           </div>
@@ -191,8 +191,8 @@ const CreateJobModal = ({ isOpen, onClose, preSelectedClientId }: Props) => {
             {step === 'search' && (
               <div className="space-y-6">
                 <div className="flex bg-background p-1 rounded-2xl border border-border">
-                  <button onClick={() => setMode('existing')} className={cn("flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all", mode === 'existing' ? 'bg-primary text-[#0A0F1E] shadow-lg shadow-gold/20' : 'text-muted-foreground/60 hover:text-foreground')}>Existing Client</button>
-                  <button onClick={() => setMode('new')} className={cn("flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all", mode === 'new' ? 'bg-primary text-[#0A0F1E] shadow-lg shadow-gold/20' : 'text-muted-foreground/60 hover:text-foreground')}>New Client</button>
+                  <button onClick={() => setMode('existing')} className={cn("flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all", mode === 'existing' ? 'bg-primary text-primary-foreground shadow-lg shadow-gold/20' : 'text-muted-foreground/60 hover:text-foreground')}>Existing Client</button>
+                  <button onClick={() => setMode('new')} className={cn("flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all", mode === 'new' ? 'bg-primary text-primary-foreground shadow-lg shadow-gold/20' : 'text-muted-foreground/60 hover:text-foreground')}>New Client</button>
                 </div>
                 {mode === 'existing' ? (
                   <div className="space-y-4">
@@ -217,11 +217,11 @@ const CreateJobModal = ({ isOpen, onClose, preSelectedClientId }: Props) => {
                     <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold">{selectedClient?.full_name[0] || 'C'}</div>
                     <p className="text-sm font-bold text-foreground">{selectedClient?.full_name || 'Client'}</p>
                   </div>
-                  <div className="flex bg-background/50 p-1 rounded-xl border border-border">
-                    <button onClick={() => setSelectionTab('services')} className={cn("px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-2", selectionTab === 'services' ? "bg-primary text-[#0A0F1E]" : "text-muted-foreground")}>
+                  <div className="flex bg-muted/50 p-1 rounded-xl border border-border">
+                    <button onClick={() => setSelectionTab('services')} className={cn("px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-2", selectionTab === 'services' ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
                       <LayoutGrid size={14} /> Services
                     </button>
-                    <button onClick={() => setSelectionTab('packages')} className={cn("px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-2", selectionTab === 'packages' ? "bg-primary text-[#0A0F1E]" : "text-muted-foreground")}>
+                    <button onClick={() => setSelectionTab('packages')} className={cn("px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-2", selectionTab === 'packages' ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
                       <Boxes size={14} /> Packages
                     </button>
                   </div>
@@ -234,9 +234,9 @@ const CreateJobModal = ({ isOpen, onClose, preSelectedClientId }: Props) => {
                          key={service.id}
                          whileHover={{ scale: 1.02, y: -2 }}
                          onClick={() => handleServiceSelect(service)}
-                         className={cn("p-6 rounded-3xl border flex flex-col items-center text-center gap-4 transition-all", selectedService?.id === service.id ? 'bg-primary border-gold text-[#0A0F1E]' : 'bg-white/5 border-border hover:border-gold/30 hover:bg-primary/5 text-foreground')}
+                         className={cn("p-6 rounded-3xl border flex flex-col items-center text-center gap-4 transition-all", selectedService?.id === service.id ? 'bg-primary border-gold text-primary-foreground' : 'bg-muted border-border hover:border-gold/30 hover:bg-primary/5 text-foreground')}
                        >
-                         <div className={cn("p-3 rounded-2xl", selectedService?.id === service.id ? 'bg-background/20' : 'bg-white/10')}><Building2 size={24} /></div>
+                         <div className={cn("p-3 rounded-2xl", selectedService?.id === service.id ? 'bg-primary-foreground/20' : 'bg-muted-foreground/10')}><Building2 size={24} /></div>
                          <p className="text-xs font-bold uppercase tracking-widest">{service.name_en}</p>
                        </motion.button>
                      ))
@@ -262,7 +262,7 @@ const CreateJobModal = ({ isOpen, onClose, preSelectedClientId }: Props) => {
                 </div>
 
                 <div className="pt-4 flex justify-end">
-                   <button disabled={!selectedService && !selectedPackage} onClick={() => setStep('config')} className="px-8 py-4 bg-primary text-[#0A0F1E] font-bold rounded-2xl flex items-center gap-3 disabled:opacity-30 transition-all hover:shadow-[0_0_40px_rgba(212,175,55,0.3)] group">
+                   <button disabled={!selectedService && !selectedPackage} onClick={() => setStep('config')} className="px-8 py-4 bg-primary text-primary-foreground font-bold rounded-2xl flex items-center gap-3 disabled:opacity-30 transition-all hover:shadow-[0_0_40px_rgba(212,175,55,0.3)] group">
                      Configure Entry <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                    </button>
                 </div>
@@ -285,30 +285,30 @@ const CreateJobModal = ({ isOpen, onClose, preSelectedClientId }: Props) => {
                          </div>
                        )}
                        
-                       <div className="space-y-3 p-4 bg-black/20 rounded-xl border border-border">
+                       <div className="space-y-3 p-4 bg-muted/30 rounded-xl border border-border">
                           <div className={cn("flex justify-between items-center text-xs", selectedPackage && "opacity-60")}>
                              <span className="text-muted-foreground/60 font-bold uppercase tracking-wider">Service Fee</span>
                              <div className="flex items-center gap-2">
                                 <span className="text-foreground font-mono">OMR</span>
-                                <input type="number" value={workFee} onChange={(e) => setWorkFee(Number(e.target.value))} className="w-16 bg-white/5 border border-border rounded px-2 py-1 text-foreground text-right font-bold outline-none focus:border-gold/50" />
+                                <input type="number" value={workFee} onChange={(e) => setWorkFee(Number(e.target.value))} className="w-16 bg-background border border-border rounded px-2 py-1 text-foreground text-right font-bold outline-none focus:border-gold/50" />
                              </div>
                           </div>
                           <div className={cn("flex justify-between items-center text-xs", selectedPackage && "opacity-60")}>
                              <span className="text-muted-foreground/60 font-bold uppercase tracking-wider">Ministry Fee</span>
                              <div className="flex items-center gap-2">
                                 <span className="text-foreground font-mono">OMR</span>
-                                <input type="number" value={ministryFee} onChange={(e) => setMinistryFee(Number(e.target.value))} className="w-16 bg-white/5 border border-border rounded px-2 py-1 text-foreground text-right font-bold outline-none focus:border-gold/50" />
+                                <input type="number" value={ministryFee} onChange={(e) => setMinistryFee(Number(e.target.value))} className="w-16 bg-background border border-border rounded px-2 py-1 text-foreground text-right font-bold outline-none focus:border-gold/50" />
                              </div>
                           </div>
                           {selectedPackage && (
-                            <div className="pt-2 mt-2 border-t border-white/5 flex items-center justify-between text-emerald-400">
+                            <div className="pt-2 mt-2 border-t border-border flex items-center justify-between text-emerald-400">
                                <div className="flex items-center gap-1.5">
                                   <Sparkles size={12} />
                                   <span className="text-[10px] font-bold uppercase tracking-widest">Bundle Discount ({selectedPackage.discount_percentage}%)</span>
                                </div>
                             </div>
                           )}
-                          <div className="h-[1px] bg-white/5 my-1" />
+                          <div className="h-[1px] bg-border my-1" />
                           <div className="flex justify-between items-center">
                              <span className="text-[10px] text-primary font-bold uppercase tracking-[0.2em]">Launch Total</span>
                              <span className="text-lg font-bold text-foreground font-syne">{workFee + ministryFee} <span className="text-[10px] text-muted-foreground/60">OMR</span></span>
@@ -320,7 +320,7 @@ const CreateJobModal = ({ isOpen, onClose, preSelectedClientId }: Props) => {
                         <div className="space-y-4">
                            <p className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-widest mb-4">Ownership Assignment</p>
                            {isAdmin ? (
-                             <div className="p-4 bg-white/5 border border-border rounded-2xl space-y-3">
+                             <div className="p-4 bg-muted border border-border rounded-2xl space-y-3">
                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.1em] flex items-center gap-2"><UserPlus size={12} className="text-primary" /> Staff Selection</p>
                                <select value={overrideEmployeeId} onChange={(e) => setOverrideEmployeeId(e.target.value)} className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm text-foreground outline-none focus:border-gold/50 appearance-none">
                                   <option value="" disabled>Select Employee...</option>
@@ -328,7 +328,17 @@ const CreateJobModal = ({ isOpen, onClose, preSelectedClientId }: Props) => {
                                   {employees?.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
                                </select>
                              </div>
-                           ) : <div className="flex items-center gap-3 p-4 bg-blue-500/5 border border-blue-500/20 rounded-2xl"><div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 font-bold">{profile?.full_name?.[0]}</div><div><p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Self-Assigned</p><p className="text-sm font-bold text-foreground">{profile?.full_name}</p></div></div>}
+                           ) : (
+                             <div className="flex items-center gap-3 p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl">
+                               <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-500 font-bold">
+                                 {profile?.full_name?.[0]}
+                               </div>
+                               <div>
+                                 <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest">Self-Assigned</p>
+                                 <p className="text-sm font-bold text-foreground">{profile?.full_name}</p>
+                               </div>
+                             </div>
+                           )}
                         </div>
 
                         {selectedPackage && (

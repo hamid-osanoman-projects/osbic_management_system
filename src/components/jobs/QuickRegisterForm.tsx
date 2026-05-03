@@ -85,27 +85,27 @@ const QuickRegisterForm = ({ onSuccess }: Props) => {
   };
 
   return (
-    <div className="bg-[#0A0F1E] border border-white/5 rounded-2xl p-6 space-y-4">
+    <div className="bg-background border border-border rounded-2xl p-6 space-y-4">
       <div className="flex items-center gap-2 mb-2">
-        <div className="p-2 rounded-lg bg-gold/10 text-gold text-sm">
+        <div className="p-2 rounded-lg bg-primary/10 text-primary text-sm">
           <Plus size={16} />
         </div>
         <div>
-          <h4 className="text-sm font-bold text-white">New Client Registration</h4>
-          <p className="text-[10px] text-[#475569] uppercase font-bold tracking-widest">Minimal Data Entry</p>
+          <h4 className="text-sm font-bold text-foreground">New Client Registration</h4>
+          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Minimal Data Entry</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-[#475569] uppercase tracking-widest ml-1">Full Name</label>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Full Name</label>
           <div className="relative">
-            <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#475569]" />
+            <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               value={formData.fullName}
               onChange={e => setFormData({ ...formData, fullName: e.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-9 py-2.5 text-sm text-white focus:border-gold outline-none transition-all"
+              className="w-full bg-muted border border-border rounded-xl px-9 py-2.5 text-sm text-foreground focus:border-primary outline-none transition-all"
               placeholder="e.g. Salim Al Hashmi"
             />
           </div>
@@ -113,27 +113,27 @@ const QuickRegisterForm = ({ onSuccess }: Props) => {
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-[#475569] uppercase tracking-widest ml-1">Phone</label>
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Phone</label>
             <div className="relative">
-              <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#475569]" />
+              <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="tel"
                 value={formData.phone}
                 onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-9 py-2.5 text-sm text-white focus:border-gold outline-none transition-all"
+                className="w-full bg-muted border border-border rounded-xl px-9 py-2.5 text-sm text-foreground focus:border-primary outline-none transition-all"
                 placeholder="9123 4567"
               />
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-[#475569] uppercase tracking-widest ml-1">Email (Opt)</label>
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Email (Opt)</label>
             <div className="relative">
-              <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#475569]" />
+              <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="email"
                 value={formData.email}
                 onChange={e => setFormData({ ...formData, email: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-9 py-2.5 text-sm text-white focus:border-gold outline-none transition-all"
+                className="w-full bg-muted border border-border rounded-xl px-9 py-2.5 text-sm text-foreground focus:border-primary outline-none transition-all"
                 placeholder="client@mail.com"
               />
             </div>
@@ -143,7 +143,7 @@ const QuickRegisterForm = ({ onSuccess }: Props) => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+          className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/10"
         >
           {loading ? (
             <Loader2 className="animate-spin" size={16} />

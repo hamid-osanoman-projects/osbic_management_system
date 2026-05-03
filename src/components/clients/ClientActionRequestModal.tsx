@@ -64,7 +64,7 @@ const ClientActionRequestModal = ({ isOpen, onClose, client, mode }: Props) => {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}
           className={cn(
-            "relative w-full max-w-md bg-[#0F1629] border rounded-[32px] overflow-hidden shadow-2xl",
+            "relative w-full max-w-md bg-card border rounded-[32px] overflow-hidden shadow-2xl",
             isDelete ? "border-red-500/20 shadow-red-500/10" : "border-amber-500/20 shadow-amber-500/10"
           )}
         >
@@ -84,32 +84,32 @@ const ClientActionRequestModal = ({ isOpen, onClose, client, mode }: Props) => {
                   {isDelete ? <ShieldAlert size={20} /> : <Archive size={20} />}
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">
+                  <h3 className="text-lg font-bold text-foreground">
                     {isDelete ? 'Request Deletion' : 'Request Deactivation'}
                   </h3>
-                  <p className="text-[10px] text-[#475569] font-bold uppercase tracking-widest">Administrative Approval Required</p>
+                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Administrative Approval Required</p>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-[#475569] hover:text-white transition-colors">
+              <button onClick={onClose} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                 <X size={20} />
               </button>
             </div>
 
             <div className={cn(
               "border p-4 rounded-2xl mb-6",
-              isDelete ? "bg-red-500/5 border-red-500/10" : "bg-amber-500/5 border-amber-500/10"
+              isDelete ? "bg-red-500/10 border-red-500/20" : "bg-amber-500/10 border-amber-500/20"
             )}>
                <div className="flex gap-3">
-                 <AlertTriangle size={18} className={cn("shrink-0", isDelete ? "text-red-400" : "text-amber-400")} />
-                 <div className={cn("text-xs leading-relaxed", isDelete ? "text-red-400/80" : "text-amber-400/80")}>
-                   You are requesting to {isDelete ? 'permanently remove' : 'deactivate'} <span className="font-bold text-white uppercase">{client.full_name}</span>. This will be sent to Admin for final review.
+                 <AlertTriangle size={18} className={cn("shrink-0", isDelete ? "text-red-500" : "text-amber-500")} />
+                 <div className={cn("text-xs leading-relaxed", isDelete ? "text-red-600/80" : "text-amber-600/80")}>
+                   You are requesting to {isDelete ? 'permanently remove' : 'deactivate'} <span className="font-bold text-foreground uppercase">{client.full_name}</span>. This will be sent to Admin for final review.
                  </div>
                </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
                <div>
-                 <label className="text-[10px] font-bold text-[#475569] uppercase tracking-widest ml-1 mb-2 block">
+                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1 mb-2 block">
                     Please provide a justification:
                  </label>
                  <textarea
@@ -118,7 +118,7 @@ const ClientActionRequestModal = ({ isOpen, onClose, client, mode }: Props) => {
                    autoFocus
                    placeholder={isDelete ? "e.g. Duplicate entry, Data removal request..." : "e.g. Client moving abroad, Service no longer needed..."}
                    className={cn(
-                     "w-full bg-[#0A0F1E] border border-white/10 rounded-2xl p-4 text-sm text-white outline-none transition-all h-32 resize-none placeholder:text-[#475569]",
+                     "w-full bg-background border border-border rounded-2xl p-4 text-sm text-foreground outline-none transition-all h-32 resize-none placeholder:text-muted-foreground",
                      isDelete ? "focus:border-red-500/50" : "focus:border-amber-500/50"
                    )}
                  />
@@ -128,7 +128,7 @@ const ClientActionRequestModal = ({ isOpen, onClose, client, mode }: Props) => {
                  <button
                    type="button"
                    onClick={onClose}
-                   className="flex-1 py-4 rounded-2xl text-xs font-bold text-[#475569] hover:text-white transition-colors"
+                   className="flex-1 py-4 rounded-2xl text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
                  >
                    Cancel
                  </button>

@@ -65,11 +65,11 @@ const ClientsHub = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
           <h1 className="text-3xl font-syne font-bold text-foreground">Client Management Hub</h1>
-          <p className="text-sm text-[#475569] uppercase font-bold tracking-[0.2em] mt-1">Client Lifetime Value & Operations</p>
+          <p className="text-sm text-muted-foreground uppercase font-bold tracking-[0.2em] mt-1">Client Lifetime Value & Operations</p>
         </div>
         <button
           onClick={() => setIsRegisterOpen(true)}
-          className="px-6 py-3 bg-primary text-[#0A0F1E] font-bold rounded-2xl flex items-center gap-2 hover:shadow-[0_0_30px_rgba(212,175,55,0.2)] transition-all active:scale-95"
+          className="px-6 py-3 bg-primary text-primary-foreground font-bold rounded-2xl flex items-center gap-2 hover:shadow-[0_0_30px_rgba(212,175,55,0.2)] transition-all active:scale-95"
         >
           <Plus size={20} /> Register New Client
         </button>
@@ -83,18 +83,18 @@ const ClientsHub = () => {
       {/* Toolbar */}
       <div className="bg-card border border-border rounded-3xl shadow-2xl p-2 flex flex-col lg:flex-row gap-4 items-center">
         <div className="flex-1 w-full relative">
-          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#475569]" />
+          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search by Name, CR, or Phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#0A0F1E]/50 border-none outline-none pl-12 pr-4 py-4 text-foreground placeholder:text-[#475569] text-base rounded-2xl"
+            className="w-full bg-background/50 border-none outline-none pl-12 pr-4 py-4 text-foreground placeholder:text-muted-foreground text-base rounded-2xl"
           />
         </div>
         <div className="flex items-center gap-2 px-2 overflow-x-auto no-scrollbar w-full lg:w-auto">
-          <div className="h-10 w-[1px] bg-white/10 mx-2 hidden lg:block" />
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-muted-foreground text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all border border-white/5">
+          <div className="h-10 w-[1px] bg-border mx-2 hidden lg:block" />
+          <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted/50 text-muted-foreground text-xs font-bold uppercase tracking-widest hover:bg-muted transition-all border border-border">
             <Filter size={14} /> My Registrations
           </button>
         </div>
@@ -119,36 +119,36 @@ const ClientsHub = () => {
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.4, delay: idx * 0.03 }}
                 // Add a cursor-pointer if the whole card is clickable, or leave it as is
-                className="group relative bg-[#0F172A]/40 backdrop-blur-xl border border-white/10 rounded-[40px] p-8 hover:border-primary/40 transition-all duration-500 shadow-2xl hover:shadow-primary/5 overflow-hidden"
+                className="group relative bg-card/60 backdrop-blur-xl border border-border rounded-[40px] p-8 hover:border-primary/40 transition-all duration-500 shadow-2xl hover:shadow-primary/5 overflow-hidden"
               >
                 {/* Subtle Gradient Glow Background */}
                 <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/5 blur-[80px] group-hover:bg-primary/10 transition-colors duration-500 rounded-full" />
-
+ 
                 {/* Header Section */}
                 <div className="flex items-start justify-between mb-8 relative z-10">
                   <div className="flex items-center gap-5">
                     <div className="relative">
-                      <div className="bg-[#1E293B] ring-1 ring-white/10 rounded-2xl flex items-center justify-center overflow-hidden w-16 h-16 shadow-inner">
+                      <div className="bg-muted ring-1 ring-border rounded-2xl flex items-center justify-center overflow-hidden w-16 h-16 shadow-inner">
                         {client.avatar_url ? (
                           <img src={client.avatar_url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                         ) : (
-                          <User className="text-slate-500" size={32} />
+                          <User className="text-muted-foreground" size={32} />
                         )}
                       </div>
                       {/* Active Indicator */}
                       <div className={cn(
-                        "absolute -top-1 -right-1 h-4 w-4 rounded-full border-4 border-[#0F172A] z-10",
+                        "absolute -top-1 -right-1 h-4 w-4 rounded-full border-4 border-card z-10",
                         client.is_active ? "bg-emerald-400" : "bg-red-400"
                       )} />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-xl font-bold text-white truncate font-syne tracking-tight">{client.full_name}</h3>
-                      <span className="inline-block px-2 py-0.5 rounded-md bg-white/5 text-[9px] text-slate-400 font-mono tracking-tighter border border-white/5 mt-1">
+                      <h3 className="text-xl font-bold text-foreground truncate font-syne tracking-tight">{client.full_name}</h3>
+                      <span className="inline-block px-2 py-0.5 rounded-md bg-muted text-[9px] text-muted-foreground font-mono tracking-tighter border border-border mt-1">
                         {client.client_code || 'ID-PENDING'}
                       </span>
                     </div>
                   </div>
-
+ 
                   {/* FIXED HISTORY BUTTON */}
                   <button
                     onClick={(e) => {
@@ -156,25 +156,25 @@ const ClientsHub = () => {
                       e.stopPropagation(); // Prevents the card from triggering other clicks
                       navigate(`/employee/clients/${client.id}/history`);
                     }}
-                    className="p-3 rounded-2xl bg-white/5 text-slate-400 hover:text-primary hover:bg-primary/10 transition-all border border-transparent hover:border-primary/20 cursor-pointer relative z-20"
+                    className="p-3 rounded-2xl bg-muted text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all border border-transparent hover:border-primary/20 cursor-pointer relative z-20"
                     title="View History"
                   >
                     <History size={20} />
                   </button>
                 </div>
-
+ 
                 {/* Info Section */}
                 <div className="grid grid-cols-2 gap-4 mb-8 relative z-10">
-                  <div className="bg-white/5 rounded-2xl p-3 border border-white/5">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Phone</p>
-                    <p className="text-sm font-mono text-slate-200">{client.phone || '—'}</p>
+                  <div className="bg-muted rounded-2xl p-3 border border-border">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">Phone</p>
+                    <p className="text-sm font-mono text-foreground">{client.phone || '—'}</p>
                   </div>
-                  <div className="bg-white/5 rounded-2xl p-3 border border-white/5">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Active Jobs</p>
+                  <div className="bg-muted rounded-2xl p-3 border border-border">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">Active Jobs</p>
                     <p className="text-sm font-mono text-primary font-bold">{client.active_jobs || 0}</p>
                   </div>
                 </div>
-
+ 
                 {/* Actions Section */}
                 <div className="space-y-3 relative z-10">
                   <button
@@ -182,19 +182,19 @@ const ClientsHub = () => {
                       e.stopPropagation();
                       handleLaunchJob(client);
                     }}
-                    className="w-full py-4 rounded-2xl bg-primary text-[#0A0F1E] text-[11px] font-black uppercase tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 group/btn"
+                    className="w-full py-4 rounded-2xl bg-primary text-primary-foreground text-[11px] font-black uppercase tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 group/btn"
                   >
                     Start New Job
                     <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
                   </button>
-
+ 
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleActionRequest(client, 'ARCHIVE');
                       }}
-                      className="py-3 rounded-xl bg-white/5 hover:bg-amber-500/10 text-slate-400 hover:text-amber-400 text-[10px] font-bold uppercase tracking-widest border border-white/5 hover:border-amber-500/30 transition-all flex items-center justify-center gap-2"
+                      className="py-3 rounded-xl bg-muted hover:bg-amber-500/10 text-muted-foreground hover:text-amber-400 text-[10px] font-bold uppercase tracking-widest border border-border hover:border-amber-500/30 transition-all flex items-center justify-center gap-2"
                     >
                       Archive <Archive size={14} />
                     </button>
@@ -203,7 +203,7 @@ const ClientsHub = () => {
                         e.stopPropagation();
                         handleActionRequest(client, 'DELETE');
                       }}
-                      className="py-3 rounded-xl bg-white/5 hover:bg-red-500/10 text-slate-400 hover:text-red-400 text-[10px] font-bold uppercase tracking-widest border border-white/5 hover:border-red-500/30 transition-all flex items-center justify-center gap-2"
+                      className="py-3 rounded-xl bg-muted hover:bg-red-500/10 text-muted-foreground hover:text-red-400 text-[10px] font-bold uppercase tracking-widest border border-border hover:border-red-500/30 transition-all flex items-center justify-center gap-2"
                     >
                       Delete <Trash2 size={14} />
                     </button>
