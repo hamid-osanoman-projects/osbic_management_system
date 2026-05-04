@@ -63,7 +63,7 @@ const ClientProfile = () => {
       if (error) throw error;
 
       if (refreshProfile) await refreshProfile();
-      toast.success('Identity profile updated successfully');
+      toast.success('Profile updated successfully');
       setIsEditing(false);
     } catch (err: any) {
       toast.error(err.message || 'Failed to update profile');
@@ -106,7 +106,7 @@ const ClientProfile = () => {
       if (updateError) throw updateError;
 
       if (refreshProfile) await refreshProfile();
-      toast.success('Identity photo updated');
+      toast.success('Profile photo updated');
     } catch (err: any) {
       toast.error(err.message || 'Failed to sync photo');
     } finally {
@@ -124,7 +124,7 @@ const ClientProfile = () => {
       const { error } = await supabase.auth.updateUser({ password: passwordData.new });
       if (error) throw error;
 
-      toast.success('Account security updated successfully');
+      toast.success('Password updated successfully');
       setShowPasswordModal(false);
       setPasswordData({ new: '', confirm: '' });
     } catch (err: any) {
@@ -135,7 +135,8 @@ const ClientProfile = () => {
   };
 
   return (
-    <div className="space-y-10 max-w-4xl mx-auto pb-20">
+    <div className="flex-1 overflow-y-auto no-scrollbar bg-background">
+      <div className="max-w-4xl mx-auto w-full p-6 sm:p-8 lg:p-12 pb-32 lg:pb-12 space-y-8 lg:space-y-12">
 
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-8 sm:gap-6 px-4 sm:px-0">
@@ -169,7 +170,7 @@ const ClientProfile = () => {
               </p>
               <div className="flex items-center gap-1.5 px-3 py-1 bg-muted/50 border border-border rounded-lg">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">Verified Identity</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">Verified Account</span>
               </div>
             </div>
           </div>
@@ -196,12 +197,12 @@ const ClientProfile = () => {
               <Shield size={64} className="text-foreground" />
             </div>
             <h3 className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <Shield size={14} className="text-primary" /> Identity Security
+              <Shield size={14} className="text-primary" /> Account Security
             </h3>
             <div className="space-y-4">
               {[
-                { label: 'Security Key', icon: Lock, val: '••••••••••••', onClick: () => setShowPasswordModal(true) },
-                { label: 'Verified Identity', icon: User, val: 'SLA-LEVEL 1', accent: true },
+                { label: 'Password', icon: Lock, val: '••••••••••••', onClick: () => setShowPasswordModal(true) },
+                { label: 'Verification Level', icon: User, val: 'SLA-LEVEL 1', accent: true },
               ].map((item, i) => (
                 <div
                   key={i}
@@ -228,17 +229,17 @@ const ClientProfile = () => {
 
           <div className="bg-card border border-border rounded-[2.5rem] p-6 shadow-xl shadow-black/5">
             <h3 className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <Bell size={14} className="text-primary" /> Automation Alerts
+              <Bell size={14} className="text-primary" /> Notifications
             </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 group hover:bg-emerald-500/10 transition-colors">
-                <span className="text-[10px] font-bold text-emerald-500 transition-all uppercase tracking-widest leading-none">WhatsApp Pulse</span>
+                <span className="text-[10px] font-bold text-emerald-500 transition-all uppercase tracking-widest leading-none">WhatsApp Updates</span>
                 <div className="w-10 h-5 bg-emerald-500 border border-emerald-600 rounded-full relative cursor-pointer shadow-sm">
                   <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full" />
                 </div>
               </div>
               <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/30 border border-border group hover:bg-muted/50 transition-colors opacity-60">
-                <span className="text-[10px] font-bold text-muted-foreground transition-all uppercase tracking-widest leading-none underline decoration-dotted decoration-border">Email Audit Logs</span>
+                <span className="text-[10px] font-bold text-muted-foreground transition-all uppercase tracking-widest leading-none underline decoration-dotted decoration-border">Email Updates</span>
                 <div className="w-10 h-5 bg-muted rounded-full relative cursor-not-allowed">
                   <div className="absolute left-1 top-1 w-3 h-3 bg-muted-foreground/30 rounded-full" />
                 </div>
@@ -251,7 +252,7 @@ const ClientProfile = () => {
         <div className="lg:col-span-2">
           <div className="bg-card border border-border rounded-[2.5rem] p-8 shadow-2xl shadow-black/5 relative overflow-hidden h-full">
             <div className="flex items-center justify-between mb-10">
-              <h3 className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] flex items-center gap-2">Operational Identity Hub</h3>
+              <h3 className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] flex items-center gap-2">Profile Details</h3>
               <Globe size={18} className="text-muted-foreground/30" />
             </div>
 
@@ -259,7 +260,7 @@ const ClientProfile = () => {
               <div className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-muted-foreground/60 transition-colors uppercase tracking-widest font-bold text-[9px] mb-2 px-1 flex items-center gap-2">
-                    <User size={12} className="text-primary" /> Registered Name
+                    <User size={12} className="text-primary" /> Full Name
                   </label>
                   <input
                     disabled={!isEditing}
@@ -271,7 +272,7 @@ const ClientProfile = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-muted-foreground/60 transition-colors uppercase tracking-widest font-bold text-[9px] mb-2 px-1 flex items-center gap-2">
-                    <Mail size={12} className="text-primary" /> Verified System Email
+                    <Mail size={12} className="text-primary" /> Email Address
                   </label>
                   <input
                     disabled
@@ -285,7 +286,7 @@ const ClientProfile = () => {
               <div className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-muted-foreground/60 transition-colors uppercase tracking-widest font-bold text-[9px] mb-2 px-1 flex items-center gap-2">
-                    <Phone size={12} className="text-primary" /> Primary WhatsApp
+                    <Phone size={12} className="text-primary" /> Phone Number
                   </label>
                   <input
                     disabled={!isEditing}
@@ -297,7 +298,7 @@ const ClientProfile = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-muted-foreground/60 transition-colors uppercase tracking-widest font-bold text-[9px] mb-2 px-1 flex items-center gap-2">
-                    <Globe size={12} className="text-primary" /> Legal Nationality
+                    <Globe size={12} className="text-primary" /> Nationality
                   </label>
                   <input
                     disabled={!isEditing}
@@ -322,7 +323,7 @@ const ClientProfile = () => {
                   className="px-8 py-4 bg-primary text-white font-extrabold rounded-2xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 text-[10px] uppercase tracking-widest flex items-center gap-3"
                 >
                   {loading ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
-                  Synchronize Changes
+                  Save Changes
                 </button>
               </motion.div>
             )}
@@ -356,8 +357,8 @@ const ClientProfile = () => {
                       <Lock size={18} />
                     </div>
                     <div>
-                      <h3 className="text-xl font-syne font-bold text-foreground">Security Sync</h3>
-                      <p className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-widest">Update Identity Authentication</p>
+                      <h3 className="text-xl font-syne font-bold text-foreground">Change Password</h3>
+                      <p className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-widest">Update your password</p>
                     </div>
                   </div>
                   <button onClick={() => setShowPasswordModal(false)} className="text-muted-foreground hover:text-foreground p-2 hover:bg-muted rounded-xl transition-colors">
@@ -368,7 +369,7 @@ const ClientProfile = () => {
                 <form onSubmit={handleChangePassword} className="space-y-6">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest ml-1">New Secure Key</label>
+                      <label className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest ml-1">New Password</label>
                       <div className="relative group">
                         <input
                           type={showNew ? "text" : "password"}
@@ -389,7 +390,7 @@ const ClientProfile = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest ml-1">Repeat Secure Key</label>
+                      <label className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest ml-1">Confirm Password</label>
                       <div className="relative group">
                         <input
                           type={showConfirm ? "text" : "password"}
@@ -416,7 +417,7 @@ const ClientProfile = () => {
                   <AnimatePresence>
                     {!passwordsMatch && (
                       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 text-rose-500 text-[10px] font-bold uppercase tracking-widest bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">
-                        <AlertCircle size={14} /> Identity keys do not match
+                        <AlertCircle size={14} /> Passwords do not match
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -427,7 +428,7 @@ const ClientProfile = () => {
                     className="w-full bg-foreground text-background font-bold p-4 rounded-2xl shadow-xl shadow-black/20 hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-30 disabled:scale-100 font-syne"
                   >
                     {loading ? <Loader2 className="animate-spin" size={18} /> : (
-                      <><Shield size={18} /> Authorize Key Seal</>
+                      <><Shield size={18} /> Update Password</>
                     )}
                   </button>
                 </form>
@@ -436,6 +437,7 @@ const ClientProfile = () => {
           </div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 };

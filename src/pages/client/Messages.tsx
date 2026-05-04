@@ -31,13 +31,13 @@ const ClientMessages = () => {
   const activeJob = jobs?.find(j => j.id === selectedJobId);
 
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col lg:flex-row gap-6">
+    <div className="flex-1 flex flex-col lg:flex-row gap-8 overflow-hidden h-full p-6 sm:p-8 lg:p-12">
       
       {/* ── Chat Sidebar (Job Threads) ── */}
       <div className="w-full lg:w-80 flex flex-col gap-6 shrink-0 h-full">
         <div className="px-2">
            <h1 className="text-2xl font-syne font-bold text-foreground mb-1">Messages</h1>
-           <p className="text-muted-foreground/60 transition-colors uppercase tracking-widest font-bold text-[10px] leading-none">Support Center</p>
+           <p className="text-muted-foreground/60 transition-colors uppercase tracking-widest font-bold text-[10px] leading-none">Help & Support</p>
         </div>
 
         <div className="relative group px-1">
@@ -57,7 +57,7 @@ const ClientMessages = () => {
            ) : filteredThreads.length === 0 ? (
              <div className="text-center py-12 px-4">
                 <Inbox size={32} className="mx-auto text-muted-foreground/20 mb-3" />
-                <p className="text-xs text-muted-foreground italic">No conversations found</p>
+                <p className="text-xs text-muted-foreground italic">No messages yet</p>
              </div>
            ) : (
              filteredThreads.map(thread => (
@@ -81,7 +81,7 @@ const ClientMessages = () => {
                   </div>
                   <h4 className="text-sm font-bold text-foreground truncate mb-1 group-hover:text-primary transition-colors">{thread.service_name}</h4>
                   <p className="text-muted-foreground/60 line-clamp-1 text-[11px] leading-tight flex items-center gap-1.5">
-                    <User size={10} className="opacity-40" /> Case Officer: {thread.employee_name}
+                    <User size={10} className="opacity-40" /> Agent: {thread.employee_name}
                   </p>
                </motion.div>
              ))
@@ -92,20 +92,20 @@ const ClientMessages = () => {
       {/* ── Main Chat Area ── */}
       <div className="flex-1 flex flex-col h-full min-h-[500px]">
         {!selectedJobId ? (
-          <div className="flex-1 bg-card border border-border rounded-[40px] flex flex-col items-center justify-center text-center p-12 shadow-2xl relative overflow-hidden">
-             <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
-             <div className="relative z-10">
-                <div className="w-20 h-20 rounded-3xl bg-white/5 border border-white/5 flex items-center justify-center mb-6 mx-auto shadow-2xl">
-                   <MessageSquare size={36} className="text-primary/20" />
+          <div className="flex-1 bg-card/40 backdrop-blur-xl border border-border rounded-[40px] flex flex-col items-center justify-center text-center p-12 shadow-2xl relative overflow-hidden">
+             <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none opacity-20" />
+             <div className="relative z-10 flex flex-col items-center">
+                <div className="w-24 h-24 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-8 shadow-2xl">
+                   <MessageSquare size={42} className="text-primary" />
                 </div>
-                <h3 className="text-xl font-syne font-bold text-foreground mb-2">Service Support Hub</h3>
-                <p className="text-muted-foreground/60 max-w-sm mx-auto text-sm">Select a project thread from the sidebar to view your secure conversation history with our operational team.</p>
+                <h3 className="text-2xl font-syne font-bold text-foreground mb-3">Message Center</h3>
+                <p className="text-muted-foreground/50 max-w-sm mx-auto text-sm font-medium leading-relaxed">Select a service from the list to start chatting with our support team.</p>
              </div>
           </div>
         ) : isLoadingDetail ? (
           <div className="flex-1 bg-card border border-border rounded-[40px] flex flex-col items-center justify-center">
              <Loader2 size={32} className="text-primary animate-spin mb-4" />
-             <p className="text-xs text-muted-foreground/60 uppercase tracking-widest font-black">Decrypting Secure Thread...</p>
+             <p className="text-xs text-muted-foreground/60 uppercase tracking-widest font-black">Loading messages...</p>
           </div>
         ) : (
           <motion.div 
@@ -123,7 +123,7 @@ const ClientMessages = () => {
                     <h3 className="text-sm font-bold text-foreground leading-none mb-1.5">{jobDetail.job.service_name}</h3>
                     <div className="flex items-center gap-2">
                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                       <span className="text-muted-foreground/60 transition-colors uppercase tracking-widest font-bold text-[9px]">Case Officer: {jobDetail.job.employee_name}</span>
+                       <span className="text-muted-foreground/60 transition-colors uppercase tracking-widest font-bold text-[9px]">Support Agent: {jobDetail.job.employee_name}</span>
                     </div>
                   </div>
                 </div>

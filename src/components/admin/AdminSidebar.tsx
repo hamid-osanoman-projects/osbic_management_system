@@ -42,7 +42,7 @@ const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const { data: requests } = useOperationalRequests();
   const { useNotificationsList } = useNotifications();
   const { data: notifications } = useNotificationsList();
-  const { logo } = useAdminSettings();
+  const { settings, logo } = useAdminSettings();
 
   const pendingRequestsCount = requests?.filter(r => r.status === 'pending').length || 0;
   const unreadNotifsCount = notifications?.filter(n => !n.is_read).length || 0;
@@ -101,8 +101,9 @@ const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
               exit={{ opacity: 0, width: 0 }}
               className="font-syne font-bold text-lg tracking-tight whitespace-nowrap overflow-hidden"
             >
-              <span className="text-foreground">OSBIC</span>
-              <span className="text-primary ml-1">OS</span>
+              <span className="font-syne font-bold text-foreground tracking-[0.2em] whitespace-nowrap">
+                {settings?.company_name || 'OSBIC'}
+              </span>
             </motion.div>
           )}
         </div>

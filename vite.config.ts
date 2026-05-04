@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// https://vite.dev/config/
 export default defineConfig({
   optimizeDeps: {
     include: ['react-is', 'recharts'],
@@ -13,12 +12,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       workbox: {
-        // ADD THIS LINE BELOW
         maximumFileSizeToCacheInBytes: 5000000,
-
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
-          // ... (keep your existing Supabase and Image caching rules exactly the same)
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/,
             handler: 'NetworkFirst',
@@ -27,9 +23,6 @@ export default defineConfig({
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
               }
             }
           },
@@ -47,27 +40,28 @@ export default defineConfig({
         ]
       },
       manifest: {
-        // ... (keep your existing manifest settings the same)
-        name: 'OSBIC OS',
-        short_name: 'OSBIC',
-        description: 'Elite Service Lifecycle Management for OSBIC',
+        name: 'OSBIC Client Portal', // Focused on Clients
+        short_name: 'OSBIC Portal',
+        description: 'Access your OSBIC projects and services.',
         theme_color: '#0A0F1E',
         background_color: '#0A0F1E',
         display: 'standalone',
         orientation: 'portrait',
+        scope: '/',
+        start_url: '/portal/login', // Forces the PWA to open here
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: 'logo-192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'logo-512.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'logo-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
