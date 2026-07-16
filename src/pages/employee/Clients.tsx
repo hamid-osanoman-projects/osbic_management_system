@@ -24,6 +24,7 @@ const ClientsHub = () => {
   const { profile } = useAuth();
   const { data: clients, isLoading } = useEmployeeClients(profile?.id);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'mine' | 'assigned'>('all');
 
   // Modals state
   const [requestModal, setRequestModal] = useState<{
@@ -40,11 +41,16 @@ const ClientsHub = () => {
   const [isCreateJobOpen, setIsCreateJobOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<{ id: string, full_name: string } | null>(null);
 
-  const filteredClients = clients?.filter(c =>
-    c.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.client_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.phone?.includes(searchQuery)
-  );
+  const filteredClients = clients?.filter(c => {
+    const matchesSearch = c.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          c.client_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          c.phone?.includes(searchQuery);
+    
+    if (!matchesSearch) return false;
+    if (filterType === 'mine' && c.created_by !== profile?.id) return false;
+    if (filterType === 'assigned' && c.created_by === profile?.id) return false;
+    return true;
+  });
 
   const handleActionRequest = (client: any, mode: 'DELETE' | 'ARCHIVE') => {
     setRequestModal({
@@ -92,11 +98,19 @@ const ClientsHub = () => {
             className="w-full bg-background/50 border-none outline-none pl-12 pr-4 py-4 text-foreground placeholder:text-muted-foreground text-base rounded-2xl"
           />
         </div>
-        <div className="flex items-center gap-2 px-2 overflow-x-auto no-scrollbar w-full lg:w-auto">
-          <div className="h-10 w-[1px] bg-border mx-2 hidden lg:block" />
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted/50 text-muted-foreground text-xs font-bold uppercase tracking-widest hover:bg-muted transition-all border border-border">
-            <Filter size={14} /> My Registrations
-          </button>
+        <div className="flex items-center gap-1 p-1 bg-muted/50 border border-border rounded-2xl w-full lg:w-auto overflow-x-auto no-scrollbar">
+          {(['all', 'mine', 'assigned'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setFilterType(f)}
+              className={`relative px-4 py-2.5 text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-colors whitespace-nowrap flex-1 lg:flex-none ${filterType === f ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              {f === 'mine' ? 'My Registrations' : f === 'assigned' ? 'Assigned to Me' : 'All Clients'}
+              {filterType === f && (
+                <motion.div layoutId="clientFilter" className="absolute inset-0 bg-card rounded-xl shadow-sm border border-border -z-10" />
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -143,9 +157,20 @@ const ClientsHub = () => {
                     </div>
                     <div className="min-w-0">
                       <h3 className="text-xl font-bold text-foreground truncate font-syne tracking-tight">{client.full_name}</h3>
-                      <span className="inline-block px-2 py-0.5 rounded-md bg-muted text-[9px] text-muted-foreground font-mono tracking-tighter border border-border mt-1">
-                        {client.client_code || 'ID-PENDING'}
-                      </span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-muted text-[9px] text-muted-foreground font-mono tracking-tighter border border-border">
+                          {client.client_code || 'ID-PENDING'}
+                        </span>
+                        {client.created_by === profile?.id ? (
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-widest border border-primary/20">
+                            My Client
+                          </span>
+                        ) : (
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[9px] font-bold uppercase tracking-widest border border-amber-500/20">
+                            Assigned
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
  

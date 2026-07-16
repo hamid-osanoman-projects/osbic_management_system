@@ -21,9 +21,13 @@ export interface Database {
           is_active: boolean | null
           employee_code: string | null
           client_code: string | null
+          is_manager: boolean | null
+          department: 'sales' | 'operations' | null
           created_by: string | null
           created_at: string | null
           updated_at: string | null
+          whatsapp: string | null
+          nationality: string | null
         }
         Insert: {
           id: string
@@ -36,9 +40,13 @@ export interface Database {
           is_active?: boolean | null
           employee_code?: string | null
           client_code?: string | null
+          is_manager?: boolean | null
+          department?: 'sales' | 'operations' | null
           created_by?: string | null
           created_at?: string | null
           updated_at?: string | null
+          whatsapp?: string | null
+          nationality?: string | null
         }
         Update: {
           id?: string
@@ -51,9 +59,13 @@ export interface Database {
           is_active?: boolean | null
           employee_code?: string | null
           client_code?: string | null
+          is_manager?: boolean | null
+          department?: 'sales' | 'operations' | null
           created_by?: string | null
           created_at?: string | null
           updated_at?: string | null
+          whatsapp?: string | null
+          nationality?: string | null
         }
       }
 
@@ -101,9 +113,10 @@ export interface Database {
           job_code: string
           client_id: string
           employee_id: string
+          assigned_by: string | null
           service_id: string
           current_step_id: string | null
-          status: 'active' | 'on_hold' | 'completed' | 'cancelled'
+          status: 'draft' | 'active' | 'on_hold' | 'completed' | 'cancelled'
           total_fee: number
           work_fee: number
           ministry_fee: number
@@ -128,11 +141,28 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['jobs']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['jobs']['Insert']>
       }
+      job_payments: {
+        Row: {
+          id: string
+          job_id: string
+          amount: number
+          payment_method: 'cash' | 'bank_transfer' | 'pos' | 'online'
+          reference_number: string | null
+          notes: string | null
+          recorded_by: string | null
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['job_payments']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['job_payments']['Insert']>
+      }
       job_steps: {
         Row: {
           id: string
           job_id: string
-          workflow_step_id: string
+          workflow_step_id: string | null
+          custom_name: string | null
+          assigned_to: string | null
+          assigned_by: string | null
           status: 'pending' | 'in_progress' | 'completed' | 'rejected' | 'skipped'
           started_at: string | null
           completed_at: string | null
@@ -147,11 +177,40 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['job_steps']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['job_steps']['Insert']>
       }
+      job_sub_tasks: {
+        Row: {
+          id: string
+          job_step_id: string
+          name: string
+          status: 'pending' | 'applied' | 'approved' | 'rejected' | 'expired'
+          notes: string | null
+          ministry_fee: number | null
+          issued_date: string | null
+          expiry_date: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['job_sub_tasks']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['job_sub_tasks']['Insert']>
+      }
+      job_additional_charges: {
+        Row: {
+          id: string
+          job_id: string
+          description: string
+          amount: number
+          created_by: string | null
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['job_additional_charges']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['job_additional_charges']['Insert']>
+      }
       documents: {
         Row: {
           id: string
           job_id: string
           job_step_id: string | null
+          job_sub_task_id: string | null
           uploaded_by: string
           file_name: string
           file_path: string
@@ -198,6 +257,40 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['messages']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['messages']['Insert']>
+      }
+      chat_rooms: {
+        Row: {
+          id: string
+          type: 'direct' | 'group'
+          name: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['chat_rooms']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['chat_rooms']['Insert']>
+      }
+      chat_participants: {
+        Row: {
+          chat_id: string
+          user_id: string
+          role: 'member' | 'admin'
+          joined_at: string
+          last_read_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['chat_participants']['Row'], 'joined_at' | 'last_read_at'>
+        Update: Partial<Database['public']['Tables']['chat_participants']['Insert']>
+      }
+      chat_messages: {
+        Row: {
+          id: string
+          chat_id: string
+          sender_id: string | null
+          content: string
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['chat_messages']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['chat_messages']['Insert']>
       }
       employee_requests: {
         Row: {
@@ -269,6 +362,20 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['audit_logs']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['audit_logs']['Insert']>
+      }
+    }
+    Functions: {
+      create_quick_task: {
+        Args: {
+          p_employee_id: string | undefined
+          p_task_description: string
+          p_amount: number
+          p_payment_method: string
+          p_customer_name: string | null
+          p_customer_phone?: string | null
+          p_status?: string
+        }
+        Returns: any
       }
     }
   }

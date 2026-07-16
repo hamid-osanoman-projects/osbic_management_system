@@ -11,13 +11,21 @@ import {
   ChevronRight,
    Search,
    Globe,
-   User
+   User,
+   MessageSquare,
+   PieChart,
+   LayoutDashboard,
+   FileText
  } from 'lucide-react';
- import ThemeToggle from '../components/ThemeToggle';
+import ThemeToggle from '../components/ThemeToggle';
+import { TopBarNotifications } from '../components/employee/TopBarNotifications';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { GlobalNotificationListener } from '../components/shared/GlobalNotificationListener';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { supabase } from '../lib/supabase';
+import toast from 'react-hot-toast';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -30,12 +38,34 @@ const EmployeeLayout: React.FC = () => {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.dir() === 'rtl';
 
+  const [availability, setAvailability] = useState(profile?.availability_status || 'on-work');
+
+  React.useEffect(() => {
+    if (profile) setAvailability(profile.availability_status || 'on-work');
+  }, [profile]);
+
+  const toggleAvailability = async () => {
+    const newStatus = availability === 'available' ? 'on-work' : 'available';
+    setAvailability(newStatus);
+    try {
+      await supabase.from('profiles').update({ availability_status: newStatus }).eq('id', profile?.id);
+      toast.success(newStatus === 'available' ? 'You are now marked as Available for tasks' : 'You are now marked as On-Work');
+    } catch (err) {
+      toast.error('Failed to update status');
+      setAvailability(availability);
+    }
+  };
+
   const navItems = [
-    { key: 'my_tasks', icon: ClipboardList, path: '/employee/my-jobs' },
-    { key: 'clients', icon: Users, path: '/employee/clients' },
+    { key: 'home', icon: LayoutDashboard, path: '/employee' },
+    { key: 'my_clients', icon: Users, path: '/employee/clients' },
+    { key: 'my_tasks', icon: ClipboardList, path: '/employee/tasks' },
+    { key: 'reports', icon: PieChart, path: '/employee/reports' },
+    { key: 'invoices', icon: FileText, path: '/employee/invoices' },
+    { key: 'messages', icon: MessageSquare, path: '/employee/messages' },
     { key: 'notifications', icon: Bell, path: '/employee/notifications' },
     { key: 'profile', icon: User, path: '/employee/profile' },
-    { key: 'support', icon: HelpCircle, path: '/employee/requests' },
+    ...(profile?.is_manager ? [{ key: 'pipeline', icon: Globe, path: '/employee/pipeline' }] : []),
   ];
 
   const handleLanguageToggle = () => {
@@ -46,6 +76,7 @@ const EmployeeLayout: React.FC = () => {
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden" dir={isRtl ? 'rtl' : 'ltr'}>
+      <GlobalNotificationListener />
       {/* Sidebar */}
       <motion.aside
         initial={false}
@@ -117,7 +148,7 @@ const EmployeeLayout: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
-        <header className="h-20 flex items-center justify-between px-8 bg-background/50 backdrop-blur-xl border-b border-border">
+        <header className="relative z-50 h-20 flex items-center justify-between px-8 bg-background/50 backdrop-blur-xl border-b border-border">
           <div className="flex items-center gap-4 bg-muted/20 border border-border px-4 py-2 rounded-xl w-80 group focus-within:border-primary/50 transition-all">
             <Search size={18} className="text-muted-foreground group-focus-within:text-primary transition-colors" />
             <input 
@@ -127,10 +158,24 @@ const EmployeeLayout: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
+            <TopBarNotifications />
+            <div className="w-[1px] h-6 bg-border mx-2" />
             <ThemeToggle />
             
-            <NavLink to="/employee/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            <button
+              onClick={toggleAvailability}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold uppercase tracking-widest transition-all ml-2 ${
+                availability === 'available' 
+                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20' 
+                  : 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20'
+              }`}
+            >
+              <div className={`w-2 h-2 rounded-full ${availability === 'available' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              {availability === 'available' ? 'Available' : 'On-Work'}
+            </button>
+
+            <NavLink to="/employee/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity ml-2">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-foreground leading-tight">{profile?.full_name}</p>
                 <p className="text-xs text-muted-foreground uppercase">{profile?.employee_code || 'Employee'}</p>

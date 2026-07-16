@@ -197,24 +197,28 @@ const JobDetail = () => {
            </div>
 
            <div className="flex flex-wrap items-center gap-2">
-              <button 
-                onClick={() => setActiveTab('workflow')}
-                className={cn(
-                  "px-4 py-2 border rounded-xl bg-muted/50 text-sm font-medium transition-all active:scale-95",
-                  activeTab === 'workflow' ? "border-gold text-primary" : "border-border text-foreground hover:bg-white/10"
-                )}
-              >
-                Update Status
-              </button>
-              <button 
-                onClick={() => setActiveTab('documents')} 
-                className={cn(
-                  "px-4 py-2 border rounded-xl bg-muted/50 text-sm font-medium transition-all active:scale-95",
-                  activeTab === 'documents' ? "border-gold text-primary" : "border-border text-muted-foreground hover:text-foreground hover:bg-white/10"
-                )}
-              >
-                Upload Doc
-              </button>
+              {!isAdmin && (
+                <>
+                  <button 
+                    onClick={() => setActiveTab('workflow')}
+                    className={cn(
+                      "px-4 py-2 border rounded-xl bg-muted/50 text-sm font-medium transition-all active:scale-95",
+                      activeTab === 'workflow' ? "border-gold text-primary" : "border-border text-foreground hover:bg-white/10"
+                    )}
+                  >
+                    Update Status
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('documents')} 
+                    className={cn(
+                      "px-4 py-2 border rounded-xl bg-muted/50 text-sm font-medium transition-all active:scale-95",
+                      activeTab === 'documents' ? "border-gold text-primary" : "border-border text-muted-foreground hover:text-foreground hover:bg-white/10"
+                    )}
+                  >
+                    Upload Doc
+                  </button>
+                </>
+              )}
               
                {isAdmin ? (
                 <div className="relative">

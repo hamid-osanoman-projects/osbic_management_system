@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  ChevronLeft, Edit3, Key, Ban, Mail, Phone, Calendar, 
+import {
+  ChevronLeft, Edit3, Key, Ban, Mail, Phone, Calendar,
   Clock, CheckCircle, TrendingUp,
   FileText, Activity, UserCheck, AlertCircle, Trash2, ChevronRight
 } from 'lucide-react';
-import { 
-  useAdminEmployee, 
-  useUpdateEmployee, 
-  useResetEmployeePassword, 
+import {
+  useAdminEmployee,
+  useUpdateEmployee,
   useToggleEmployeeStatus,
   useDeleteEmployee,
   useEmployeeActivity
@@ -37,7 +36,7 @@ const EmployeeDetail = () => {
   const { data: employee, isLoading } = useAdminEmployee(id);
   const { data: activityLogs } = useEmployeeActivity(id!);
   const { mutate: toggleStatus, isPending: isToggling } = useToggleEmployeeStatus();
-  const { mutate: resetPassword, isPending: isResetting } = useResetEmployeePassword();
+  const { mutate: updateEmployee, isPending: isUpdating } = useUpdateEmployee();
   const { mutate: deleteEmployee, isPending: isDeleting } = useDeleteEmployee();
 
   const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'performance' | 'audit'>('active');
@@ -87,13 +86,7 @@ const EmployeeDetail = () => {
   };
 
   const handleConfirmReset = () => {
-    if (emp.email) {
-      resetPassword(emp.email, {
-        onSuccess: () => {
-          setIsResetOpen(false);
-        }
-      });
-    }
+    // This is no longer used by the modal since it handles its own submit
   };
 
   const handleConfirmDelete = () => {
@@ -137,27 +130,32 @@ const EmployeeDetail = () => {
         <div className="flex flex-col md:flex-row gap-8 relative z-10">
           {/* Avatar side */}
           <div className="flex flex-col items-center gap-4 shrink-0">
-            <div className="w-32 h-32 rounded-3xl bg-primary/5 border border-gold/10 flex items-center justify-center text-4xl font-syne font-bold text-primary overflow-hidden relative group shadow-inner">
-              {emp.avatar_url ? (
-                <img src={emp.avatar_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span>{emp.full_name?.[0]}</span>
-              )}
-              <div 
-                onClick={() => setIsEditOpen(true)}
-                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer backdrop-blur-md"
-              >
-                <div className="bg-white/10 p-2 rounded-full border border-white/20">
-                  <Edit3 size={20} className="text-foreground" />
+            <div className="relative">
+              <div className="w-32 h-32 rounded-3xl bg-primary/5 border border-gold/10 flex items-center justify-center text-4xl font-syne font-bold text-primary overflow-hidden relative group shadow-inner">
+                {emp.avatar_url ? (
+                  <img src={emp.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{emp.full_name?.[0]}</span>
+                )}
+                <div
+                  onClick={() => setIsEditOpen(true)}
+                  className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer backdrop-blur-md"
+                >
+                  <div className="bg-white/10 p-2 rounded-full border border-white/20">
+                    <Edit3 size={20} className="text-foreground" />
+                  </div>
                 </div>
               </div>
+              <div className={cn(
+                "absolute -bottom-2 -right-2 w-8 h-8 border-4 border-card rounded-full z-10",
+                isEmployeeActive === false ? 'bg-red-500' : (emp.availability_status === 'available' ? 'bg-emerald-500' : 'bg-amber-500')
+              )} />
             </div>
             <div className={cn(
               "px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border",
               isEmployeeActive ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
             )}>
-              <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isEmployeeActive ? "bg-emerald-400" : "bg-red-400")} />
-              {isEmployeeActive ? 'Active' : 'Inactive'}
+              {isEmployeeActive ? 'Active Account' : 'Inactive Account'}
             </div>
           </div>
 
@@ -166,8 +164,40 @@ const EmployeeDetail = () => {
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
               <div className="flex-1">
                 <h1 className="text-3xl font-syne font-bold text-foreground mb-2">{emp.full_name}</h1>
-                <p className="text-muted-foreground font-mono tracking-widest text-xs uppercase bg-muted/50 px-2 py-1 rounded inline-block">{emp.employee_code}</p>
-                
+                <div className="flex items-center gap-3">
+                  <p className="text-muted-foreground font-mono tracking-widest text-xs uppercase bg-muted/50 px-2 py-1 rounded inline-block">{emp.employee_code}</p>
+
+                  <div className="relative">
+                    <select
+                      value={emp.department || 'operations'}
+                      onChange={(e) => {
+                        updateEmployee({
+                          id: emp.id,
+                          updates: { department: e.target.value as 'sales' | 'operations' }
+                        }, {
+                          onSuccess: () => toast.success('Department updated')
+                        });
+                      }}
+                      disabled={isUpdating}
+                      className={cn(
+                        "appearance-none text-xs font-bold uppercase tracking-widest px-3 py-1 rounded border outline-none cursor-pointer transition-all pr-8",
+                        emp.department === 'sales'
+                          ? "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20"
+                          : "bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20",
+                        isUpdating && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <option value="operations" className="bg-[#131824] text-foreground">Operations Team</option>
+                      <option value="sales" className="bg-[#131824] text-foreground">Sales Executive</option>
+                    </select>
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                      <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap items-center gap-6 mt-6">
                   <div className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer group">
                     <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all">
@@ -192,31 +222,31 @@ const EmployeeDetail = () => {
 
               {/* Actions */}
               <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                <button 
+                <button
                   onClick={() => setIsEditOpen(true)}
                   className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-muted/50 border border-border text-foreground font-bold hover:bg-muted/50 transition-all flex items-center justify-center gap-2 text-xs"
                 >
                   <Edit3 size={14} /> <span>Edit</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setIsResetOpen(true)}
                   className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-muted/50 border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all flex items-center justify-center gap-2 text-xs"
                 >
                   <Key size={14} /> <span>Reset</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setIsStatusOpen(true)}
                   className={cn(
                     "flex-1 md:flex-none px-4 py-2.5 rounded-xl border font-bold transition-all flex items-center justify-center gap-2 text-xs shadow-lg",
-                    isEmployeeActive 
-                      ? "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-[#0A0F1E] shadow-amber-500/5" 
+                    isEmployeeActive
+                      ? "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-[#0A0F1E] shadow-amber-500/5"
                       : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-[#0A0F1E] shadow-emerald-500/5"
                   )}
                 >
                   {isEmployeeActive ? <Ban size={14} /> : <UserCheck size={14} />}
                   <span>{isEmployeeActive ? 'Deactivate' : 'Activate'}</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setIsDeleteOpen(true)}
                   className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 font-bold hover:bg-red-500 hover:text-foreground transition-all flex items-center justify-center gap-2 text-xs"
                 >
@@ -227,22 +257,22 @@ const EmployeeDetail = () => {
 
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-10 pt-8 border-t border-border">
-               <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-gold/20 transition-all group">
-                 <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1 group-hover:text-primary transition-colors">Total Jobs</p>
-                 <p className="text-3xl font-mono font-bold text-foreground">{emp.total_jobs || 0}</p>
-               </div>
-               <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-accent/20 transition-all group">
-                 <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1 group-hover:text-accent transition-colors">Active Now</p>
-                 <p className="text-3xl font-mono font-bold text-accent">{emp.active_jobs || 0}</p>
-               </div>
-               <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-white/20 transition-all group">
-                 <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1">Completed (Mo)</p>
-                 <p className="text-3xl font-mono font-bold text-foreground">{emp.completed_month || 0}</p>
-               </div>
-               <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-white/20 transition-all group">
-                 <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1">Avg Completion</p>
-                 <p className="text-3xl font-mono font-bold text-foreground">{emp.avg_completion_days || 0} <span className="text-sm font-normal text-muted-foreground/60">days</span></p>
-               </div>
+              <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-gold/20 transition-all group">
+                <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1 group-hover:text-primary transition-colors">Total Jobs</p>
+                <p className="text-3xl font-mono font-bold text-foreground">{emp.total_jobs || 0}</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-accent/20 transition-all group">
+                <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1 group-hover:text-accent transition-colors">Active Now</p>
+                <p className="text-3xl font-mono font-bold text-accent">{emp.active_jobs || 0}</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-white/20 transition-all group">
+                <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1">Completed (Mo)</p>
+                <p className="text-3xl font-mono font-bold text-foreground">{emp.completed_month || 0}</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-muted/50 border border-border hover:border-white/20 transition-all group">
+                <p className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-widest mb-1">Avg Completion</p>
+                <p className="text-3xl font-mono font-bold text-foreground">{emp.avg_completion_days || 0} <span className="text-sm font-normal text-muted-foreground/60">days</span></p>
+              </div>
             </div>
           </div>
         </div>
@@ -256,8 +286,8 @@ const EmployeeDetail = () => {
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
               "flex items-center gap-2.5 px-6 py-5 border-b-2 text-sm font-bold transition-all whitespace-nowrap relative",
-              activeTab === tab.id 
-                ? "border-gold text-primary" 
+              activeTab === tab.id
+                ? "border-gold text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
@@ -266,17 +296,17 @@ const EmployeeDetail = () => {
             {tab.count !== undefined && (
               <span className={cn(
                 "px-2 py-0.5 rounded-lg text-[10px] font-bold shadow-sm border",
-                activeTab === tab.id 
-                  ? "bg-primary/10 text-primary border-gold/20" 
+                activeTab === tab.id
+                  ? "bg-primary/10 text-primary border-gold/20"
                   : "bg-muted/50 text-muted-foreground/60 border-border"
               )}>
                 {tab.count}
               </span>
             )}
             {activeTab === tab.id && (
-              <motion.div 
+              <motion.div
                 layoutId="activeTabUnderline"
-                className="absolute inset-x-0 bottom-0 h-0.5 bg-primary shadow-[0_0_10px_rgba(251,191,36,0.5)]" 
+                className="absolute inset-x-0 bottom-0 h-0.5 bg-primary shadow-[0_0_10px_rgba(251,191,36,0.5)]"
               />
             )}
           </button>
@@ -292,7 +322,7 @@ const EmployeeDetail = () => {
         className="bg-card border border-border rounded-3xl p-8 shadow-2xl min-h-[500px] relative overflow-hidden"
       >
         <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-gold/20 via-transparent to-transparent opacity-30" />
-        
+
         {activeTab === 'active' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -301,7 +331,7 @@ const EmployeeDetail = () => {
                 Currently Processing ({activeJobsList.length})
               </h3>
             </div>
-            
+
             {activeJobsList.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {activeJobsList.map((job: any) => (
@@ -310,9 +340,9 @@ const EmployeeDetail = () => {
                       <FileText size={20} />
                     </div>
                     <div className="flex-1 min-w-0">
-                       <p className="text-xs font-mono text-primary font-bold mb-0.5">{job.job_code}</p>
-                       <p className="text-sm font-bold text-foreground truncate">{isRtl ? job.service?.name_ar : job.service?.name_en}</p>
-                       <p className="text-[10px] text-muted-foreground truncate">Client: {job.client?.full_name}</p>
+                      <p className="text-xs font-mono text-primary font-bold mb-0.5">{job.job_code}</p>
+                      <p className="text-sm font-bold text-foreground truncate">{isRtl ? job.service?.name_ar : job.service?.name_en}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">Client: {job.client?.full_name}</p>
                     </div>
                     <ChevronRight size={16} className="text-muted-foreground/30 group-hover:text-primary transition-colors" />
                   </Link>
@@ -321,7 +351,7 @@ const EmployeeDetail = () => {
             ) : (
               <div className="flex flex-col items-center justify-center py-24 bg-black/20 border border-border rounded-3xl text-center px-6">
                 <div className="w-20 h-20 bg-muted/50 rounded-3xl flex items-center justify-center text-[#222B45] mb-6 relative">
-                   <FileText size={40} className="opacity-20" />
+                  <FileText size={40} className="opacity-20" />
                 </div>
                 <h4 className="text-foreground font-bold mb-2">No active jobs found</h4>
               </div>
@@ -335,7 +365,7 @@ const EmployeeDetail = () => {
               <CheckCircle className="text-emerald-400" size={24} />
               Historical Jobs History ({completedJobsList.length})
             </h3>
-            
+
             {completedJobsList.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {completedJobsList.map((job: any) => (
@@ -344,9 +374,9 @@ const EmployeeDetail = () => {
                       <CheckCircle size={20} />
                     </div>
                     <div className="flex-1 min-w-0">
-                       <p className="text-xs font-mono text-emerald-400 font-bold mb-0.5">{job.job_code}</p>
-                       <p className="text-sm font-bold text-foreground truncate">{isRtl ? job.service?.name_ar : job.service?.name_en}</p>
-                       <p className="text-[10px] text-muted-foreground">Finished {new Date(job.completed_at).toLocaleDateString()}</p>
+                      <p className="text-xs font-mono text-emerald-400 font-bold mb-0.5">{job.job_code}</p>
+                      <p className="text-sm font-bold text-foreground truncate">{isRtl ? job.service?.name_ar : job.service?.name_en}</p>
+                      <p className="text-[10px] text-muted-foreground">Finished {new Date(job.completed_at).toLocaleDateString()}</p>
                     </div>
                     <ChevronRight size={16} className="text-muted-foreground/30" />
                   </Link>
@@ -368,35 +398,35 @@ const EmployeeDetail = () => {
               Efficiency Analytics
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-               <div className="p-6 rounded-3xl bg-muted/30 border border-border">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Delivery Speed</p>
-                  <p className="text-4xl font-mono font-bold text-foreground mb-1">{emp.avg_completion_days} <span className="text-sm font-normal text-muted-foreground/60">Days</span></p>
-                  <p className="text-[10px] text-emerald-500 font-bold">Standard target: 5 Days</p>
-               </div>
-               <div className="p-6 rounded-3xl bg-muted/30 border border-border">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Volume (Month)</p>
-                  <p className="text-4xl font-mono font-bold text-foreground mb-1">{emp.completed_month}</p>
-                  <p className="text-[10px] text-primary font-bold">In-Month Fulfillment</p>
-               </div>
-               <div className="p-6 rounded-3xl bg-primary/5 border border-gold/20">
-                  <p className="text-xs font-bold text-primary uppercase tracking-widest mb-4">Trust Level</p>
-                  <p className="text-4xl font-syne font-bold text-foreground mb-1">Excellent</p>
-                  <p className="text-[10px] text-primary/60 font-bold">System Reliability Rating</p>
-               </div>
+              <div className="p-6 rounded-3xl bg-muted/30 border border-border">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Delivery Speed</p>
+                <p className="text-4xl font-mono font-bold text-foreground mb-1">{emp.avg_completion_days} <span className="text-sm font-normal text-muted-foreground/60">Days</span></p>
+                <p className="text-[10px] text-emerald-500 font-bold">Standard target: 5 Days</p>
+              </div>
+              <div className="p-6 rounded-3xl bg-muted/30 border border-border">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Volume (Month)</p>
+                <p className="text-4xl font-mono font-bold text-foreground mb-1">{emp.completed_month}</p>
+                <p className="text-[10px] text-primary font-bold">In-Month Fulfillment</p>
+              </div>
+              <div className="p-6 rounded-3xl bg-primary/5 border border-gold/20">
+                <p className="text-xs font-bold text-primary uppercase tracking-widest mb-4">Trust Level</p>
+                <p className="text-4xl font-syne font-bold text-foreground mb-1">Excellent</p>
+                <p className="text-[10px] text-primary/60 font-bold">System Reliability Rating</p>
+              </div>
             </div>
             <div className="py-12 bg-black/20 border border-border rounded-3xl text-center text-muted-foreground/40 text-xs font-bold uppercase tracking-widest">
-               Advanced Trend Charts will appear as more jobs are completed
+              Advanced Trend Charts will appear as more jobs are completed
             </div>
           </div>
         )}
 
         {activeTab === 'audit' && (
           <div className="space-y-6">
-             <h3 className="text-xl font-syne font-bold text-foreground flex items-center gap-3">
+            <h3 className="text-xl font-syne font-bold text-foreground flex items-center gap-3">
               <Activity className="text-primary" size={24} />
               System Activity Log
             </h3>
-            
+
             {activityLogs && activityLogs.length > 0 ? (
               <div className="space-y-3">
                 {activityLogs.map((log: any) => (
@@ -426,21 +456,20 @@ const EmployeeDetail = () => {
       </motion.div>
 
       {/* Modals & Slide-overs */}
-      <EditEmployeeSlideOver 
-        isOpen={isEditOpen} 
-        onClose={() => setIsEditOpen(false)} 
-        employee={emp} 
-      />
-      
-      <ResetPasswordModal 
-        isOpen={isResetOpen} 
-        onClose={() => setIsResetOpen(false)} 
-        onConfirm={handleConfirmReset} 
-        employeeName={emp.full_name || ''} 
-        isPending={isResetting}
+      <EditEmployeeSlideOver
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        employee={emp}
       />
 
-      <ConfirmStatusModal 
+      <ResetPasswordModal
+        isOpen={isResetOpen}
+        onClose={() => setIsResetOpen(false)}
+        userId={emp.id}
+        userName={emp.full_name || ''}
+      />
+
+      <ConfirmStatusModal
         isOpen={isStatusOpen}
         onClose={() => setIsStatusOpen(false)}
         onConfirm={handleConfirmStatus}
@@ -449,7 +478,7 @@ const EmployeeDetail = () => {
         isPending={isToggling}
       />
 
-      <DeleteEmployeeModal 
+      <DeleteEmployeeModal
         isOpen={isDeleteOpen}
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}

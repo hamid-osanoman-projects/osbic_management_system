@@ -20,6 +20,7 @@ export interface Client {
   created_at: string;
   avatar_url?: string | null;
   total_ministry_spent?: number;
+  created_by?: string;
   jobs?: any[];
 }
 
@@ -45,6 +46,7 @@ export const useAdminClients = () => {
         is_active: p.is_active ?? true,
         created_at: p.created_at ?? new Date().toISOString(),
         avatar_url: p.avatar_url,
+        created_by: p.created_by,
         active_jobs: 0,
         total_paid: 0,
       }));
@@ -91,6 +93,7 @@ export const useEmployeeClients = (employeeId?: string) => {
         is_active: p.is_active ?? true,
         created_at: p.created_at ?? new Date().toISOString(),
         avatar_url: p.avatar_url,
+        created_by: p.created_by,
         active_jobs: 0,
         total_paid: 0,
       }));
@@ -163,6 +166,7 @@ export const useAdminClient = (id?: string) => {
         is_active: profile.is_active ?? true,
         status: profile.is_active ? 'active' : 'archived',
         created_at: profile.created_at ?? new Date().toISOString(),
+        created_by: profile.created_by,
         avatar_url: profile.avatar_url,
         active_jobs: activeJobsCount,
         total_paid: totalAmountPaid,
@@ -178,10 +182,13 @@ export const useAdminClient = (id?: string) => {
 // ─── Create Client ────────────────────────────────────────────────────────────
 export const useCreateClient = () => {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (newClient: {
+      email: string;
+      full_name: string;
       phone?: string;
+      whatsapp?: string;
+      nationality?: string;
       password: string;
       created_by?: string;
     }) => {
@@ -224,6 +231,8 @@ export const useCreateClient = () => {
           full_name: newClient.full_name,
           email: newClient.email,
           phone: newClient.phone ?? null,
+          whatsapp: newClient.whatsapp ?? null,
+          nationality: newClient.nationality ?? null,
           role: 'client',
           client_code: clientCode,
           is_active: true,
@@ -233,6 +242,30 @@ export const useCreateClient = () => {
         .single();
 
       if (profileError) throw new Error(profileError.message);
+
+      // Send the credentials via Edge Function (Resend)
+      const { error: invokeError } = await supabase.functions.invoke('send-credentials', {
+        body: {
+          email: newClient.email,
+          password: newClient.password,
+          name: newClient.full_name,
+          role: 'client'
+        }
+      });
+      
+      if (invokeError) {
+        console.error('Failed to send credentials email:', invokeError);
+        if (invokeError.context) {
+          try {
+            const errorBody = await invokeError.context.json();
+            console.error('Edge Function Error Body:', errorBody);
+          } catch (e) {
+            const errorText = await invokeError.context.text();
+            console.error('Edge Function Error Text:', errorText);
+          }
+        }
+      }
+
       return { ...profile, password: newClient.password }; // Return password for one-time display
     },
     onSuccess: () => {
@@ -261,6 +294,27 @@ export const useUpdateClient = () => {
     onSuccess: (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'clients'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'client', id] });
+    },
+  });
+};
+
+// ─── Delete Client ────────────────────────────────────────────────────────────
+export const useDeleteClient = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await db
+        .from('profiles')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'clients'] });
+      queryClient.invalidateQueries({ queryKey: ['employee', 'clients'] });
     },
   });
 };

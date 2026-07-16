@@ -243,7 +243,7 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
               </div>
             )}
 
-            {isStaff && (
+            {isEmployee && (
               <div className="space-y-3">
                 {uploadingFor === 'advance' ? (
                   <div className="p-4 bg-black/20 rounded-xl border border-dashed border-border space-y-4">
@@ -332,7 +332,7 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
               </div>
             )}
 
-            {isStaff && (
+            {isEmployee && (
               <div className="space-y-3">
                 {uploadingFor === 'remaining' ? (
                   <div className="p-4 bg-black/20 rounded-xl border border-dashed border-border space-y-4">

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AdminSidebar from '../components/admin/AdminSidebar';
 import AdminTopBar from '../components/admin/AdminTopBar';
 import KBarWrapper from '../components/admin/KBarWrapper';
+import { GlobalNotificationListener } from '../components/shared/GlobalNotificationListener';
 import { useTranslation } from 'react-i18next';
 
 const AdminLayout: React.FC = () => {
@@ -14,6 +15,7 @@ const AdminLayout: React.FC = () => {
 
   return (
     <KBarWrapper>
+      <GlobalNotificationListener />
       <div className="flex h-screen w-full bg-background overflow-hidden" dir={isRtl ? 'rtl' : 'ltr'}>
         <AdminSidebar collapsed={collapsed} setCollapsed={setCollapsed} />
         

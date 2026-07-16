@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { TopBarNotifications } from '../employee/TopBarNotifications';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -18,32 +19,9 @@ const AdminTopBar = () => {
   const location = useLocation();
   const { profile } = useAuth();
   const { i18n } = useTranslation();
-  const [hasNewNotification, setHasNewNotification] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const isRtl = i18n.dir() === 'rtl';
 
   const pathnames = location.pathname.split('/').filter(Boolean);
-
-  // Realtime Notification Listener
-  useEffect(() => {
-    if (!profile?.id) return;
-
-    const channel = supabase
-      .channel('admin-notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `recipient_id=eq.${profile.id}`,
-        },
-        () => setHasNewNotification(true)
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [profile?.id]);
 
 
 
@@ -91,51 +69,7 @@ const AdminTopBar = () => {
         <LanguageToggle variant="minimal" />
 
         {/* Notification bell */}
-        <div className="relative">
-          <button
-            onClick={() => { setNotifOpen((o) => !o); setHasNewNotification(false); }}
-            className="relative p-2.5 rounded-xl bg-muted/50 border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-            aria-label="Notifications"
-          >
-            <motion.div
-              animate={hasNewNotification ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
-              transition={{ repeat: hasNewNotification ? Infinity : 0, duration: 1 }}
-            >
-              <Bell size={18} className={cn(hasNewNotification && 'text-primary')} />
-            </motion.div>
-            {hasNewNotification && (
-              <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full ring-2 ring-background" />
-            )}
-          </button>
-
-          <AnimatePresence>
-            {notifOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                transition={{ duration: 0.15 }}
-                className="absolute right-0 mt-3 w-80 bg-card border border-border rounded-2xl shadow-2xl p-4 z-50"
-              >
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <span className="text-sm font-bold text-foreground">Notifications</span>
-                  <Link to="/admin/notifications" className="text-xs text-primary hover:underline" onClick={() => setNotifOpen(false)}>
-                    View all
-                  </Link>
-                </div>
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="p-3 bg-muted/50 rounded-xl border border-transparent hover:border-primary/20 transition-all cursor-pointer">
-                      <p className="text-sm font-medium text-foreground">Job #{i} status updated</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Awaiting your review or action.</p>
-                      <span className="text-[10px] text-muted-foreground block mt-1.5">{i * 2} hours ago</span>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        <TopBarNotifications />
 
         {/* Avatar */}
         <div className="flex items-center gap-3 pl-3 border-l border-border">

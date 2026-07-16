@@ -30,16 +30,21 @@
   "sidebar": {
     "home": "Dashboard",
     "employees": "Employees",
-    "clients": "Clients",
+    "clients": "Client Directory",
+    "my_clients": "My Clients",
     "services": "Services",
     "jobs": "Jobs",
     "approvals": "Approval Hub",
     "finance": "Finance",
     "audit": "System Audit",
-    "my_tasks": "My Tasks",
+    "my_tasks": "Assigned Tasks",
     "notifications": "Notifications",
     "profile": "Profile & Security",
-    "support": "Support Center"
+    "support": "Support Center",
+    "pipeline": "Pipeline",
+    "messages": "Messages",
+    "reports": "Reports",
+    "invoices": "Invoices & Quotes"
   },
   "admin": {
 

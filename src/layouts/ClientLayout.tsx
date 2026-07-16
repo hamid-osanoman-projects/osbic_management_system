@@ -18,6 +18,7 @@ function cn(...inputs: ClassValue[]) {
 import { useAuth } from '../contexts/AuthContext';
 import { useUnreadMessageCount } from '../hooks/shared/useJobs';
 import { useAdminSettings } from '../hooks/admin/useAdminSettings';
+import { GlobalNotificationListener } from '../components/shared/GlobalNotificationListener';
 
 const ClientLayout: React.FC = () => {
   const { i18n } = useTranslation();
@@ -50,7 +51,7 @@ const ClientLayout: React.FC = () => {
 
   return (
     <div className="h-screen overflow-hidden bg-background flex flex-col font-sans selection:bg-gold/30 selection:text-white" dir={isRtl ? 'rtl' : 'ltr'}>
-      
+      <GlobalNotificationListener />
       {/* ── Mobile Header ── */}
       <header className="lg:hidden h-16 bg-background/80 backdrop-blur-xl border-b border-border flex items-center justify-between px-6 shrink-0 z-[100]">
         <button 

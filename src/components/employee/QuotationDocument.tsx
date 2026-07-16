@@ -1,0 +1,278 @@
+import React, { forwardRef } from 'react';
+import type { Invoice } from '../../hooks/employee/useInvoices';
+import { useAuth } from '../../contexts/AuthContext';
+
+interface QuotationDocumentProps {
+  invoice: Invoice;
+}
+
+export const QuotationDocument = forwardRef<HTMLDivElement, QuotationDocumentProps>(({ invoice }, ref) => {
+  const { profile } = useAuth();
+  const themeColor = '#0088cc';
+  const lightBg = '#f0f9ff'; // sky-50
+
+  return (
+    <div ref={ref} className="bg-white text-black p-10 min-h-[1056px] w-[794px] max-w-full mx-auto shadow-2xl relative overflow-hidden font-sans text-[11px] leading-relaxed print:w-[210mm] print:min-h-[297mm] print:m-0 print:shadow-none print:p-10">
+      
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-4xl font-black tracking-widest uppercase" style={{ color: themeColor }}>OSBIC</h1>
+        <div className="text-right" style={{ color: themeColor }}>
+          <p className="font-bold text-sm">OSBIC International LLC</p>
+          <p className="text-[10px]">+968 9216 4213 www.osbic.net</p>
+        </div>
+      </div>
+
+      {/* Main Title Bar */}
+      <div className="text-center py-3 mb-6" style={{ backgroundColor: themeColor }}>
+        <h2 className="text-white text-xl font-bold uppercase tracking-widest">Service Quotation</h2>
+        <p className="text-white/90 text-[10px]">Oman Company Formation & Business Set Up</p>
+      </div>
+
+      {/* Client Details Grid */}
+      <div className="grid grid-cols-2 border border-[#0088cc]/30 mb-8">
+        <div className="p-3 border-r border-b border-[#0088cc]/30" style={{ backgroundColor: lightBg }}>
+          <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: themeColor }}>Client Name</p>
+          <p className="font-bold text-xs uppercase">{invoice.client?.full_name || 'CLIENT NAME'}</p>
+        </div>
+        <div className="p-3 border-b border-[#0088cc]/30" style={{ backgroundColor: lightBg }}>
+          <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: themeColor }}>Contact</p>
+          <p className="font-bold text-xs uppercase">{invoice.client?.phone || 'CONTACT NUMBER'}</p>
+        </div>
+        <div className="p-3 border-r border-[#0088cc]/30" style={{ backgroundColor: lightBg }}>
+          <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: themeColor }}>Prepared By</p>
+          <p className="font-bold text-xs uppercase">{profile?.full_name || 'OSBIC TEAM'}</p>
+        </div>
+        <div className="p-3" style={{ backgroundColor: lightBg }}>
+          <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: themeColor }}>Activity</p>
+          <p className="font-bold text-xs uppercase">{invoice.notes || 'BUSINESS SETUP'}</p>
+        </div>
+      </div>
+
+      {/* Package Includes Section */}
+      <div className="mb-6">
+        <div className="py-1 px-3 mb-3 font-bold text-white uppercase tracking-widest text-[10px]" style={{ backgroundColor: themeColor }}>
+          Package Includes
+        </div>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-1 px-2">
+          {invoice.items && invoice.items.length > 0 ? (
+            invoice.items.map((item, idx) => (
+              <div key={idx} className="flex gap-2">
+                <span className="font-bold" style={{ color: themeColor }}>{idx + 1}.</span>
+                <span className="font-medium text-gray-800">{item.description}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-400 italic">No package items added.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Documents Required Section */}
+      <div className="mb-6">
+        <div className="py-1 px-3 mb-3 font-bold text-white uppercase tracking-widest text-[10px]" style={{ backgroundColor: themeColor }}>
+          Documents Required
+        </div>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-1 px-2 text-[10px] text-gray-800 font-medium">
+          {(() => {
+            let docs = invoice.metadata?.documents;
+            if (typeof docs === 'string') {
+              docs = docs.split('\n').map((s: string) => s.trim()).filter(Boolean);
+            }
+            if (!docs || docs.length === 0) return <p className="text-gray-400 italic">No documents specified.</p>;
+            return docs.map((doc: string, idx: number) => (
+              <div key={idx} className="flex gap-2">
+                <span className="font-bold" style={{ color: themeColor }}>{idx + 1}.</span> {doc}
+              </div>
+            ));
+          })()}
+        </div>
+      </div>
+
+      {/* Processing Timeline */}
+      <div className="mb-6">
+        <div className="py-1 px-3 mb-2 font-bold text-white uppercase tracking-widest text-[10px] flex justify-between" style={{ backgroundColor: themeColor }}>
+          <span>Processing Timeline</span>
+          <span>Payment Schedule</span>
+        </div>
+        <div className="grid grid-cols-2 px-2 text-[10px]">
+          <div className="space-y-1 border-r border-[#0088cc]/20 pr-4">
+            {(() => {
+               let timeline = invoice.metadata?.timeline;
+               if (typeof timeline === 'string') {
+                 timeline = timeline.split('\n').filter(Boolean).map((line: string) => {
+                   const [task, ...rest] = line.split(':');
+                   return { task: task?.trim() || '', days: rest.join(':')?.trim() || '' };
+                 });
+               }
+               if (!timeline || timeline.length === 0) return <p className="text-gray-400 italic pt-1">No timeline specified.</p>;
+               
+               return timeline.map((item: any, idx: number) => (
+                 <div key={idx} className={`flex justify-between ${idx !== timeline.length - 1 ? 'border-b border-[#0088cc]/10 pb-1 pt-1' : 'pt-1'}`}>
+                   <span className="font-medium text-gray-800">{item.task}</span>
+                   <span className="font-bold" style={{ color: themeColor }}>{item.days}</span>
+                 </div>
+               ));
+            })()}
+          </div>
+          <div className="pl-4 pt-1">
+            <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mb-1">Advance Payment</p>
+            <p className="text-gray-500">Upon signing the quotation: 50%</p>
+            <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mt-3 mb-1">Balance Payment</p>
+            <p className="text-gray-500">Upon completion of Visa: 50%</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Important Notes */}
+      <div className="mb-6">
+        <div className="py-1 px-3 mb-2 font-bold text-white uppercase tracking-widest text-[10px]" style={{ backgroundColor: themeColor }}>
+          Important Notes
+        </div>
+        <ul className="list-disc pl-6 space-y-1 text-gray-800 text-[10px] font-medium">
+          <li>All government fees are subject to change without prior notice.</li>
+          <li>All external approval fees shall be paid by the client as per voucher issued.</li>
+          <li>Industrial activity fees will be charged based on the specific activity selected.</li>
+          <li>This quotation is issued based on a general business activity. The final price may be subject to change depending on the specific activity. Any variation in cost will be communicated before proceeding.</li>
+        </ul>
+      </div>
+
+      {/* Total Package Value */}
+      <div className="mt-8 mb-16 p-4 flex flex-col items-start" style={{ backgroundColor: lightBg }}>
+        <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: themeColor }}>Total Package Value</p>
+        <p className="text-xl font-bold text-gray-900 uppercase">OMR {invoice.total_amount.toFixed(3)}</p>
+      </div>
+
+      {/* Footer */}
+      <div className="absolute bottom-10 left-10 right-10 flex justify-between text-[8px] text-[#0088cc]/60 font-bold tracking-wider">
+        <p>OSBIC International LLC | Ghala, Muscat, Oman | info@osangroupoman.com</p>
+        <p>CONFIDENTIAL</p>
+      </div>
+
+      {/* PAGE 2 BREAK */}
+      <div className="break-before-page pt-10">
+        
+        {/* Page 2 Header */}
+        <div className="flex justify-between items-center mb-10">
+          <h1 className="text-4xl font-black tracking-widest uppercase opacity-50" style={{ color: themeColor }}>OSBIC</h1>
+          <div className="text-right opacity-50" style={{ color: themeColor }}>
+            <p className="font-bold text-sm">OSBIC International LLC</p>
+            <p className="text-[10px]">+968 9216 4213 www.osbic.net</p>
+          </div>
+        </div>
+
+        {/* Selfie with Passport Section */}
+        <div className="mb-10">
+          <div className="py-2 px-3 mb-6 font-bold text-white uppercase tracking-widest text-[11px]" style={{ backgroundColor: themeColor }}>
+            Example of Acceptable Selfie With Passport
+          </div>
+          <div className="flex justify-center items-center h-48 w-full bg-gray-50 border border-gray-200 rounded-xl overflow-hidden p-4">
+            {/* Using a placeholder for now - user can replace the src with their actual image */}
+            <div className="text-center text-gray-400">
+               {/* 
+                 For production, place the actual image in the public folder (e.g. /selfie-guide.png)
+                 and uncomment the img tag below:
+               */}
+               <img src="/selfie-guide.png" alt="Selfie Guide" className="max-h-full object-contain mx-auto" onError={(e) => e.currentTarget.style.display = 'none'} />
+               <p className="mt-2 text-xs">(Please upload selfie-guide.png to the public folder)</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Bank Details Section */}
+        <div className="mb-6">
+          <div className="py-2 px-3 mb-6 font-bold text-white uppercase tracking-widest text-[11px]" style={{ backgroundColor: themeColor }}>
+            Bank Account Details
+          </div>
+          
+          <div className="space-y-6 max-w-xl mx-auto">
+            {/* Bank Muscat */}
+            <table className="w-full text-left border-collapse border border-[#0088cc]/30">
+              <thead>
+                <tr>
+                  <th colSpan={2} className="py-2 px-4 text-center font-bold text-gray-800 border-b border-[#0088cc]/30" style={{ backgroundColor: lightBg }}>
+                    BANK MUSCAT
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="text-xs">
+                <tr className="border-b border-[#0088cc]/10">
+                  <td className="py-2 px-4 text-gray-600 font-medium w-40 border-r border-[#0088cc]/10">Customer Name</td>
+                  <td className="py-2 px-4 font-bold text-gray-900">OSBIC INTERNATIONAL LLC</td>
+                </tr>
+                <tr className="border-b border-[#0088cc]/10">
+                  <td className="py-2 px-4 text-gray-600 font-medium border-r border-[#0088cc]/10">SWIFT Code</td>
+                  <td className="py-2 px-4 font-bold text-gray-900">BMUSOMRXXX</td>
+                </tr>
+                <tr className="border-b border-[#0088cc]/10">
+                  <td className="py-2 px-4 text-gray-600 font-medium border-r border-[#0088cc]/10">IBAN</td>
+                  <td className="py-2 px-4 font-bold text-gray-900">OM550270423081077790019</td>
+                </tr>
+                <tr>
+                  <td className="py-2 px-4 text-gray-600 font-medium border-r border-[#0088cc]/10">Account Number</td>
+                  <td className="py-2 px-4 font-bold text-gray-900">0423081077790019</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Bank Dhofar */}
+            <table className="w-full text-left border-collapse border border-[#0088cc]/30">
+              <thead>
+                <tr>
+                  <th colSpan={2} className="py-2 px-4 text-center font-bold text-gray-800 border-b border-[#0088cc]/30" style={{ backgroundColor: lightBg }}>
+                    BANK DHOFAR
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="text-xs">
+                <tr className="border-b border-[#0088cc]/10">
+                  <td className="py-2 px-4 text-gray-600 font-medium w-40 border-r border-[#0088cc]/10">Customer Name</td>
+                  <td className="py-2 px-4 font-bold text-gray-900">OSBIC INTERNATIONAL LLC</td>
+                </tr>
+                <tr className="border-b border-[#0088cc]/10">
+                  <td className="py-2 px-4 text-gray-600 font-medium border-r border-[#0088cc]/10">SWIFT Code</td>
+                  <td className="py-2 px-4 font-bold text-gray-900">BDOFOMRUXXX</td>
+                </tr>
+                <tr className="border-b border-[#0088cc]/10">
+                  <td className="py-2 px-4 text-gray-600 font-medium border-r border-[#0088cc]/10">IBAN</td>
+                  <td className="py-2 px-4 font-bold text-gray-900">OM390250001045788333002</td>
+                </tr>
+                <tr>
+                  <td className="py-2 px-4 text-gray-600 font-medium border-r border-[#0088cc]/10">Account Number</td>
+                  <td className="py-2 px-4 font-bold text-gray-900">01045788333002</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Mobile Banking */}
+            <table className="w-full text-left border-collapse border border-[#0088cc]/30">
+              <thead>
+                <tr>
+                  <th colSpan={2} className="py-2 px-4 text-center font-bold text-gray-800 border-b border-[#0088cc]/30" style={{ backgroundColor: lightBg }}>
+                    MOBILE BANKING
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="text-xs">
+                <tr>
+                  <td className="py-2 px-4 text-gray-600 font-medium w-40 border-r border-[#0088cc]/10">Mobile Number</td>
+                  <td className="py-2 px-4 font-bold text-gray-900">72229827</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Page 2 Footer */}
+        <div className="absolute bottom-10 left-10 right-10 flex justify-between text-[8px] text-[#0088cc]/60 font-bold tracking-wider">
+          <p>OSBIC International LLC | Ghala, Muscat, Oman | info@osangroupoman.com</p>
+          <p>CONFIDENTIAL</p>
+        </div>
+
+      </div>
+
+    </div>
+  );
+});
+
+QuotationDocument.displayName = 'QuotationDocument';

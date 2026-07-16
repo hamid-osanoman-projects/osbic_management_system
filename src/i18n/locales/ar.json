@@ -32,6 +32,9 @@
     "my_tasks": "مهامي",
     "notifications": "الإشعارات",
     "profile": "الحساب والأمان",
-    "support": "الدعم الفني"
+    "support": "الدعم الفني",
+    "reports": "التقارير",
+    "pipeline": "المسار",
+    "messages": "الرسائل"
   }
 }

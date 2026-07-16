@@ -15,7 +15,8 @@ import {
   Globe, 
   Boxes,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -56,6 +57,7 @@ const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
     { id: 'jobs', icon: ClipboardList, label: 'sidebar.jobs', path: '/admin/jobs' },
     { id: 'approvals', icon: Shield, label: 'sidebar.approvals', path: '/admin/approvals', badge: pendingRequestsCount > 0 ? pendingRequestsCount : undefined },
     { id: 'finance', icon: Wallet, label: 'sidebar.finance', path: '/admin/finance' },
+    { id: 'messages', icon: MessageSquare, label: 'Messages', path: '/admin/messages' },
     { id: 'notifications', icon: Bell, label: 'common.notifications', path: '/admin/notifications', badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined },
     { id: 'audit', icon: Shield, label: 'sidebar.audit', path: '/admin/audit' },
     { id: 'settings', icon: Settings, label: 'common.settings', path: '/admin/settings' },

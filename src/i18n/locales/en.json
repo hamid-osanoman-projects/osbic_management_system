@@ -32,6 +32,9 @@
     "my_tasks": "My Tasks",
     "notifications": "Notifications",
     "profile": "Profile & Security",
-    "support": "Support Center"
+    "support": "Support Center",
+    "reports": "Reports",
+    "pipeline": "Pipeline",
+    "messages": "Messages"
   }
 }

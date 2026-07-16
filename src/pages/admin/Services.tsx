@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAdminServices, useAdminService, useToggleServiceActive, useDeleteService } from '../../hooks/admin/useAdminServices';
 import Skeleton from '../../components/ui/Skeleton';
+import DeleteServiceModal from '../../components/admin/DeleteServiceModal';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import toast from 'react-hot-toast';
@@ -46,6 +47,7 @@ const ServicesList = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [serviceToDelete, setServiceToDelete] = useState<{ id: string, name: string } | null>(null);
 
   const { data: detailService, isLoading: isDetailLoading } = useAdminService(selectedServiceId || undefined);
 
@@ -65,12 +67,7 @@ const ServicesList = () => {
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`Are you absolutely sure you want to delete "${name}"? This action cannot be undone.`)) {
-      deleteService(id, {
-        onSuccess: () => toast.success('Service deleted successfully'),
-        onError: (err: any) => toast.error(err.message || 'Failed to delete service')
-      });
-    }
+    setServiceToDelete({ id, name });
   };
 
   const containerAnimations = {
@@ -399,6 +396,27 @@ const ServicesList = () => {
             ) : null}
           </motion.div>
         </div>
+      )}
+
+      {serviceToDelete && (
+        <DeleteServiceModal 
+          isOpen={!!serviceToDelete}
+          onClose={() => setServiceToDelete(null)}
+          onConfirm={() => {
+            deleteService(serviceToDelete.id, {
+              onSuccess: () => {
+                toast.success('Service deleted successfully');
+                setServiceToDelete(null);
+              },
+              onError: (err: any) => {
+                toast.error(err.message || 'Failed to delete service');
+                setServiceToDelete(null);
+              }
+            });
+          }}
+          serviceName={serviceToDelete.name}
+          isDeleting={isDeleting}
+        />
       )}
     </div>
   );

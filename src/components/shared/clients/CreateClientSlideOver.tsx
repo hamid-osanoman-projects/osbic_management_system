@@ -1,33 +1,60 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   X, User, Mail, 
   Phone, Shield, Loader2, 
   Copy, Check, UserPlus,
   Eye, EyeOff, Key,
-  ChevronRight
+  ChevronRight, Globe, MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useCreateClient } from '../../../hooks/admin/useAdminClients';
+import { useCreateClient, useUpdateClient } from '../../../hooks/admin/useAdminClients';
 import { useAuth } from '../../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  clientToEdit?: any;
 }
 
-const CreateClientSlideOver = ({ isOpen, onClose }: Props) => {
+const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit }: Props) => {
   const [formData, setFormData] = useState({
-    full_name: '',
-    email: '',
-    phone: '',
+    full_name: clientToEdit?.full_name || '',
+    email: clientToEdit?.email || '',
+    phone: clientToEdit?.phone || '',
+    countryCode: '+968',
+    customCountryCode: '',
+    whatsapp: clientToEdit?.whatsapp || '',
+    nationality: clientToEdit?.nationality || 'Oman',
     password: '',
   });
+
+  useEffect(() => {
+    if (clientToEdit && clientToEdit.phone) {
+      let cCode = '+968';
+      let pNum = clientToEdit.phone || '';
+      if (pNum.startsWith('+')) {
+        const parts = pNum.split(' ');
+        if (parts.length > 1) {
+          cCode = parts[0];
+          pNum = parts.slice(1).join(' ');
+        }
+      }
+      setFormData(prev => ({
+        ...prev,
+        phone: pNum,
+        countryCode: ['+968', '+971', '+966', '+974', '+973', '+965', '+91', '+92', '+20'].includes(cCode) ? cCode : 'Other',
+        customCountryCode: !['+968', '+971', '+966', '+974', '+973', '+965', '+91', '+92', '+20'].includes(cCode) ? cCode : '',
+      }));
+    }
+  }, [clientToEdit]);
+  const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(clientToEdit ? clientToEdit.whatsapp === clientToEdit.phone : false);
   const { profile } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [createdClient, setCreatedClient] = useState<any>(null);
 
   const createClientMutation = useCreateClient();
+  const updateClientMutation = useUpdateClient();
 
   const generatePassword = () => {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
@@ -41,14 +68,29 @@ const CreateClientSlideOver = ({ isOpen, onClose }: Props) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const data = await createClientMutation.mutateAsync({
+      const finalCountryCode = formData.countryCode === 'Other' ? (formData.customCountryCode || '+') : formData.countryCode;
+      const formattedPhone = formData.phone ? `${finalCountryCode} ${formData.phone}` : undefined;
+
+      const payload = {
         ...formData,
-        created_by: profile?.id
-      });
-      setCreatedClient(data);
-      toast.success('Client registered successfully!');
+        phone: formattedPhone,
+        whatsapp: whatsappSameAsPhone ? formattedPhone : formData.whatsapp,
+      };
+      
+      if (clientToEdit) {
+        // Exclude password from update payload
+        const { password, ...updatePayload } = payload;
+        await updateClientMutation.mutateAsync({ id: clientToEdit.id, updates: updatePayload });
+        toast.success('Client updated successfully!');
+        onClose();
+      } else {
+        const createPayload = { ...payload, created_by: profile?.id };
+        const data = await createClientMutation.mutateAsync(createPayload);
+        setCreatedClient(data);
+        toast.success('Client registered successfully!');
+      }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to create client');
+      toast.error(error.message || `Failed to ${clientToEdit ? 'update' : 'create'} client`);
     }
   };
 
@@ -58,7 +100,8 @@ const CreateClientSlideOver = ({ isOpen, onClose }: Props) => {
   };
 
   const handleClose = () => {
-    setFormData({ full_name: '', email: '', phone: '', password: '' });
+    setFormData({ full_name: '', email: '', phone: '', countryCode: '+968', customCountryCode: '', whatsapp: '', nationality: 'Oman', password: '' });
+    setWhatsappSameAsPhone(false);
     setCreatedClient(null);
     onClose();
   };
@@ -88,8 +131,8 @@ const CreateClientSlideOver = ({ isOpen, onClose }: Props) => {
                   <UserPlus size={20} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-foreground">Register New Client</h3>
-                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Onboarding & Credentials</p>
+                  <h2 className="text-2xl font-syne font-bold text-foreground mb-1">{clientToEdit ? 'Edit Client Profile' : 'Register New Client'}</h2>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{clientToEdit ? 'UPDATE DETAILS' : 'ONBOARDING & CREDENTIALS'}</p>
                 </div>
               </div>
               <button onClick={handleClose} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
@@ -118,84 +161,168 @@ const CreateClientSlideOver = ({ isOpen, onClose }: Props) => {
 
                   {/* Email */}
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Email Address</label>
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Username / Email</label>
                     <div className="relative">
                       <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <input
-                        required
+                        required={!clientToEdit}
+                        disabled={!!clientToEdit}
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                         placeholder="client@example.com"
-                        className="w-full bg-background border border-border rounded-xl py-3 pl-12 pr-4 text-sm text-foreground focus:border-primary/50 outline-none transition-all placeholder:text-muted-foreground/50"
+                        className="w-full bg-background border border-border rounded-xl py-3 pl-12 pr-4 text-sm text-foreground focus:border-primary/50 outline-none transition-all placeholder:text-muted-foreground/50 disabled:opacity-50"
                       />
                     </div>
                   </div>
 
                   {/* Phone */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Phone Number</label>
-                    <div className="relative group">
-                      <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                      <input
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                        placeholder="+968 9xxx xxxx"
-                        className="w-full bg-background/50 border border-border rounded-xl py-3 pl-12 pr-4 text-sm text-foreground focus:border-primary/50 outline-none transition-all placeholder:text-muted-foreground/50"
-                      />
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center ml-1 h-[16px]">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Phone Number</label>
+                      </div>
+                      <div className="flex gap-2">
+                        <select 
+                          value={formData.countryCode} 
+                          onChange={(e) => setFormData(prev => ({ ...prev, countryCode: e.target.value }))}
+                          className="w-20 bg-background/50 border border-border rounded-xl px-1 py-3 text-xs text-foreground focus:outline-none focus:border-primary/50 transition-colors cursor-pointer text-center appearance-none"
+                        >
+                          <option value="+968" className="bg-[#0A0F1E]">+968</option>
+                          <option value="+971" className="bg-[#0A0F1E]">+971</option>
+                          <option value="+966" className="bg-[#0A0F1E]">+966</option>
+                          <option value="+974" className="bg-[#0A0F1E]">+974</option>
+                          <option value="+973" className="bg-[#0A0F1E]">+973</option>
+                          <option value="+965" className="bg-[#0A0F1E]">+965</option>
+                          <option value="+91" className="bg-[#0A0F1E]">+91</option>
+                          <option value="+92" className="bg-[#0A0F1E]">+92</option>
+                          <option value="+20" className="bg-[#0A0F1E]">+20</option>
+                          <option value="Other" className="bg-[#0A0F1E]">Other</option>
+                        </select>
+                        {formData.countryCode === 'Other' && (
+                          <input
+                            type="text"
+                            value={formData.customCountryCode}
+                            onChange={(e) => setFormData(prev => ({ ...prev, customCountryCode: e.target.value }))}
+                            className="w-12 bg-background/50 border border-border rounded-xl px-2 py-3 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 transition-colors text-center"
+                            placeholder="+"
+                          />
+                        )}
+                        <input
+                          type="tel"
+                          autoComplete="off"
+                          value={formData.phone}
+                          onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                          placeholder="Phone number"
+                          className="flex-1 bg-background/50 border border-border rounded-xl py-3 px-4 text-sm text-foreground focus:border-primary/50 outline-none transition-all placeholder:text-muted-foreground/50 w-full min-w-0"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center ml-1 h-[16px]">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">WhatsApp</label>
+                        <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setWhatsappSameAsPhone(!whatsappSameAsPhone)}>
+                          <input type="checkbox" checked={whatsappSameAsPhone} readOnly className="accent-primary w-3 h-3 m-0" />
+                          <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider hover:text-foreground leading-none">Same</span>
+                        </div>
+                      </div>
+                      <div className="relative group">
+                        <MessageCircle size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-emerald-500 transition-colors" />
+                        <input
+                          type="tel"
+                          autoComplete="off"
+                          disabled={whatsappSameAsPhone}
+                          value={whatsappSameAsPhone ? formData.phone : formData.whatsapp}
+                          onChange={(e) => setFormData(prev => ({ ...prev, whatsapp: e.target.value }))}
+                          placeholder="+968 9xxx xxxx"
+                          className="w-full bg-background/50 border border-border rounded-xl py-3 pl-12 pr-4 text-sm text-foreground focus:border-emerald-500/50 outline-none transition-all placeholder:text-muted-foreground/50 disabled:opacity-50"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Password */}
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between ml-1">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Credentials</label>
-                      <button
-                        type="button"
-                        onClick={generatePassword}
-                        className="text-[10px] font-bold text-primary hover:text-foreground uppercase tracking-widest transition-colors"
-                      >
-                        Auto-Generate
-                      </button>
-                    </div>
-                    <div className="relative group">
-                      <Key size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                      <input
-                        required
-                        type={showPassword ? 'text' : 'password'}
-                        value={formData.password}
-                        onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                        placeholder="Secure Portal Password"
-                        className="w-full bg-background/50 border border-border rounded-xl py-3.5 pl-12 pr-12 text-sm text-foreground focus:border-primary/50 focus:ring-1 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/50"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                      >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Nationality</label>
+                    <div className="grid grid-cols-1 gap-2">
+                      <div className="relative group">
+                        <Globe size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                        <select
+                          value={formData.nationality === 'Other' || !['Oman', 'United Arab Emirates', 'Saudi Arabia', 'Qatar', 'Bahrain', 'Kuwait', 'India', 'Pakistan', 'Egypt', 'Iran'].includes(formData.nationality) ? 'Other' : formData.nationality}
+                          onChange={(e) => {
+                            if (e.target.value !== 'Other') {
+                              setFormData(prev => ({ ...prev, nationality: e.target.value }));
+                            } else {
+                              setFormData(prev => ({ ...prev, nationality: '' })); // clear for custom input
+                            }
+                          }}
+                          className="w-full bg-background/50 border border-border rounded-xl py-3 pl-12 pr-4 text-sm text-foreground focus:border-primary/50 outline-none transition-all appearance-none"
+                        >
+                          {['Oman', 'United Arab Emirates', 'Saudi Arabia', 'Qatar', 'Bahrain', 'Kuwait', 'India', 'Pakistan', 'Egypt', 'Iran', 'Other'].map(n => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {(!['Oman', 'United Arab Emirates', 'Saudi Arabia', 'Qatar', 'Bahrain', 'Kuwait', 'India', 'Pakistan', 'Egypt', 'Iran'].includes(formData.nationality)) && (
+                        <div className="relative group">
+                          <input
+                            type="text"
+                            autoComplete="off"
+                            value={formData.nationality}
+                            onChange={(e) => setFormData(prev => ({ ...prev, nationality: e.target.value }))}
+                            placeholder="Please specify nationality"
+                            className="w-full bg-background/50 border border-border rounded-xl py-3 px-4 text-sm text-foreground focus:border-primary/50 outline-none transition-all placeholder:text-muted-foreground/50"
+                            autoFocus
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Info Box */}
-                  <div className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex gap-3">
-                    <Shield className="text-primary shrink-0" size={18} />
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Registering this client will create a secure OSBIC account. Credentials will be <span className="text-primary">securely revealed</span> upon success.
-                    </p>
-                  </div>
- 
+                  {/* Password - Only for new clients */}
+                  {!clientToEdit && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between ml-1">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Credentials</label>
+                        <button
+                          type="button"
+                          onClick={generatePassword}
+                          className="text-[10px] font-bold text-primary hover:text-foreground uppercase tracking-widest transition-colors"
+                        >
+                          Auto-Generate
+                        </button>
+                      </div>
+                      <div className="relative group">
+                        <Key size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                        <input
+                          required
+                          type={showPassword ? 'text' : 'password'}
+                          value={formData.password}
+                          onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                          placeholder="Secure Portal Password"
+                          className="w-full bg-background/50 border border-border rounded-xl py-3.5 pl-12 pr-12 text-sm text-foreground focus:border-primary/50 focus:ring-1 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     type="submit"
-                    disabled={createClientMutation.isPending}
+                    disabled={createClientMutation.isPending || updateClientMutation.isPending}
                     className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:brightness-110 shadow-lg shadow-primary/10 transition-all active:scale-[0.98] disabled:opacity-50 mt-2"
                   >
-                    {createClientMutation.isPending ? (
+                    {(createClientMutation.isPending || updateClientMutation.isPending) ? (
                       <Loader2 className="animate-spin" size={18} />
                     ) : (
-                      <>Register Client Portal <ChevronRight size={16} /></>
+                      <>{clientToEdit ? 'Save Changes' : 'Register Client Portal'} <ChevronRight size={16} /></>
                     )}
                   </button>
                 </form>
@@ -235,6 +362,10 @@ const CreateClientSlideOver = ({ isOpen, onClose }: Props) => {
                     </div>
                   </div>
  
+                  <div className="flex items-center justify-center gap-2 text-sm text-emerald-400 mt-6 bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
+                    <Mail size={16} /> Credentials securely emailed to {createdClient.email}
+                  </div>
+
                   <button
                     onClick={handleClose}
                     className="w-full mt-8 py-5 bg-muted text-foreground font-bold rounded-2xl hover:bg-muted/80 transition-all"

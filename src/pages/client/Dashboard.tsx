@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Download, ArrowRight, ArrowUpRight, Loader2 } from 'lucide-react';
+import { AlertTriangle, Download, ArrowRight, ArrowUpRight, Loader2, Boxes, User } from 'lucide-react';
 import { useClientJobs } from '../../hooks/shared/useJobs';
 import { useAuth } from '../../contexts/AuthContext';
 import PizzaTracker from '../../components/client/PizzaTracker';

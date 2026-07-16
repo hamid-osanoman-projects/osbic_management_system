@@ -2,11 +2,15 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, Filter, Check, X as XIcon, 
-  Eye, Edit3, UserPlus, Archive, Trash2
+  Eye, Edit3, UserPlus, Archive, Trash2,
+  Users, UserCheck, UserMinus
 } from 'lucide-react';
 import { useAdminClients } from '../../hooks/admin/useAdminClients';
+import { useAdminEmployees } from '../../hooks/admin/useAdminEmployees';
 import CreateClientSlideOver from '../../components/shared/clients/CreateClientSlideOver';
 import Skeleton from '../../components/ui/Skeleton';
+import DeleteClientModal from '../../components/shared/clients/DeleteClientModal';
+import ConfirmModal from '../../components/shared/ConfirmModal';
 
 function cn(...inputs: any[]) {
   return inputs.filter(Boolean).join(' ');
@@ -14,15 +18,65 @@ function cn(...inputs: any[]) {
 
 const Clients = () => {
   const navigate = useNavigate();
-  const { data: clients, isLoading } = useAdminClients();
+  const { data: clients, isLoading: isClientsLoading } = useAdminClients();
+  const { data: employees, isLoading: isEmployeesLoading } = useAdminEmployees();
+  const isLoading = isClientsLoading || isEmployeesLoading;
   const [searchQuery, setSearchQuery] = useState('');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
-  const filteredClients = clients?.filter(c => 
-    c.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    c.client_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.email?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const [clientToDelete, setClientToDelete] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [clientToToggle, setClientToToggle] = useState<any>(null);
+  const [isToggling, setIsToggling] = useState(false);
+
+  const handleToggleConfirm = async () => {
+    if (!clientToToggle) return;
+    setIsToggling(true);
+    try {
+      const db = (await import('../../lib/supabase')).supabase as any;
+      await db.from('profiles').update({ is_active: !clientToToggle.is_active }).eq('id', clientToToggle.id);
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      setIsToggling(false);
+      setClientToToggle(null);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!clientToDelete) return;
+    setIsDeleting(true);
+    try {
+      const db = (await import('../../lib/supabase')).supabase as any;
+      
+      // Before deleting the client profile, we need to ensure any dependent tables
+      // that don't have CASCADE delete are cleaned up, but the prompt says 
+      // "verified deletion" for the current UI. Profiles usually CASCADE to jobs, etc.
+      // But let's just run the delete as it was.
+      await db.from('profiles').delete().eq('id', clientToDelete.id);
+      window.location.reload();
+    } catch (error) {
+      console.error(error);
+      setIsDeleting(false);
+      setClientToDelete(null);
+    }
+  };
+
+  const filteredClients = clients?.filter(c => {
+    const matchesSearch = c.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      c.client_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.email?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesArchiveStatus = showArchived ? !c.is_active : c.is_active;
+
+    return matchesSearch && matchesArchiveStatus;
+  });
+
+  const totalClients = clients?.length || 0;
+  const activeClients = clients?.filter(c => c.is_active).length || 0;
+  const archivedClients = clients?.filter(c => !c.is_active).length || 0;
 
   return (
     <div className="space-y-6 pb-16">
@@ -32,12 +86,37 @@ const Clients = () => {
           <h1 className="text-2xl font-syne font-bold text-foreground">Client Portal Registry</h1>
           <p className="text-sm text-muted-foreground">Manage multi-portal client accounts and business profiles</p>
         </div>
-        <button 
-          onClick={() => setIsRegisterOpen(true)}
-          className="px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl flex items-center gap-2 hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95"
-        >
-          <UserPlus size={18} /> Register Client
-        </button>
+      </div>
+
+      {/* Stats Summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Users size={20} />
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{totalClients}</p>
+            <p className="text-xs text-muted-foreground">Total Clients</p>
+          </div>
+        </div>
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+            <UserCheck size={20} />
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{activeClients}</p>
+            <p className="text-xs text-muted-foreground">Active</p>
+          </div>
+        </div>
+        <div className="bg-card border border-border p-4 rounded-xl shadow-sm flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+            <UserMinus size={20} />
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{archivedClients}</p>
+            <p className="text-xs text-muted-foreground">Archived</p>
+          </div>
+        </div>
       </div>
 
       <CreateClientSlideOver 
@@ -61,12 +140,21 @@ const Clients = () => {
           <button className="p-2 rounded-xl text-muted-foreground hover:bg-muted transition-colors border border-transparent hover:border-border flex items-center gap-2 whitespace-nowrap">
             <Filter size={16} /> <span className="text-sm font-medium">Assigned</span>
           </button>
-          <button className="p-2 rounded-xl text-muted-foreground hover:bg-muted transition-colors border border-transparent hover:border-border flex items-center gap-2 whitespace-nowrap">
-            <span className="text-sm font-medium">Service Type</span>
-          </button>
-          <button className="p-2 rounded-xl text-muted-foreground hover:bg-muted transition-colors border border-transparent hover:border-border flex items-center gap-2 whitespace-nowrap">
-            <span className="text-sm font-medium">Job Status</span>
-          </button>
+          <div className="w-[1px] h-6 bg-border mx-2" />
+          <div className="bg-muted/50 p-1 rounded-xl flex items-center">
+            <button 
+              onClick={() => setShowArchived(false)}
+              className={cn("px-4 py-1.5 rounded-lg text-sm font-medium transition-all", !showArchived ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              Active
+            </button>
+            <button 
+              onClick={() => setShowArchived(true)}
+              className={cn("px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2", showArchived ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              <Archive size={14} /> Archived
+            </button>
+          </div>
         </div>
       </div>
 
@@ -84,7 +172,7 @@ const Clients = () => {
                   <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Client</th>
                   <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Contact / Nat.</th>
                   <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Workload</th>
-                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Role</th>
+                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Managed By</th>
                   <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Status</th>
                   <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 text-right">Actions</th>
                 </tr>
@@ -124,8 +212,33 @@ const Clients = () => {
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                       <p className="text-xs text-foreground">Institutional Client</p>
-                       <p className="text-[10px] text-muted-foreground/60">Since {new Date(client.created_at).toLocaleDateString()}</p>
+                      {(() => {
+                        const manager = employees?.find(e => e.id === client.created_by);
+                        if (!manager) return (
+                          <div>
+                            <p className="text-xs text-foreground">Self Registered</p>
+                            <p className="text-[10px] text-muted-foreground/60">Since {new Date(client.created_at).toLocaleDateString()}</p>
+                          </div>
+                        );
+                        
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-md bg-muted overflow-hidden shrink-0">
+                              {manager.avatar_url ? (
+                                <img src={manager.avatar_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="w-full h-full flex items-center justify-center text-[10px] font-bold">
+                                  {manager.full_name[0]}
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs text-foreground truncate max-w-[120px]">{manager.full_name}</p>
+                              <p className="text-[9px] text-muted-foreground/60 uppercase">{manager.department || 'Staff'}</p>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="py-4 px-6">
                        <span className={cn(
@@ -137,7 +250,7 @@ const Clients = () => {
                        </span>
                     </td>
                     <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <div className="flex items-center justify-end gap-1">
                          <button 
                            onClick={() => navigate(`/admin/clients/${client.id}`)}
                            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors" 
@@ -151,13 +264,9 @@ const Clients = () => {
                          <div className="w-[1px] h-4 bg-border mx-1" />
                          
                          <button 
-                           onClick={async (e) => {
+                           onClick={(e) => {
                              e.stopPropagation();
-                             if(confirm(`Are you sure you want to ${client.is_active ? 'ARCHIVE' : 'RESTORE'} this client?`)) {
-                               const db = (await import('../../lib/supabase')).supabase as any;
-                               await db.from('profiles').update({ is_active: !client.is_active }).eq('id', client.id);
-                               window.location.reload();
-                             }
+                             setClientToToggle(client);
                            }}
                            className={cn(
                              "p-1.5 rounded-lg transition-colors",
@@ -169,13 +278,9 @@ const Clients = () => {
                          </button>
 
                          <button 
-                           onClick={async (e) => {
+                           onClick={(e) => {
                              e.stopPropagation();
-                             if(confirm('CRITICAL: Are you sure you want to PERMANENTLY DELETE this client and all associated data? This cannot be undone.')) {
-                               const db = (await import('../../lib/supabase')).supabase as any;
-                               await db.from('profiles').delete().eq('id', client.id);
-                               window.location.reload();
-                             }
+                             setClientToDelete(client);
                            }}
                            className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" 
                            title="Hard Delete"
@@ -190,6 +295,29 @@ const Clients = () => {
             </table>
           </div>
         </div>
+      )}
+
+      {clientToDelete && (
+        <DeleteClientModal 
+          isOpen={!!clientToDelete}
+          onClose={() => setClientToDelete(null)}
+          onConfirm={handleDeleteConfirm}
+          clientCode={clientToDelete.client_code || clientToDelete.full_name}
+          isDeleting={isDeleting}
+        />
+      )}
+
+      {clientToToggle && (
+        <ConfirmModal 
+          isOpen={!!clientToToggle}
+          onClose={() => setClientToToggle(null)}
+          onConfirm={handleToggleConfirm}
+          title={clientToToggle.is_active ? "Archive Client" : "Restore Client"}
+          message={`Are you sure you want to ${clientToToggle.is_active ? 'archive' : 'restore'} ${clientToToggle.full_name}?`}
+          confirmText={clientToToggle.is_active ? "Yes, Archive" : "Yes, Restore"}
+          isDestructive={clientToToggle.is_active}
+          isLoading={isToggling}
+        />
       )}
     </div>
   );

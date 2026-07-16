@@ -8,6 +8,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import Skeleton from '../../components/ui/Skeleton';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../../lib/supabase';
+import toast from 'react-hot-toast';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -21,8 +24,36 @@ const MyJobs = () => {
   const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'on_hold'>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateJobOpen, setIsCreateJobOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const acceptJobMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      // Set the job status to active
+      const { error } = await supabase
+        .from('jobs')
+        .update({ status: 'active' })
+        .eq('id', jobId);
+      if (error) throw error;
+      
+      // Also set any pending steps assigned to this employee to in_progress
+      await supabase
+        .from('job_steps')
+        .update({ status: 'in_progress' })
+        .eq('job_id', jobId)
+        .eq('assigned_to', profile?.id)
+        .eq('status', 'pending');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employee', 'jobs'] });
+      toast.success('Task accepted and moved to active workload!');
+    }
+  });
+
+  const pendingJobs = jobs?.filter(job => job.status === 'pending' && job.assigned_by !== profile?.id) || [];
 
   const filteredJobs = jobs?.filter(job => {
+    // Exclude pending jobs from the main active list, they live in the tray
+    if (job.status === 'pending' && job.assigned_by !== profile?.id) return false;
     // 1. Filter by Status
     let matchStatus = true;
     if (filter === 'active') matchStatus = job.status === 'active' || job.status === 'in_progress' || job.status === 'awaiting_govt' || job.status === 'pending';
@@ -98,6 +129,37 @@ const MyJobs = () => {
           </div>
         </div>
       </div>
+
+      {/* Pending Acceptance Tray */}
+      {pendingJobs.length > 0 && (
+        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 mb-8 relative overflow-hidden shadow-[0_0_40px_rgba(212,175,55,0.05)]">
+           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+           <h2 className="text-sm font-syne font-bold text-foreground flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              Pending Acceptance ({pendingJobs.length})
+           </h2>
+           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+             {pendingJobs.map(job => (
+               <div key={job.id} className="bg-card border border-primary/20 rounded-xl p-4 flex items-center justify-between shadow-lg">
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">{job.client_name}</h3>
+                    <p className="text-xs text-muted-foreground">{job.service_name}</p>
+                    <p className="text-[10px] text-primary/80 font-bold uppercase tracking-widest mt-1">
+                      Assigned by: {job.assigned_by_role}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => acceptJobMutation.mutate(job.id)}
+                    disabled={acceptJobMutation.isPending}
+                    className="px-4 py-2 bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg hover:bg-gold transition-all disabled:opacity-50"
+                  >
+                    Accept Task
+                  </button>
+               </div>
+             ))}
+           </div>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="bg-background border border-border p-2 rounded-2xl flex flex-col sm:flex-row gap-4 items-center justify-between">

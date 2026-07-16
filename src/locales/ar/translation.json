@@ -39,7 +39,11 @@
     "my_tasks": "مهامي",
     "notifications": "الإشعارات",
     "profile": "الحساب والأمان",
-    "support": "مركز الدعم"
+    "support": "مركز الدعم",
+    "pipeline": "خط الأنابيب",
+    "messages": "الرسائل",
+    "reports": "التقارير",
+    "invoices": "الفواتير وعروض الأسعار"
   },
   "admin": {
 

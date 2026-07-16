@@ -27,7 +27,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 const PackageForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const isNew = id === 'new';
+  const isNew = !id || id === 'new';
 
   const { data: pkg, isLoading: isPkgLoading } = useAdminPackage(id);
   const { data: allServices, isLoading: isServicesLoading } = useAdminServices();
@@ -120,8 +120,8 @@ const PackageForm = () => {
   }
 
   const filteredServicesList = allServices?.filter(s => 
-    !selectedServices.find(ss => ss.id === s.id) &&
-    (s.name_en.toLowerCase().includes(searchTerm.toLowerCase()) || s.name_ar.includes(searchTerm))
+    !selectedServices.find(ss => ss?.id === s?.id) &&
+    ((s?.name_en || '').toLowerCase().includes((searchTerm || '').toLowerCase()) || (s?.name_ar || '').includes(searchTerm || ''))
   );
 
   return (

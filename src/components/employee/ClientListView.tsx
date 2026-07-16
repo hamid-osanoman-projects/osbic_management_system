@@ -1,0 +1,328 @@
+import React from 'react';
+import { User, Mail, Phone, ChevronRight, LayoutGrid, List, Zap, Edit2, Trash2, X } from 'lucide-react';
+import { useDeleteClient } from '../../hooks/admin/useAdminClients';
+import { useAuth } from '../../contexts/AuthContext';
+import { motion } from 'framer-motion';
+
+export interface ClientProfile {
+  id: string;
+  full_name: string;
+  email?: string;
+  phone?: string;
+  avatar_url?: string;
+  client_code?: string;
+  created_at?: string;
+  created_by?: string;
+}
+
+interface ClientListViewProps {
+  clients: ClientProfile[];
+  jobs: any[]; // Used to calculate project stats
+  onClientSelect: (clientId: string) => void;
+  onViewToggle: (mode: 'split' | 'list') => void;
+  currentMode: 'split' | 'list';
+  clientTypeFilter?: 'standard' | 'walk-in';
+  onClientTypeChange?: (type: 'standard' | 'walk-in') => void;
+  onNewClient?: () => void;
+  onEditClient?: (client: ClientProfile) => void;
+}
+
+const DeleteClientModal = ({ 
+  isOpen, 
+  onClose, 
+  client, 
+  onConfirm 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  client: ClientProfile | null;
+  onConfirm: (id: string) => void;
+}) => {
+  const [confirmText, setConfirmText] = React.useState('');
+  
+  if (!isOpen || !client) return null;
+  
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-card border border-border w-full max-w-md rounded-3xl p-6 shadow-2xl relative">
+        <button onClick={onClose} className="absolute right-4 top-4 p-2 text-muted-foreground hover:bg-muted rounded-full">
+          <X size={20} />
+        </button>
+        
+        <div className="w-12 h-12 bg-destructive/10 text-destructive rounded-full flex items-center justify-center mb-4 border border-destructive/20">
+          <Trash2 size={24} />
+        </div>
+        
+        <h3 className="text-xl font-bold font-syne text-foreground mb-2">Delete Client</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Are you sure you want to delete <span className="font-bold text-foreground">{client.full_name}</span>? This action cannot be undone.
+        </p>
+        
+        <div className="bg-muted/50 p-4 rounded-xl border border-border mb-6">
+          <p className="text-xs text-muted-foreground mb-2">
+            Please type <strong className="text-foreground select-all">{client.full_name}</strong> to confirm.
+          </p>
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            className="w-full bg-background border border-border rounded-lg py-2 px-3 text-sm focus:border-destructive outline-none transition-colors"
+            placeholder={client.full_name}
+          />
+        </div>
+        
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl font-bold text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+            Cancel
+          </button>
+          <button 
+            disabled={confirmText !== client.full_name}
+            onClick={() => onConfirm(client.id)}
+            className="px-5 py-2.5 rounded-xl font-bold text-sm bg-destructive text-destructive-foreground hover:brightness-110 disabled:opacity-50 transition-all shadow-lg shadow-destructive/20"
+          >
+            Delete Client
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, onClientSelect, onViewToggle, currentMode, clientTypeFilter = 'standard', onClientTypeChange, onNewClient, onEditClient }) => {
+  const [deleteModalOpen, setDeleteModalOpen] = React.useState(false);
+  const [clientToDelete, setClientToDelete] = React.useState<ClientProfile | null>(null);
+  const [filterType, setFilterType] = React.useState<'all' | 'mine' | 'assigned'>('all');
+  const { mutate: deleteClient } = useDeleteClient();
+  const { profile } = useAuth();
+  
+  const handleDeleteConfirm = (id: string) => {
+    deleteClient(id);
+    setDeleteModalOpen(false);
+    setClientToDelete(null);
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto p-8 bg-background no-scrollbar">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl font-syne font-bold text-foreground">Client Directory</h2>
+          <div className="flex items-center gap-4">
+            <div className="flex bg-muted/50 p-1 rounded-xl border border-border">
+              <button 
+                onClick={() => onViewToggle('split')}
+                className={`p-1.5 rounded-lg transition-all ${currentMode === 'split' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button 
+                onClick={() => onViewToggle('list')}
+                className={`p-1.5 rounded-lg transition-all ${currentMode === 'list' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <List size={16} />
+              </button>
+            </div>
+            
+            {onNewClient && (
+              <button
+                onClick={onNewClient}
+                className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl flex items-center gap-2 hover:shadow-[0_0_20px_rgba(212,175,55,0.2)] transition-all active:scale-95 text-sm"
+              >
+                <User size={16} /> Add Client
+              </button>
+            )}
+          </div>
+        </div>
+
+        {onClientTypeChange && (
+          <div className="flex flex-col md:flex-row gap-4 mb-8">
+            <div className="flex bg-card p-1 rounded-2xl border border-border w-full max-w-md">
+              <button 
+                onClick={() => onClientTypeChange('standard')}
+                className={`flex-1 flex justify-center items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${clientTypeFilter === 'standard' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <User size={16} /> Standard Clients
+              </button>
+              <button 
+                onClick={() => onClientTypeChange('walk-in')}
+                className={`flex-1 flex justify-center items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${clientTypeFilter === 'walk-in' ? 'bg-amber-500 text-amber-950 shadow-lg shadow-amber-500/20' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Zap size={16} /> Walk-in
+              </button>
+            </div>
+            
+            {clientTypeFilter === 'standard' && (
+              <div className="flex items-center gap-1 p-1 bg-muted/50 border border-border rounded-2xl w-full max-w-md overflow-x-auto no-scrollbar">
+                {(['all', 'mine'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setFilterType(f)}
+                    className={`relative flex-1 px-4 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-colors whitespace-nowrap ${filterType === f ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    {f === 'mine' ? 'My Registrations' : 'All Clients'}
+                    {filterType === f && (
+                      <motion.div layoutId="clientListFilter" className="absolute inset-0 bg-card rounded-xl shadow-sm border border-border -z-10" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        
+        <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-muted/50 border-b border-border">
+                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Client</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden sm:table-cell">Contact Info</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden md:table-cell">Joined</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Projects</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {(() => {
+                  const filtered = clients.filter(c => {
+                    if (clientTypeFilter !== 'standard') return true;
+                    if (filterType === 'mine' && c.created_by !== profile?.id) return false;
+                    if (filterType === 'assigned' && c.created_by === profile?.id) return false;
+                    return true;
+                  });
+                  
+                  if (filtered.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground text-sm">
+                          No clients found.
+                        </td>
+                      </tr>
+                    );
+                  }
+                  
+                  return filtered.map(client => {
+                    const clientJobs = jobs.filter(j => j.client_id === client.id);
+                    const activeJobs = clientJobs.filter(j => j.status === 'active' || j.status === 'in_progress');
+                    
+                    return (
+                      <tr 
+                        key={client.id}
+                        onClick={() => onClientSelect(client.id)}
+                        className="group hover:bg-muted/30 transition-colors cursor-pointer"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold overflow-hidden shrink-0">
+                              {client.avatar_url ? (
+                                <img src={client.avatar_url} alt={client.full_name} className="w-full h-full object-cover" />
+                              ) : (
+                                <User size={16} />
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-syne font-bold text-foreground group-hover:text-primary transition-colors">{client.full_name}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                {client.client_code && (
+                                  <span className="text-[10px] font-mono text-muted-foreground uppercase">{client.client_code}</span>
+                                )}
+                                {clientTypeFilter === 'standard' && client.created_by === profile?.id && (
+                                  <span className="inline-block px-1.5 py-0.5 rounded md bg-primary/10 text-primary text-[8px] font-bold uppercase tracking-widest border border-primary/20">
+                                    My Client
+                                  </span>
+                                )}
+                                {clientTypeFilter === 'standard' && client.created_by !== profile?.id && client.created_by && (
+                                  <span className="inline-block px-1.5 py-0.5 rounded md bg-amber-500/10 text-amber-500 text-[8px] font-bold uppercase tracking-widest border border-amber-500/20">
+                                    Assigned
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        
+                        <td className="px-6 py-4 hidden sm:table-cell">
+                          <div className="flex flex-col gap-1">
+                            {client.email && (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Mail size={12} /> {client.email}
+                              </div>
+                            )}
+                            {client.phone && (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Phone size={12} /> {client.phone}
+                              </div>
+                            )}
+                            {!client.email && !client.phone && (
+                              <span className="text-xs text-muted-foreground/50">N/A</span>
+                            )}
+                          </div>
+                        </td>
+                        
+                        <td className="px-6 py-4 hidden md:table-cell text-sm text-muted-foreground">
+                          {client.created_at ? new Date(client.created_at).toLocaleDateString() : 'Unknown'}
+                        </td>
+                        
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-foreground">{activeJobs.length}</p>
+                              <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Active</p>
+                            </div>
+                            <div className="w-[1px] h-6 bg-border" />
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-muted-foreground">{clientJobs.length}</p>
+                              <p className="text-[9px] uppercase tracking-widest text-muted-foreground opacity-50">Total</p>
+                            </div>
+                          </div>
+                        </td>
+                        
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (onEditClient) onEditClient(client);
+                              }}
+                              className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="Edit Client"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setClientToDelete(client);
+                                setDeleteModalOpen(true);
+                              }}
+                              className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                              title="Delete Client"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                            <button className="p-2 text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 rounded-lg transition-all ml-2">
+                              <ChevronRight size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      
+      <DeleteClientModal 
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setClientToDelete(null);
+        }}
+        client={clientToDelete}
+        onConfirm={handleDeleteConfirm}
+      />
+    </div>
+  );
+};

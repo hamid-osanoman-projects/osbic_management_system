@@ -100,8 +100,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
       
       if (error) {
-        // If profile doesn't exist but user does, it's a broken session
-        console.error('Profile fetch failed:', error);
+        // If profile doesn't exist but user does, it's a broken session or an incomplete test account.
+        // We suppress the PGRST116 "0 rows" error to avoid console spam during password resets.
+        if (error.code !== 'PGRST116') {
+          console.error('Profile fetch failed:', error);
+        }
         setProfile(null);
       } else {
         setProfile(data);

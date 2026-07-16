@@ -16,6 +16,8 @@ export interface Job {
   employee_id: string;
   employee_name: string;
   employee_avatar?: string;
+  assigned_by?: string | null;
+  assigned_by_role?: 'admin' | 'employee' | 'client';
   status: 'active' | 'on_hold' | 'completed' | 'cancelled' | 'pending' | string;
   started_date: string;
   expected_completion: string;
@@ -31,6 +33,7 @@ export interface Job {
   advance_receipt_url?: string;
   remaining_due_amount: number;
   remaining_receipt_url?: string;
+  notes?: string | null;
   documents?: JobDocument[];
 }
 
@@ -41,6 +44,8 @@ export interface JobStep {
   name_en: string;
   name_ar: string;
   order_index: number;
+  assigned_to?: string | null;
+  assigned_by?: string | null;
   status: 'pending' | 'in_progress' | 'completed' | 'rejected' | 'skipped';
   is_client_visible: boolean;
   started_at?: string | null;
@@ -135,6 +140,7 @@ export const useAdminJobs = () => {
           remaining_paid: j.remaining_paid ?? false,
           advance_due_amount: Number(j.advance_amount) || 0,
           remaining_due_amount: Number(j.remaining_amount) || 0,
+          notes: j.notes,
         };
       });
     },
@@ -147,26 +153,79 @@ export const useEmployeeJobs = (employeeId: string) => {
     queryKey: ['employee', 'jobs', employeeId],
     enabled: !!employeeId,
     queryFn: async (): Promise<Job[]> => {
-      const { data, error } = await supabase
+      // 1. Fetch jobs the employee owns
+      const { data: ownedData, error: ownedError } = await supabase
         .from('jobs')
         .select(`
           *,
+          assigner:profiles!assigned_by(role),
           client:profiles!client_id(full_name, avatar_url),
           service:services!service_id(name_en, category),
-          job_steps(status, actual_gov_fee, workflow_step_id)
+          job_steps(id, status, actual_gov_fee, workflow_step_id, assigned_to, assigned_by)
         `)
-        .eq('employee_id', employeeId)
-        .order('created_at', { ascending: false });
+        .or(`employee_id.eq.${employeeId},assigned_by.eq.${employeeId}`);
 
-      if (error) throw error;
+      if (ownedError) throw ownedError;
 
-      return (data || []).map((j: any) => {
+      // 2. Fetch steps assigned to the employee
+      const { data: stepsData, error: stepsError } = await supabase
+        .from('job_steps')
+        .select('job_id')
+        .eq('assigned_to', employeeId);
+        
+      if (stepsError) throw stepsError;
+
+      // Find jobs they are assigned a step in, but DO NOT own
+      let delegatedData: any[] = [];
+      const delegatedJobIds = Array.from(new Set((stepsData || []).map((s: any) => s.job_id))).filter(
+        id => !(ownedData || []).some((oj: any) => oj.id === id)
+      );
+
+      if (delegatedJobIds.length > 0) {
+        const { data: dJobs, error: dError } = await supabase
+          .from('jobs')
+          .select(`
+            *,
+            assigner:profiles!assigned_by(role),
+            client:profiles!client_id(full_name, avatar_url),
+            service:services!service_id(name_en, category),
+            job_steps(id, status, actual_gov_fee, workflow_step_id, assigned_to, assigned_by)
+          `)
+          .in('id', delegatedJobIds);
+          
+        if (dError) throw dError;
+        delegatedData = dJobs;
+      }
+
+      // 3. Combine and Map
+      const allJobs = [...(ownedData || []), ...(delegatedData || [])];
+
+      return allJobs.map((j: any) => {
         const totalSteps = j.job_steps?.length || 0;
         const completedSteps = j.job_steps?.filter((s: any) => s.status === 'completed').length || 0;
-        // Approximation of completed steps since we don't fetch all statuses here for performance
-        // In a real high-perf scenario, we'd use a RPC or view. 
-        // For now, let's just make the total steps work so we don't get NaN.
         
+        // Determine the "assigner" for this context. 
+        // If they own the job, the job's assigned_by is used.
+        // If they only own a step, we find the step they are assigned to and use its assigned_by.
+        let resolvedAssignedBy = j.assigned_by;
+        let resolvedAssignedByRole = j.assigner?.role;
+        
+        if (j.employee_id !== employeeId) {
+           const specificStep = j.job_steps?.find((s: any) => s.assigned_to === employeeId);
+           if (specificStep) {
+              resolvedAssignedBy = specificStep.assigned_by;
+              // If the step assigner is the same as the job assigner, we know their role
+              if (resolvedAssignedBy === j.assigned_by) {
+                resolvedAssignedByRole = j.assigner?.role;
+              } else if (resolvedAssignedBy === employeeId) {
+                resolvedAssignedByRole = 'employee';
+              } else {
+                // Fallback: assume manager if delegated by someone else
+                resolvedAssignedByRole = 'manager';
+              }
+           }
+        }
+
         return {
           id: j.id,
           job_code: j.job_code,
@@ -176,6 +235,8 @@ export const useEmployeeJobs = (employeeId: string) => {
           service_category: j.service?.category ?? 'other',
           employee_id: j.employee_id,
           employee_name: 'Me',
+          assigned_by: resolvedAssignedBy,
+          assigned_by_role: resolvedAssignedByRole,
           status: j.status,
           started_date: j.started_at ?? j.created_at,
           expected_completion: j.created_at,
@@ -189,8 +250,9 @@ export const useEmployeeJobs = (employeeId: string) => {
           remaining_paid: j.remaining_paid ?? false,
           advance_due_amount: Number(j.advance_amount) || 0,
           remaining_due_amount: Number(j.remaining_amount) || 0,
+          notes: j.notes,
         };
-      });
+      }).sort((a, b) => new Date(b.started_date).getTime() - new Date(a.started_date).getTime());
     },
   });
 };
@@ -440,6 +502,7 @@ const _createInternalJob = async (supabase: any, jobData: any, isAdmin: boolean,
     title_ar: 'تم تكليفك بمشروع جديد',
     body_en: `You have been assigned to job ${jobCode}.`,
     body_ar: `تم تعيينك للعمل على الطلب رقم ${jobCode}.`,
+    action_url: `/employee/tasks?jobId=${job.id}`
   } as any);
 
   return job;
@@ -568,9 +631,9 @@ export const useCreatePackageJobs = () => {
         // 3. Pointer Sync: Point the job to the first active step
         const firstActive = insertedSteps.find((s: any) => s.status === 'pending');
         if (firstActive) {
-          await supabase
+          await (supabase as any)
             .from('jobs')
-            .update({ current_step_id: firstActive.id } as any)
+            .update({ current_step_id: firstActive.id })
             .eq('id', job.id);
         }
       }
@@ -614,7 +677,7 @@ export const useUpdateJobStepStatus = () => {
   return useMutation({
     mutationFn: async ({ stepId, status, notes, actualGovFee }: { stepId: string; status: string; notes?: string; actualGovFee?: number }) => {
       // Perform the entire transition in ONE atomic database transaction
-      const { error } = await supabase.rpc('finalize_job_step', {
+      const { error } = await (supabase as any).rpc('finalize_job_step', {
         p_step_id: stepId,
         p_status: status,
         p_notes: notes || null,
@@ -665,9 +728,9 @@ export const useRequestExtension = () => {
       if (error) throw error;
 
       // 2. Track the pending reason on the step itself for UI visibility
-      await supabase
+      await (supabase as any)
         .from('job_steps')
-        .update({ extension_reason: reason } as any)
+        .update({ extension_reason: reason })
         .eq('id', stepId);
 
       return data;
@@ -700,13 +763,14 @@ export const useUpdateJobPayment = () => {
       const updates: any = {};
       
       // Fetch current job fees to perform smart re-balancing
-      const { data: jobInfo, error: fetchError } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('jobs')
         .select('total_fee, advance_amount, remaining_amount')
         .eq('id', jobId)
         .single();
       
       if (fetchError) throw fetchError;
+      const jobInfo = data as any;
       const totalFee = Number(jobInfo.total_fee) || 0;
 
       if (type === 'advance') {
@@ -731,7 +795,7 @@ export const useUpdateJobPayment = () => {
       }
 
         // 1. Perform primary job financial update
-        const { data: updatedJob, error: updateError } = await supabase
+        const { data: updatedJob, error: updateError } = await (supabase as any)
           .from('jobs')
           .update(updates)
           .eq('id', jobId)
@@ -764,20 +828,20 @@ export const useUpdateJobPayment = () => {
              }
 
              // Update step status and job's current step pointer sequentially to avoid 409
-             const { error: sError } = await supabase
+             const { error: sError } = await (supabase as any)
                .from('job_steps')
                .update({ 
                  status: 'in_progress', 
                  started_at: now,
                  deadline: deadline 
-               } as any)
-               .eq('id', firstStep.id);
+               })
+               .eq('id', (firstStep as any).id);
              
              if (sError) throw sError;
 
-             const { error: jError } = await supabase
+             const { error: jError } = await (supabase as any)
                .from('jobs')
-               .update({ current_step_id: firstStep.id } as any)
+               .update({ current_step_id: (firstStep as any).id })
                .eq('id', jobId);
              
              if (jError) throw jError;
@@ -836,7 +900,7 @@ export const useResolveOperationalRequest = () => {
       metadata?: any;
     }) => {
       // 1. Resolve the request record
-      const { error: reqError } = await supabase
+      const { error: reqError } = await (supabase as any)
         .from('employee_requests')
         .update({
           status: action,
@@ -850,9 +914,9 @@ export const useResolveOperationalRequest = () => {
       // 2. Perform side effects if approved
       if (action === 'approved') {
         if (type === 'deadline_extension' && metadata?.newDeadline && metadata?.step_id) {
-           await supabase
+           await (supabase as any)
             .from('job_steps')
-            .update({ deadline: metadata.newDeadline, extension_reason: null } as any)
+            .update({ deadline: metadata.newDeadline, extension_reason: null })
             .eq('id', metadata.step_id);
         } else if (type === 'job_deletion' && jobId) {
            // DEEP CLEAN: Purge all dependencies before deleting the job
@@ -876,7 +940,7 @@ export const useResolveOperationalRequest = () => {
 
            // 5. UNLINK & PURGE Notifications
            // We first try to unlink notifications to satisfy FK even if RLS blocks deletion of others' notifs
-           await supabase.from('notifications').update({ job_id: null } as any).eq('job_id', jobId);
+           await (supabase as any).from('notifications').update({ job_id: null }).eq('job_id', jobId);
            
            // Then we try to delete notifications we have access to
            const { error: notifError } = await supabase.from('notifications').delete().eq('job_id', jobId);
@@ -965,13 +1029,13 @@ export const useUpdateDocumentStatus = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ docId, status, rejectionReason }: { docId: string; status: 'approved' | 'rejected' | 'pending'; rejectionReason?: string }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('documents')
         .update({ 
           status, 
           rejection_reason: rejectionReason || null,
           is_client_visible: status === 'approved' // Auto-reveal on approval
-        } as any)
+        })
         .eq('id', docId);
       
       if (error) throw error;
@@ -1003,22 +1067,39 @@ export const useAdminDeleteJob = () => {
   return useMutation({
     mutationFn: async (jobId: string) => {
       // DEEP CLEAN: Purge all dependencies before deleting the job
-      const { error: sE } = await supabase.from('job_steps').delete().eq('job_id', jobId);
-      if (sE) throw sE;
       
+      // 1. Delete Documents first (depends on job_steps & job_sub_tasks)
       const { error: dE } = await supabase.from('documents').delete().eq('job_id', jobId);
       if (dE) throw dE;
 
+      // 2. Find and delete Sub Tasks (depends on job_steps)
+      const { data: steps } = await supabase.from('job_steps').select('id').eq('job_id', jobId);
+      if (steps && steps.length > 0) {
+         const stepIds = steps.map(s => s.id);
+         await supabase.from('job_sub_tasks').delete().in('job_step_id', stepIds);
+      }
+
+      // 3. Clean up financials and invoices
+      await supabase.from('job_additional_charges').delete().eq('job_id', jobId);
+      await supabase.from('job_payments').delete().eq('job_id', jobId);
+      await supabase.from('invoices').delete().eq('job_id', jobId);
+
+      // 4. Delete Job Steps
+      const { error: sE } = await supabase.from('job_steps').delete().eq('job_id', jobId);
+      if (sE) throw sE;
+      
+      // 5. Delete Messages & Requests
       const { error: mE } = await supabase.from('messages').delete().eq('job_id', jobId);
       if (mE) throw mE;
 
       const { error: rE } = await supabase.from('employee_requests').delete().eq('job_id', jobId);
       if (rE) throw rE;
 
-      // UNLINK & PURGE Notifications (Defensive against RLS)
-      await supabase.from('notifications').update({ job_id: null } as any).eq('job_id', jobId);
+      // 6. UNLINK & PURGE Notifications (Defensive against RLS)
+      await (supabase as any).from('notifications').update({ job_id: null }).eq('job_id', jobId);
       await supabase.from('notifications').delete().eq('job_id', jobId);
       
+      // Finally, delete the job itself
       const { error: jobError } = await supabase.from('jobs').delete().eq('id', jobId);
       if (jobError) throw jobError;
       return jobId;
@@ -1061,7 +1142,7 @@ export const useRequestJobDeletion = () => {
         .limit(1);
 
       if (adminProfiles && adminProfiles.length > 0) {
-        const adminId = adminProfiles[0].id;
+        const adminId = (adminProfiles as any[])[0].id;
         await supabase.from('notifications').insert({
           recipient_id: adminId,
           sender_id: profile?.id,
@@ -1069,10 +1150,10 @@ export const useRequestJobDeletion = () => {
           type: 'action_required',
           title_en: 'Job Deletion Request',
           title_ar: 'طلب حذف عمل',
-          body_en: `Staff requested deletion of job ${data.id}. Reason: ${reason}`,
-          body_ar: `طلب الموظف حذف العمل ${data.id}. السبب: ${reason}`,
+          body_en: `Staff requested deletion of job ${(data as any).id}. Reason: ${reason}`,
+          body_ar: `طلب الموظف حذف العمل ${(data as any).id}. السبب: ${reason}`,
           action_required: true,
-          action_url: `job_request://${data.id}|${jobId}|job_deletion`
+          action_url: `job_request://${(data as any).id}|${jobId}|job_deletion`
         } as any);
       }
 
@@ -1110,7 +1191,7 @@ export const useSendMessage = () => {
     },
     onSuccess: (data) => {
       // Optmistically invalidate the job detail to show the new message
-      qc.invalidateQueries({ queryKey: ['job', data.job_id] });
+      qc.invalidateQueries({ queryKey: ['job', (data as any).job_id] });
     },
   });
 };
@@ -1130,7 +1211,7 @@ export const useUnreadMessageCount = (clientId?: string) => {
       if (jobsError) throw jobsError;
       if (!jobs || jobs.length === 0) return 0;
 
-      const jobIds = jobs.map(j => j.id);
+      const jobIds = (jobs as any[]).map((j: any) => j.id);
 
       // 2. Count messages in those jobs that are not from this client and are unread
       // Note: We use head: true to only get count, not data.

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 import { type Job, type JobStep, useUpdateJobStepStatus } from '../../hooks/shared/useJobs';
 import StepTimer from './StepTimer';
 import { 
-  Clock, AlertTriangle, Lock, Activity, FileUp, Send, Check, MessageSquare, Info, ExternalLink
+  Clock, AlertTriangle, Lock, Activity, FileUp, Send, Check, MessageSquare, Info, ExternalLink, Calendar, FileText, Coins
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
@@ -81,7 +82,7 @@ const WorkflowProgressTab = ({ job, steps, isEmployee, isAdmin, onSwitchTab }: P
   return (
     <div className="space-y-8 pb-12">
       
-      {!job.advance_paid && (
+      {!job.advance_paid && isEmployee && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4 duration-500 shadow-2xl shadow-amber-500/5">
            <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center shrink-0">
@@ -104,7 +105,7 @@ const WorkflowProgressTab = ({ job, steps, isEmployee, isAdmin, onSwitchTab }: P
       )}
 
       {/* ── PROJECT FINANCIAL PULSE (Staff Only) ── */}
-      {isStaff && (
+      {isEmployee && (
         <div className="bg-card border border-border rounded-3xl p-4 flex flex-wrap items-center justify-between gap-6 shadow-xl border-l-4 border-l-primary/50">
            <div className="flex items-center gap-8">
               {/* Client Deposit */}
@@ -192,7 +193,7 @@ const WorkflowProgressTab = ({ job, steps, isEmployee, isAdmin, onSwitchTab }: P
            <p className="text-sm text-muted-foreground">Step {job.completed_steps + 1} of {job.total_steps} • {job.service_name}</p>
         </div>
         
-        {activeStep && (
+        {activeStep && isEmployee && (
           <div className="bg-card border border-border rounded-2xl px-6 py-4 shadow-xl flex items-center gap-6">
              <div>
                <p className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-1">Active Step SLA</p>
@@ -204,7 +205,7 @@ const WorkflowProgressTab = ({ job, steps, isEmployee, isAdmin, onSwitchTab }: P
         )}
       </div>
 
-      {showPaymentReminderFlag && (
+      {showPaymentReminderFlag && isEmployee && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-4 animate-in slide-in-from-top-4 duration-300">
            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
               <AlertTriangle size={20} />
@@ -235,13 +236,60 @@ const WorkflowProgressTab = ({ job, steps, isEmployee, isAdmin, onSwitchTab }: P
         ) : (
           <>
             {/* Connecting Line */}
-            <div className="absolute left-[27px] top-8 bottom-8 w-0.5 bg-gradient-to-b from-emerald-500/50 via-white/5 to-white/5" />
+            <div className={cn("absolute top-8 bottom-8 w-0.5", isAdmin ? "left-[5px] bg-border" : "left-[27px] bg-gradient-to-b from-emerald-500/50 via-white/5 to-white/5")} />
 
             {steps.map((step, idx) => {
               const isActive = step.status === 'in_progress';
               const isCompleted = step.status === 'completed';
               const isPending = step.status === 'pending';
               
+              if (isAdmin) {
+                return (
+                  <div key={step.id} className="relative pl-12 pr-4 py-4 group">
+                    <div className={cn(
+                      "absolute left-[2.5px] top-6 w-2 h-2 rounded-full border-2 z-10 transition-all flex items-center justify-center",
+                      isCompleted ? "bg-emerald-500 border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : 
+                      isActive ? "bg-secondary border-emerald-500 animate-pulse border-t-transparent" : 
+                      "bg-secondary border-muted-foreground/30"
+                    )} />
+                    
+                    <div className="flex flex-col gap-2">
+                       <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                             <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest">0{idx + 1}</span>
+                             <h4 className={cn("text-base font-syne font-bold transition-colors", isCompleted ? "text-emerald-400" : isActive ? "text-foreground" : "text-muted-foreground")}>{step.name_en}</h4>
+                             {isActive && (
+                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[9px] font-bold tracking-widest uppercase">
+                                 <span className="w-1 h-1 rounded-full bg-emerald-400 animate-ping" /> Live
+                               </span>
+                             )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3">
+                             {step.estimated_hours && (
+                                <span className="text-muted-foreground/60 text-[9px] font-bold tracking-widest uppercase flex items-center gap-1">
+                                  <Clock size={10} /> {formatSLA(step.estimated_hours)}
+                                </span>
+                             )}
+                             {step.actual_gov_fee !== undefined && step.actual_gov_fee > 0 && (
+                                <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                                   <Activity size={10} /> {step.actual_gov_fee} OMR
+                                </span>
+                             )}
+                          </div>
+                       </div>
+                       
+                       <AdminSubTasksViewer stepId={step.id} jobId={job.id} />
+                       
+                       {step.notes && isCompleted && (
+                         <div className="mt-2 text-xs text-muted-foreground/80 italic border-l-2 border-border pl-3">
+                            "{step.notes}"
+                         </div>
+                       )}
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <div key={step.id} className={cn(
                   "relative pl-16 pr-6 pt-6 pb-6 rounded-3xl border transition-all duration-300 group",
@@ -273,12 +321,12 @@ const WorkflowProgressTab = ({ job, steps, isEmployee, isAdmin, onSwitchTab }: P
                               <Check size={10} className="stroke-[3]" /> Finalized
                             </span>
                           )}
-                          {step.estimated_hours && (
+                           {step.estimated_hours && (
                             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-card border border-border text-muted-foreground/60 text-[9px] font-bold tracking-widest uppercase">
                                   <Clock size={10} /> {formatSLA(step.estimated_hours)}
                                 </span>
                              )}
-                             {isStaff && step.actual_gov_fee !== undefined && step.actual_gov_fee > 0 && (
+                             {isEmployee && step.actual_gov_fee !== undefined && step.actual_gov_fee > 0 && (
                                 <span className={cn(
                                   "px-2 py-0.5 rounded text-[10px] font-mono font-bold inline-flex items-center gap-1 border",
                                   isCompleted ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-white/5 text-muted-foreground border-border"
@@ -334,7 +382,7 @@ const WorkflowProgressTab = ({ job, steps, isEmployee, isAdmin, onSwitchTab }: P
 
                     {/* Status Specific Actions */}
                     <div className="shrink-0 flex items-center gap-4">
-                        {isActive && isStaff && (
+                        {isActive && isEmployee && (
                           <div className="flex items-center gap-2">
                              {showConfirm === step.id ? (
                                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -432,7 +480,7 @@ const WorkflowProgressTab = ({ job, steps, isEmployee, isAdmin, onSwitchTab }: P
                           </div>
                         )}
 
-                       {isPending && !activeStep && nextPendingStep?.id === step.id && isStaff && (
+                       {isPending && !activeStep && nextPendingStep?.id === step.id && isEmployee && (
                           <button 
                             onClick={() => handleUpdateStatus(step.id, 'in_progress')}
                             disabled={isUpdating || !job.advance_paid}
@@ -471,6 +519,47 @@ const WorkflowProgressTab = ({ job, steps, isEmployee, isAdmin, onSwitchTab }: P
           </>
         )}
       </div>
+    </div>
+  );
+};
+
+const AdminSubTasksViewer = ({ stepId, jobId }: { stepId: string, jobId: string }) => {
+  const [subTasks, setSubTasks] = useState<any[]>([]);
+  const [docs, setDocs] = useState<any[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      const { data: st } = await supabase.from('job_sub_tasks').select('*').eq('job_step_id', stepId).order('created_at', { ascending: true });
+      if (st) setSubTasks(st);
+      
+      const { data: d } = await supabase.from('documents').select('*').eq('job_step_id', stepId).eq('document_type', 'sub_task_attachment');
+      if (d) setDocs(d);
+    };
+    load();
+  }, [stepId]);
+
+  if (subTasks.length === 0) return null;
+
+  return (
+    <div className="mt-4 space-y-2 border-t border-border pt-3">
+      {subTasks.map(st => {
+        const doc = docs.find(d => d.job_sub_task_id === st.id);
+        return (
+          <div key={st.id} className="bg-card/50 rounded-lg p-2.5 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-foreground">{st.name}</span>
+              <span className={cn("text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded", st.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-muted text-muted-foreground')}>{st.status}</span>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3 text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+              {st.ministry_fee > 0 && <span className="flex items-center gap-1 text-primary bg-primary/5 px-1.5 py-0.5 rounded"><Coins size={10} /> {st.ministry_fee} OMR</span>}
+              {st.issued_date && <span className="flex items-center gap-1"><Calendar size={10} /> Iss: {st.issued_date}</span>}
+              {st.expiry_date && <span className="flex items-center gap-1"><Calendar size={10} /> Exp: {st.expiry_date}</span>}
+              {doc && <span className="flex items-center gap-1 text-emerald-400"><FileText size={10} /> {doc.file_name}</span>}
+            </div>
+          </div>
+        )
+      })}
     </div>
   );
 };

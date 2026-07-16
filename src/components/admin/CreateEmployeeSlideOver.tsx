@@ -18,6 +18,8 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
     fullName: '',
     email: '',
     phone: '',
+    countryCode: '+968',
+    customCountryCode: '',
     notes: '',
     services: [] as string[],
     avatarFile: null as File | null,
@@ -30,28 +32,22 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
 
   const { mutate: createEmployee, isPending } = useCreateEmployee();
 
-  const handleNext = () => {
+  const handleSubmit = () => {
     if (!formData.fullName || !formData.email || !formData.phone) {
       toast.error('Please fill in all required fields');
-      return;
-    }
-    setStep(2);
-  };
-
-  const handleSubmit = () => {
-    if (formData.services.length === 0) {
-      toast.error('Please select at least one service');
       return;
     }
 
     const generatedPassword = generateSecurePassword();
     const username = generateUsername(formData.fullName);
 
-    createEmployee({
-      full_name: formData.fullName,
-      email: formData.email,
-      phone: formData.phone ? `+968 ${formData.phone}` : undefined,
-      password: generatedPassword,
+      const finalCountryCode = formData.countryCode === 'Other' ? (formData.customCountryCode || '+') : formData.countryCode;
+
+      createEmployee({
+        full_name: formData.fullName,
+        email: formData.email,
+        phone: formData.phone ? `${finalCountryCode} ${formData.phone}` : undefined,
+        password: generatedPassword,
       avatar_file: formData.avatarFile,
     }, {
       onSuccess: (data: any) => {
@@ -77,7 +73,7 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
 
   const resetForm = () => {
     setStep(1);
-    setFormData({ fullName: '', email: '', phone: '', notes: '', services: [], avatarFile: null, previewUrl: '' });
+    setFormData({ fullName: '', email: '', phone: '', countryCode: '+968', customCountryCode: '', notes: '', services: [], avatarFile: null, previewUrl: '' });
     setShowSuccess(false);
     setShowPassword(false);
     onClose();
@@ -122,15 +118,9 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
             <div className="flex-1 overflow-y-auto p-6">
               {!showSuccess ? (
                 <div className="space-y-6">
-                  {/* Step Indicator */}
-                  <div className="flex items-center gap-2 mb-8">
-                    <div className={`h-2 flex-1 rounded-full ${step >= 1 ? 'bg-primary' : 'bg-white/5'}`} />
-                    <div className={`h-2 flex-1 rounded-full ${step >= 2 ? 'bg-primary' : 'bg-white/5'}`} />
-                  </div>
-
-                  {step === 1 && (
-                    <div className="space-y-5">
-                      <h3 className="text-lg font-syne font-bold text-foreground">Basic Information</h3>
+                  {/* Basic Information */}
+                  <div className="space-y-5">
+                    <h3 className="text-lg font-syne font-bold text-foreground">Basic Information</h3>
                       
                       <div className="flex justify-center mb-6">
                         <label className="relative group cursor-pointer">
@@ -184,68 +174,43 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
                         <div>
                           <label className="block text-sm font-medium text-muted-foreground mb-1.5">Phone Number *</label>
                           <div className="flex gap-2">
-                            <div className="w-24 bg-white/5 border border-border rounded-xl px-4 py-2.5 text-foreground flex items-center justify-center pointer-events-none">
-                              +968
-                            </div>
+                            <select 
+                              value={formData.countryCode} 
+                              onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
+                              className="w-28 bg-white/5 border border-border rounded-xl px-2 py-2.5 text-foreground focus:outline-none focus:border-gold transition-colors cursor-pointer text-center"
+                            >
+                              <option value="+968" className="bg-[#0A0F1E]">+968 (OM)</option>
+                              <option value="+971" className="bg-[#0A0F1E]">+971 (AE)</option>
+                              <option value="+966" className="bg-[#0A0F1E]">+966 (SA)</option>
+                              <option value="+974" className="bg-[#0A0F1E]">+974 (QA)</option>
+                              <option value="+973" className="bg-[#0A0F1E]">+973 (BH)</option>
+                              <option value="+965" className="bg-[#0A0F1E]">+965 (KW)</option>
+                              <option value="+91" className="bg-[#0A0F1E]">+91 (IN)</option>
+                              <option value="+92" className="bg-[#0A0F1E]">+92 (PK)</option>
+                              <option value="+20" className="bg-[#0A0F1E]">+20 (EG)</option>
+                              <option value="Other" className="bg-[#0A0F1E]">Other</option>
+                            </select>
+                            {formData.countryCode === 'Other' && (
+                              <input
+                                type="text"
+                                value={formData.customCountryCode}
+                                onChange={(e) => setFormData({ ...formData, customCountryCode: e.target.value })}
+                                className="w-16 bg-white/5 border border-border rounded-xl px-2 py-2.5 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-gold transition-colors text-center"
+                                placeholder="+"
+                              />
+                            )}
                             <input
                               type="tel"
                               value={formData.phone}
                               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                               className="flex-1 bg-white/5 border border-border rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-gold transition-colors"
-                              placeholder="9123 4567"
+                              placeholder="Phone number"
                             />
                           </div>
                         </div>
                       </div>
                     </div>
-                  )}
-
-                  {step === 2 && (
-                    <div className="space-y-5">
-                      <h3 className="text-lg font-syne font-bold text-foreground">Access & Assignment</h3>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-3">Assign Services (at least one)</label>
-                        <div className="space-y-2">
-                          {availableServices.map((service) => {
-                            const isSelected = formData.services.includes(service.name);
-                            return (
-                              <div
-                                key={service.id}
-                                onClick={() => {
-                                  if (isSelected) {
-                                    setFormData({ ...formData, services: formData.services.filter(s => s !== service.name) });
-                                  } else {
-                                    setFormData({ ...formData, services: [...formData.services, service.name] });
-                                  }
-                                }}
-                                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${isSelected ? 'bg-primary/10 border-gold/50' : 'bg-white/5 border-border hover:border-white/20'}`}
-                              >
-                                <div>
-                                  <p className={`text-sm font-medium ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>{service.name}</p>
-                                  <p className="text-[10px] text-muted-foreground/60">{service.category}</p>
-                                </div>
-                                <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-gold text-[#0A0F1E]' : 'border-white/20'}`}>
-                                  {isSelected && <CheckCircle size={14} />}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1.5">Notes (Internal)</label>
-                        <textarea
-                          value={formData.notes}
-                          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                          className="w-full bg-white/5 border border-border rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-gold transition-colors min-h-[100px] resize-none"
-                          placeholder="Any internal remarks..."
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
                   <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500 mb-2">
@@ -299,32 +264,13 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
             {/* Footer */}
             <div className="p-6 border-t border-border flex gap-3">
               {!showSuccess ? (
-                <>
-                  {step === 2 && (
-                    <button
-                      onClick={() => setStep(1)}
-                      className="px-6 py-3 rounded-xl border border-border text-foreground font-bold hover:bg-white/5 transition-colors"
-                    >
-                      Back
-                    </button>
-                  )}
-                  {step === 1 ? (
-                    <button
-                      onClick={handleNext}
-                      className="flex-1 bg-white text-[#0A0F1E] font-bold rounded-xl py-3 hover:bg-white/90 transition-colors"
-                    >
-                      Continue →
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleSubmit}
-                      disabled={isPending}
-                      className="flex-1 bg-primary text-[#0A0F1E] font-bold rounded-xl py-3 hover:bg-primary/90 transition-colors disabled:opacity-50"
-                    >
-                      {isPending ? 'Creating...' : 'Create Employee'}
-                    </button>
-                  )}
-                </>
+                <button
+                  onClick={handleSubmit}
+                  disabled={isPending}
+                  className="flex-1 bg-primary text-[#0A0F1E] font-bold rounded-xl py-3 hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {isPending ? 'Creating...' : 'Create Employee'}
+                </button>
               ) : (
                 <button
                   onClick={resetForm}

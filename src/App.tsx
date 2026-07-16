@@ -7,6 +7,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAdminSettings } from './hooks/admin/useAdminSettings';
 import ThemeToggle from './components/ThemeToggle';
+import { supabase } from './lib/supabase';
 
 
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -28,19 +29,25 @@ import ClientsHub from './pages/employee/Clients';
 import ClientHistoryView from './pages/employee/ClientHistory';
 import EmployeeDashboard from './pages/employee/Dashboard';
 import EmployeeNotifications from './pages/employee/Notifications';
+import EmployeeInvoices from './pages/employee/Invoices';
+import InvoiceBuilder from './pages/employee/InvoiceBuilder';
 import Jobs from './pages/admin/Jobs';
 import JobDetail from './pages/shared/JobDetail';
 import Notifications from './pages/admin/Notifications';
 import SLAApprovals from './pages/admin/SLAApprovals';
 import Finance from './pages/admin/Finance';
-import Settings from './pages/admin/Settings';
 import Audit from './pages/admin/Audit';
+import AdminMessages from './pages/admin/Messages';
+import Settings from './pages/admin/Settings';
 import MyJobs from './pages/employee/MyJobs';
 import EmployeeProfile from './pages/employee/Profile';
 import EmployeeRequests from './pages/employee/Requests';
 import ClientLogin from './pages/auth/ClientLogin';
 import ClientDashboard from './pages/client/Dashboard';
 import ClientJobDetail from './pages/client/ClientJobDetail';
+import UnifiedWorkspace from './pages/employee/UnifiedWorkspace';
+import EmployeeMessages from './pages/employee/Messages';
+import EmployeeReports from './pages/employee/Reports';
 import ClientProfile from './pages/client/Profile';
 import ClientMessages from './pages/client/Messages';
 import PackagesList from './pages/admin/Packages';
@@ -73,6 +80,9 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<'login' | 'forgot_email' | 'forgot_otp' | 'set_password'>('login');
+  const [otpCode, setOtpCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const { logo } = useAdminSettings();
 
   useEffect(() => {
@@ -105,6 +115,64 @@ const LoginPage = () => {
     // Redirect based on precise role
     const path = userRole === 'admin' ? '/admin' : userRole === 'employee' ? '/employee' : '/portal';
     navigate(path, { replace: true });
+  };
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    // Send standard password recovery email.
+    // Ensure Supabase reset password email template is configured to use {{ .Token }} instead of link.
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    setLoading(false);
+    
+    if (error) {
+      setError(error.message);
+    } else {
+      setView('forgot_otp');
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: otpCode,
+      type: 'recovery'
+    });
+    setLoading(false);
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setView('set_password');
+    }
+  };
+
+  const handleSetNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+    setLoading(false);
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setView('login');
+      setPassword('');
+      alert('Password updated successfully. Please log in.');
+    }
   };
 
   if (authLoading) return null;
@@ -152,53 +220,161 @@ const LoginPage = () => {
               <div className="h-[1px] bg-border my-6" />
             </div>
           )}
-          <form onSubmit={handleSignIn} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-muted/50 border border-border text-foreground p-3 rounded-xl outline-none focus:border-primary transition-all placeholder:text-muted-foreground/50"
-                placeholder="admin@gmail.com"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Password</label>
-              <div className="relative group">
+          {view === 'login' && (
+            <form onSubmit={handleSignIn} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Username / Email</label>
                 <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-muted/50 border border-border text-foreground p-3 rounded-xl outline-none focus:border-primary transition-all placeholder:text-muted-foreground/50 pr-12"
-                  placeholder="••••••••••••"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-muted/50 border border-border text-foreground p-3 rounded-xl outline-none focus:border-primary transition-all placeholder:text-muted-foreground/50"
+                  placeholder="Enter your username or email"
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
               </div>
-            </div>
-            {error && (
-              <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 text-destructive text-sm font-medium">
-                {error}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Password</label>
+                  <button type="button" onClick={() => setView('forgot_email')} className="text-xs text-primary hover:underline font-bold">
+                    Forgot Password?
+                  </button>
+                </div>
+                <div className="relative group">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-muted/50 border border-border text-foreground p-3 rounded-xl outline-none focus:border-primary transition-all placeholder:text-muted-foreground/50 pr-12"
+                    placeholder="••••••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-primary text-primary-foreground font-bold p-3 rounded-xl mt-2 hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
-            >
-              {loading ? (
-                <><span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> Signing in...</>
-              ) : 'Sign In'}
-            </button>
-          </form>
+              {error && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 text-destructive text-sm font-medium">
+                  {error}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-primary text-primary-foreground font-bold p-3 rounded-xl mt-2 hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+              >
+                {loading ? (
+                  <><span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> Signing in...</>
+                ) : 'Sign In'}
+              </button>
+            </form>
+          )}
+
+          {view === 'forgot_email' && (
+            <form onSubmit={handleSendOtp} className="space-y-4">
+              <div className="mb-6 text-center">
+                <h3 className="text-xl font-syne font-bold text-foreground mb-2">Reset Password</h3>
+                <p className="text-xs text-muted-foreground">Enter your email and we will send you an 8-digit verification code.</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-muted/50 border border-border text-foreground p-3 rounded-xl outline-none focus:border-primary transition-all"
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+              {error && <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 text-destructive text-sm font-medium">{error}</div>}
+              <button
+                type="submit"
+                disabled={loading || !email}
+                className="w-full bg-primary text-primary-foreground font-bold p-3 rounded-xl hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {loading ? 'Sending...' : 'Send Verification Code'}
+              </button>
+              <button type="button" onClick={() => setView('login')} className="w-full text-xs text-muted-foreground hover:text-foreground mt-4">
+                Back to Login
+              </button>
+            </form>
+          )}
+
+          {view === 'forgot_otp' && (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div className="mb-6 text-center">
+                <h3 className="text-xl font-syne font-bold text-foreground mb-2">Enter Verification Code</h3>
+                <p className="text-xs text-muted-foreground">We sent an 8-digit code to <span className="text-primary font-bold">{email}</span></p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">8-Digit Code</label>
+                <input
+                  type="text"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  className="w-full bg-muted/50 border border-border text-foreground p-3 rounded-xl text-center tracking-[0.5em] font-mono text-xl outline-none focus:border-primary transition-all"
+                  placeholder="------"
+                  maxLength={8}
+                  required
+                />
+              </div>
+              {error && <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 text-destructive text-sm font-medium">{error}</div>}
+              <button
+                type="submit"
+                disabled={loading || otpCode.length < 6}
+                className="w-full bg-primary text-primary-foreground font-bold p-3 rounded-xl hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {loading ? 'Verifying...' : 'Verify Code'}
+              </button>
+              <button type="button" onClick={() => setView('login')} className="w-full text-xs text-muted-foreground hover:text-foreground mt-4">
+                Back to Login
+              </button>
+            </form>
+          )}
+
+          {view === 'set_password' && (
+            <form onSubmit={handleSetNewPassword} className="space-y-4">
+              <div className="mb-6 text-center">
+                <h3 className="text-xl font-syne font-bold text-foreground mb-2">Set New Password</h3>
+                <p className="text-xs text-muted-foreground">Code verified successfully. Please choose a new secure password.</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">New Password</label>
+                <div className="relative group">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-muted/50 border border-border text-foreground p-3 rounded-xl outline-none focus:border-primary transition-all pr-12"
+                    placeholder="Min 6 characters"
+                    minLength={6}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+              {error && <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 text-destructive text-sm font-medium">{error}</div>}
+              <button
+                type="submit"
+                disabled={loading || !newPassword}
+                className="w-full bg-primary text-primary-foreground font-bold p-3 rounded-xl hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {loading ? 'Updating...' : 'Update Password & Login'}
+              </button>
+            </form>
+          )}
         </div>
         <p className="text-center text-muted-foreground text-xs mt-6">Client portal? <a href="/portal/login" className="text-primary hover:underline">Access here →</a></p>
       </div>
@@ -215,7 +391,10 @@ function App() {
       <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
-          <Toaster position="top-right" />
+          <Toaster 
+            position="top-right" 
+            containerStyle={{ zIndex: 999999 }}
+          />
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -243,6 +422,7 @@ function App() {
               <Route path="jobs/:id" element={<JobDetail />} />
               <Route path="approvals" element={<SLAApprovals />} />
               <Route path="finance" element={<Finance />} />
+              <Route path="messages" element={<AdminMessages />} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="audit" element={<Audit />} />
               <Route path="settings" element={<Settings />} />
@@ -255,13 +435,15 @@ function App() {
               </ProtectedRoute>
             }>
               <Route index element={<EmployeeDashboard />} />
-              <Route path="clients" element={<ClientsHub />} />
-              <Route path="clients/:id/history" element={<ClientHistoryView />} />
-              <Route path="my-jobs" element={<MyJobs />} />
-              <Route path="my-jobs/:id" element={<JobDetail />} />
-              <Route path="requests" element={<EmployeeRequests />} />
+              <Route path="tasks" element={<UnifiedWorkspace filterType="tasks" />} />
+              <Route path="clients" element={<UnifiedWorkspace filterType="clients" />} />
+              <Route path="pipeline" element={<UnifiedWorkspace filterType="pipeline" />} />
+              <Route path="messages" element={<EmployeeMessages />} />
               <Route path="notifications" element={<EmployeeNotifications />} />
               <Route path="profile" element={<EmployeeProfile />} />
+              <Route path="reports" element={<EmployeeReports />} />
+              <Route path="invoices" element={<EmployeeInvoices />} />
+              <Route path="invoices/:id" element={<InvoiceBuilder />} />
             </Route>
 
             {/* Client Portal */}

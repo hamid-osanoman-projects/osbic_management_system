@@ -37,7 +37,8 @@ export const useAdminPackages = () => {
         ...p,
         services: p.package_services
           ?.sort((a: any, b: any) => a.display_order - b.display_order)
-          ?.map((ps: any) => ps.services) || []
+          ?.map((ps: any) => ps.services)
+          ?.filter(Boolean) || []
       }));
     },
   });
@@ -82,7 +83,8 @@ export const useAdminPackage = (id?: string) => {
         ...pkg,
         services: pkg.package_services
           ?.sort((a: any, b: any) => a.display_order - b.display_order)
-          ?.map((ps: any) => ps.services) || []
+          ?.map((ps: any) => ps.services)
+          ?.filter(Boolean) || []
       };
     },
   });

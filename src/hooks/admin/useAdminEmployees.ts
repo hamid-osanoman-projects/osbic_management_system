@@ -30,6 +30,7 @@ export interface Employee {
   phone: string | null;
   avatar_url: string | null;
   role: string;
+  department?: 'sales' | 'operations' | null;
   is_active: boolean;
   created_at: string;
   // Computed stats from jobs table
@@ -114,6 +115,7 @@ export const useAdminEmployee = (id?: string) => {
         ...profile,
         full_name: profile.full_name ?? 'Unknown',
         email: profile.email ?? '',
+        department: profile.department ?? 'operations',
         total_jobs: totalJobs,
         active_jobs: activeJobs,
         completed_month: completedMonth,
@@ -221,6 +223,22 @@ export const useCreateEmployee = () => {
         throw new Error(profileError.message);
       }
       
+      // Step D: Send the credentials via Edge Function (Resend)
+      const { error: invokeError } = await supabase.functions.invoke('send-credentials', {
+        body: {
+          email: newEmployee.email,
+          password: newEmployee.password,
+          name: newEmployee.full_name,
+          role: 'employee'
+        }
+      });
+      
+      if (invokeError) {
+        console.error('Failed to send credentials email:', invokeError);
+        // We do not throw here, because the user is already created in the DB.
+        // We will just show a toast in onSuccess or let the UI know.
+      }
+
       return profile;
     },
     onSuccess: () => {

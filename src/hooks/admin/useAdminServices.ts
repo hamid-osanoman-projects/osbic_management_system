@@ -247,27 +247,30 @@ export const useDeleteService = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      // 1. Check for active jobs
-      const { data: activeJobs, error: jError } = await supabase
+      // 1. Check for any existing jobs (active or historical)
+      const { data: existingJobs, error: jError } = await supabase
         .from('jobs')
         .select('id')
         .eq('service_id', id)
-        .eq('status', 'active')
         .limit(1);
       
       if (jError) throw jError;
-      if (activeJobs && activeJobs.length > 0) {
-        throw new Error('Cannot delete service with active jobs. Please complete or cancel them first.');
+      if (existingJobs && existingJobs.length > 0) {
+        throw new Error('This service cannot be deleted because it is linked to existing jobs. Please mark it as inactive instead.');
       }
 
-      // 2. Delete workflow steps (dependency)
+      // 2. Clear out any lightweight dependencies (leads, packages)
+      await supabase.from('service_interests').delete().eq('service_id', id);
+      await supabase.from('package_services').delete().eq('service_id', id);
+
+      // 3. Delete workflow steps (dependency)
       const { error: stError } = await supabase
         .from('workflow_steps')
         .delete()
         .eq('service_id', id);
       if (stError) throw stError;
 
-      // 3. Delete service
+      // 4. Delete service
       const { error: sError } = await supabase
         .from('services')
         .delete()
