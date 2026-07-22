@@ -553,7 +553,7 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
                 </div>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {services?.map(s => (
+                  {services?.filter(s => s.is_active).map(s => (
                     <button
                       key={s.id}
                       onClick={() => handleSelectService(s)}
@@ -727,6 +727,7 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
                             </div>
                             <div className="max-h-[200px] overflow-y-auto p-1 custom-scrollbar">
                               {services
+                                ?.filter(s => s.is_active)
                                 ?.filter(s => !packageServices.find(ps => ps.id === s.id))
                                 ?.filter(s => s.name_en.toLowerCase().includes(serviceSearchQuery.toLowerCase()) || s.name_ar.includes(serviceSearchQuery))
                                 .map(s => (

@@ -15,22 +15,22 @@ env.split('\n').forEach(line => {
 
 const supabase = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY);
 
-const migrationSql = `
-ALTER TABLE public.messages 
-ADD COLUMN IF NOT EXISTS conversation_scope TEXT DEFAULT 'staff_client' 
-CHECK (conversation_scope IN ('staff_client', 'admin_client'));
-
-UPDATE public.messages 
-SET conversation_scope = 'staff_client' 
-WHERE conversation_scope IS NULL;
-
-CREATE INDEX IF NOT EXISTS idx_messages_job_scope 
-ON public.messages(job_id, conversation_scope);
-`;
-
 async function run() {
-  const { data, error } = await supabase.rpc('execute_sql', { sql: migrationSql });
-  if (error) console.error("Migration failed:", error);
-  else console.log("Migration applied successfully!", data);
+  console.log("Running migration to add client_rating and client_feedback to jobs table...");
+  
+  const sqlCommand = `
+    ALTER TABLE public.jobs 
+    ADD COLUMN IF NOT EXISTS client_rating INTEGER CHECK (client_rating >= 1 AND client_rating <= 5),
+    ADD COLUMN IF NOT EXISTS client_feedback TEXT;
+  `;
+  
+  const { data, error } = await supabase.rpc('execute_sql', { sql: sqlCommand });
+  
+  if (error) {
+    console.error("Migration failed:", error);
+  } else {
+    console.log("Migration executed successfully. Result:", data);
+  }
 }
+
 run();

@@ -3,7 +3,8 @@ import { Outlet, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, FolderOpen, MessageSquare, 
-  User, LogOut, Menu, X, Boxes, ChevronRight
+  User, LogOut, Menu, X, Boxes, ChevronRight,
+  FileText, CreditCard, Bell
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageToggle from '../components/shared/LanguageToggle';
@@ -19,6 +20,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUnreadMessageCount } from '../hooks/shared/useJobs';
 import { useAdminSettings } from '../hooks/admin/useAdminSettings';
 import { GlobalNotificationListener } from '../components/shared/GlobalNotificationListener';
+import { useNotifications } from '../hooks/shared/useNotifications';
 
 const ClientLayout: React.FC = () => {
   const { i18n } = useTranslation();
@@ -40,6 +42,9 @@ const ClientLayout: React.FC = () => {
 
 
   const { data: unreadCount } = useUnreadMessageCount(profile?.id);
+  const { useNotificationsList } = useNotifications();
+  const { data: notifications } = useNotificationsList();
+  const unreadNotifsCount = notifications?.filter((n: any) => !n.is_read).length || 0;
 
   // Prompt PWA install after 3rd load
   useEffect(() => {
@@ -65,7 +70,7 @@ const ClientLayout: React.FC = () => {
           <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center font-syne font-bold text-primary text-xs shadow-sm overflow-hidden">
             {logo ? <img src={logo} alt="Logo" className="w-full h-full object-cover" /> : "O"}
           </div>
-          <span className="font-syne font-bold text-foreground tracking-[0.2em] text-[10px] uppercase">OSBIC OS</span>
+          <span className="font-syne font-bold text-foreground tracking-[0.2em] text-[10px] uppercase">OSBIC CONNECT</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -104,7 +109,7 @@ const ClientLayout: React.FC = () => {
                   <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center font-syne font-bold text-primary text-xs border border-primary/30">
                     {logo ? <img src={logo} alt="" className="w-full h-full object-cover rounded-lg" /> : "X"}
                   </div>
-                  <span className="font-syne font-bold text-white tracking-widest text-[11px] uppercase">OSBIC OS</span>
+                  <span className="font-syne font-bold text-white tracking-widest text-[11px] uppercase">OSBIC CONNECT</span>
                 </div>
                 <button 
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -136,7 +141,10 @@ const ClientLayout: React.FC = () => {
                     { label: 'Dashboard', icon: LayoutDashboard, path: '/portal' },
                     { label: 'Browse Services', icon: Boxes, path: '/portal/services' },
                     { label: 'Service History', icon: FolderOpen, path: '/portal/history' },
+                    { label: 'My Documents', icon: FileText, path: '/portal/documents' },
+                    { label: 'Payments & Billing', icon: CreditCard, path: '/portal/payments' },
                     { label: 'Support Chat', icon: MessageSquare, path: '/portal/messages', badge: unreadCount && unreadCount > 0 ? unreadCount.toString() : null },
+                    { label: 'Notifications', icon: Bell, path: '/portal/notifications', badge: unreadNotifsCount > 0 ? unreadNotifsCount.toString() : null },
                 ].map((item, i) => {
                   const isActive = location.pathname === item.path;
                   return (
@@ -204,7 +212,10 @@ const ClientLayout: React.FC = () => {
                     { label: 'Dashboard', icon: LayoutDashboard, path: '/portal' },
                     { label: 'Browse Services', icon: Boxes, path: '/portal/services' },
                     { label: 'Service History', icon: FolderOpen, path: '/portal/history' },
+                    { label: 'My Documents', icon: FileText, path: '/portal/documents' },
+                    { label: 'Payments & Billing', icon: CreditCard, path: '/portal/payments' },
                     { label: 'Support Chat', icon: MessageSquare, path: '/portal/messages', badge: unreadCount && unreadCount > 0 ? unreadCount.toString() : null },
+                    { label: 'Notifications', icon: Bell, path: '/portal/notifications', badge: unreadNotifsCount > 0 ? unreadNotifsCount.toString() : null },
                     { label: 'My Profile', icon: User, path: '/portal/profile' }
                 ].map((item, i) => (
                  <Link 

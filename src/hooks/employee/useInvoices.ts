@@ -36,27 +36,63 @@ export interface Invoice {
 }
 
 export const useInvoices = (clientId?: string) => {
+  const { profile } = useAuth();
+
   return useQuery({
-    queryKey: ['invoices', clientId],
+    queryKey: ['invoices', clientId, profile?.id, profile?.is_manager],
     queryFn: async () => {
+      const isRegularEmployee = profile && !profile.is_manager && profile.role === 'employee';
+
+      // Step 1: For regular employees, first get the list of their client IDs
+      // (clients they created or whose jobs are assigned to them)
+      let employeeClientIds: string[] = [];
+      if (isRegularEmployee && !clientId) {
+        const { data: jobClients } = await supabase
+          .from('jobs')
+          .select('client_id')
+          .eq('employee_id', profile.id);
+        
+        const { data: createdClients } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'client')
+          .eq('created_by', profile.id);
+
+        const jobClientIds = (jobClients ?? []).map((j: any) => j.client_id).filter(Boolean);
+        const createdClientIds = (createdClients ?? []).map((c: any) => c.id).filter(Boolean);
+        employeeClientIds = [...new Set([...jobClientIds, ...createdClientIds])];
+      }
+
+      // Step 2: Build the invoice query
       let query = supabase
         .from('invoices')
         .select(`
           *,
           client:profiles!client_id(*),
-          job:jobs!job_id(job_code, service:services(name_en)),
+          job:jobs!job_id(job_code, employee_id, assigned_by, service:services(name_en)),
           items:invoice_items(*)
         `)
         .order('created_at', { ascending: false });
 
       if (clientId) {
+        // Viewing invoices for a specific client
         query = query.eq('client_id', clientId);
+      } else if (isRegularEmployee) {
+        if (employeeClientIds.length > 0) {
+          // Filter: invoices where employee_id matches OR client_id is in employee's client list
+          query = (query as any).or(`employee_id.eq.${profile.id},client_id.in.(${employeeClientIds.join(',')})`);
+        } else {
+          // No clients found — show only invoices explicitly created by this employee
+          query = query.eq('employee_id', profile.id);
+        }
       }
+      // Managers and admins: no filter — see all invoices
 
       const { data, error } = await query;
       if (error) throw error;
       return data as Invoice[];
-    }
+    },
+    enabled: !!profile
   });
 };
 
@@ -172,10 +208,16 @@ export const useUpdateInvoiceStatus = () => {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({ id, status, terms }: { id: string; status: string; terms?: string }) => {
       const updateData: any = { status };
       if (status === 'paid') {
         updateData.paid_date = new Date().toISOString();
+        if (terms) {
+          updateData.terms = terms;
+        }
+      } else if (status === 'unpaid') {
+        updateData.paid_date = null;
+        updateData.terms = 'Payment is due within 10 days.';
       }
 
       const { error } = await (supabase.from('invoices') as any)

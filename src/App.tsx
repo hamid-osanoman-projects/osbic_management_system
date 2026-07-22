@@ -54,6 +54,12 @@ import PackagesList from './pages/admin/Packages';
 import PackageForm from './pages/admin/PackageForm';
 import ServicesCatalog from './pages/client/ServicesCatalog';
 import ClientHistory from './pages/client/History';
+import ClientDocuments from './pages/client/Documents';
+import ClientPayments from './pages/client/Payments';
+import ClientNotifications from './pages/client/Notifications';
+
+
+
 
 // i18n
 import './i18n/config';
@@ -192,7 +198,7 @@ const LoginPage = () => {
               "O"
             )}
           </div>
-          <h1 className="text-3xl font-bold text-foreground tracking-widest uppercase" style={{ fontFamily: 'Syne, sans-serif' }}>OSBIC OS</h1>
+          <h1 className="text-3xl font-bold text-foreground tracking-widest uppercase" style={{ fontFamily: 'Syne, sans-serif' }}>OSBIC CONNECT</h1>
           <p className="text-muted-foreground text-sm mt-2">Service Lifecycle Management Platform</p>
         </div>
         <div className="bg-card border border-border rounded-3xl p-8 shadow-2xl">
@@ -460,9 +466,9 @@ function App() {
               <Route path="messages" element={<ClientMessages />} />
               <Route path="services" element={<ServicesCatalog />} />
               <Route path="history" element={<ClientHistory />} />
-              <Route path="documents" element={<DashboardPlaceholder title="My Documents" />} />
-              <Route path="payments" element={<DashboardPlaceholder title="Transaction History" />} />
-              <Route path="notifications" element={<DashboardPlaceholder title="Real-time Status Updates" />} />
+              <Route path="documents" element={<ClientDocuments />} />
+              <Route path="payments" element={<ClientPayments />} />
+              <Route path="notifications" element={<ClientNotifications />} />
             </Route>
 
             {/* Fallback */}

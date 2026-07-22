@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ChevronLeft, Save, Plus, Trash2, FileText, Printer, CheckCircle2, Edit } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronLeft, Save, Plus, Trash2, FileText, Printer, CheckCircle2, Edit, X } from 'lucide-react';
 import { useInvoice, useSaveInvoice, useUpdateInvoiceStatus, useNextInvoiceNumber, type Invoice, type InvoiceItem } from '../../hooks/employee/useInvoices';
-import { useAdminClients } from '../../hooks/admin/useAdminClients';
-import { useAdminJobs } from '../../hooks/shared/useJobs';
+import { useAuth } from '../../contexts/AuthContext';
+import { useAdminClients, useEmployeeClients } from '../../hooks/admin/useAdminClients';
+import { useAdminJobs, useEmployeeJobs } from '../../hooks/shared/useJobs';
 import { InvoiceDocument } from '../../components/employee/InvoiceDocument';
 import { QuotationDocument } from '../../components/employee/QuotationDocument';
 import { useReactToPrint } from 'react-to-print';
@@ -16,16 +17,26 @@ const InvoiceBuilder = () => {
   const [searchParams] = useSearchParams();
   const viewMode = searchParams.get('view') === 'true';
   const isNew = id === 'new';
+  const { profile } = useAuth();
 
   const { data: initialData, isLoading: isLoadingInvoice } = useInvoice(id);
   const { mutateAsync: saveInvoice, isPending: isSaving } = useSaveInvoice();
   const { mutateAsync: updateStatus } = useUpdateInvoiceStatus();
   
-  const { data: clients } = useAdminClients();
-  const { data: jobs } = useAdminJobs();
+  // Scope clients and jobs: regular employees only see their assigned clients & jobs
+  const adminClientsQuery = useAdminClients();
+  const employeeClientsQuery = useEmployeeClients(profile?.id);
+  const clients = profile?.is_manager ? adminClientsQuery.data : employeeClientsQuery.data;
+
+  const adminJobsQuery = useAdminJobs();
+  const employeeJobsQuery = useEmployeeJobs(profile?.id || '');
+  const jobs = profile?.is_manager ? adminJobsQuery.data : employeeJobsQuery.data;
+
   const { data: nextInvoiceNumber } = useNextInvoiceNumber();
 
   const printRef = useRef<HTMLDivElement>(null);
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [selectedPayMode, setSelectedPayMode] = useState('Bank Transfer');
 
   const [formData, setFormData] = useState<Invoice>({
     client_id: '',
@@ -38,7 +49,7 @@ const InvoiceBuilder = () => {
     discount_amount: 0,
     total_amount: 0,
     notes: 'Thank you for your business.',
-    terms: 'Payment is due within 15 days.',
+    terms: 'Payment is due within 10 days.',
     items: []
   });
 
@@ -48,35 +59,65 @@ const InvoiceBuilder = () => {
     }
   }, [initialData, isNew]);
 
-  // Handle URL Params for Auto-Drafting from a Job
+  // Handle URL Params and selection changes for Auto-Drafting from a Job
   useEffect(() => {
-    if (isNew) {
+    if (isNew && jobs && jobs.length > 0) {
       const params = new URLSearchParams(window.location.search);
-      const autofillJobId = params.get('job_id');
-      const autofillClientId = params.get('client_id');
-      const baseFee = params.get('base_fee');
-      const minFee = params.get('min_fee');
+      const autofillJobId = params.get('job_id') || formData.job_id;
+      const autofillClientId = params.get('client_id') || formData.client_id;
+      
+      const urlBaseFee = params.get('base_fee');
+      const urlMinFee = params.get('min_fee');
 
-      if (autofillJobId && autofillClientId) {
-        const autoItems: InvoiceItem[] = [];
-        if (baseFee && parseFloat(baseFee) > 0) {
-          autoItems.push({ description: 'Professional Services / Work Fee', quantity: 1, unit_price: parseFloat(baseFee), total: parseFloat(baseFee) });
-        }
-        if (minFee && parseFloat(minFee) > 0) {
-          autoItems.push({ description: 'Government / Ministry Fee', quantity: 1, unit_price: parseFloat(minFee), total: parseFloat(minFee) });
-        }
+      if (autofillJobId) {
+        const jobDetail = jobs.find(j => j.id === autofillJobId);
+        if (jobDetail) {
+          const serviceName = jobDetail.service_name || 'Service';
+          
+          // Use URL base_fee first, then job.work_fee, fallback to 0
+          const finalWorkFee = urlBaseFee ? parseFloat(urlBaseFee) : (jobDetail.work_fee || 0);
+          
+          // Use URL min_fee first, then job.ministry_fee, fallback to 0
+          const finalMinistryFee = urlMinFee ? parseFloat(urlMinFee) : (jobDetail.ministry_fee || 0);
 
-        setFormData(prev => ({
-          ...prev,
-          client_id: autofillClientId,
-          job_id: autofillJobId,
-          items: autoItems.length > 0 ? autoItems : [{ description: '', quantity: 1, unit_price: 0, total: 0 }]
-        }));
+          // Combine work fee + ministry fee into a single total service line item
+          const totalFee = finalWorkFee + finalMinistryFee;
+          const autoItems: InvoiceItem[] = [];
+          if (totalFee > 0) {
+            autoItems.push({ 
+              description: serviceName, 
+              quantity: 1, 
+              unit_price: totalFee, 
+              total: totalFee 
+            });
+          }
+
+          // Auto-fill REF NAME with employee name prefix
+          const employeeRefName = profile?.full_name ? `REF BY: ${profile.full_name}` : 'REF BY: ';
+          const autoNotes = `${jobDetail.job_code} - ${serviceName}`;
+
+          setFormData(prev => {
+            // Only update if the items description is currently empty to avoid wiping user customizations
+            const hasExistingCustomItems = prev.items && prev.items.length > 0 && prev.items.some(item => item.description.trim() !== '');
+            if (prev.job_id === autofillJobId && hasExistingCustomItems) {
+              return prev;
+            }
+            const currentNotes = prev.notes || '';
+            const shouldAutofillNotes = currentNotes === '' || currentNotes === 'Thank you for your business.' || currentNotes === autoNotes;
+            return {
+              ...prev,
+              client_id: autofillClientId || jobDetail.client_id,
+              job_id: autofillJobId,
+              notes: shouldAutofillNotes ? employeeRefName : currentNotes,
+              items: autoItems.length > 0 ? autoItems : [{ description: '', quantity: 1, unit_price: 0, total: 0 }]
+            };
+          });
+        }
       } else if (formData.items?.length === 0) {
         setFormData(prev => ({ ...prev, items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }] }));
       }
     }
-  }, [isNew]);
+  }, [isNew, jobs, formData.job_id]);
 
   // Recalculate totals whenever items, tax, or discount changes
   useEffect(() => {
@@ -127,7 +168,11 @@ const InvoiceBuilder = () => {
     }
 
     try {
-      const savedId = await saveInvoice(formData);
+      const invoicePayload = {
+        ...formData,
+        employee_id: formData.employee_id || profile?.id
+      };
+      const savedId = await saveInvoice(invoicePayload);
       toast.success('Invoice saved successfully');
       if (isNew) {
         navigate(`/employee/invoices/${savedId}`, { replace: true });
@@ -143,15 +188,35 @@ const InvoiceBuilder = () => {
     documentTitle: formData.invoice_number || (formData.type === 'quotation' ? 'Quotation' : 'Invoice'),
   });
 
+  const handleConfirmPaymentMode = async () => {
+    try {
+      await updateStatus({ id: id!, status: 'paid', terms: selectedPayMode });
+      setFormData(prev => ({ ...prev, status: 'paid', terms: selectedPayMode }));
+      toast.success(`Invoice marked as PAID via ${selectedPayMode}`);
+      setIsPayModalOpen(false);
+    } catch (err: any) {
+      console.error("Payment confirmation error:", err);
+      toast.error('Failed to save payment details: ' + (err.message || 'Unknown error'));
+    }
+  };
+
   const togglePaid = async () => {
     if (isNew) return toast.error('Please save the invoice first');
     
-    const newStatus = formData.status === 'paid' ? 'unpaid' : 'paid';
+    const isMarkingPaid = formData.status !== 'paid';
+    if (isMarkingPaid) {
+      setIsPayModalOpen(true);
+      return;
+    }
+
+    // Toggling back to unpaid
     try {
-      await updateStatus({ id: id!, status: newStatus });
-      setFormData(prev => ({ ...prev, status: newStatus }));
-      toast.success(`Invoice marked as ${newStatus}`);
-    } catch (err) {
+      await updateStatus({ id: id!, status: 'unpaid' });
+      const defaultTerms = 'Payment is due within 10 days.';
+      setFormData(prev => ({ ...prev, status: 'unpaid', terms: defaultTerms }));
+      toast.success('Invoice marked as unpaid');
+    } catch (err: any) {
+      console.error("Payment revert error:", err);
       toast.error('Failed to update status');
     }
   };
@@ -311,19 +376,34 @@ const InvoiceBuilder = () => {
                  />
                </div>
 
-               <div className="space-y-2 col-span-2 md:col-span-1">
-                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment Mode</label>
-                 <select 
-                   value={formData.terms || 'Credit'}
-                   onChange={e => setFormData({...formData, terms: e.target.value})}
-                   className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
-                 >
-                   <option value="Credit">Credit</option>
-                   <option value="Cash">Cash</option>
-                   <option value="Bank Transfer">Bank Transfer</option>
-                   <option value="Card">Card / POS</option>
-                 </select>
-               </div>
+                <div className="space-y-2 col-span-2 md:col-span-1">
+                  {formData.status === 'paid' ? (
+                    <>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-2">
+                        Payment Mode
+                      </label>
+                      <div className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 font-bold rounded-xl px-4 py-3 text-sm">
+                        Paid via {formData.terms || 'Bank Transfer'}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-2">
+                        Payment Terms
+                      </label>
+                      <select 
+                        value={formData.terms || 'Payment is due within 10 days.'}
+                        onChange={e => setFormData({...formData, terms: e.target.value})}
+                        className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
+                      >
+                        <option value="Payment is due within 10 days.">Due within 10 days</option>
+                        <option value="Payment is due within 15 days.">Due within 15 days</option>
+                        <option value="Payment is due within 30 days.">Due within 30 days</option>
+                        <option value="Payment is due upon receipt.">Due upon receipt</option>
+                      </select>
+                    </>
+                  )}
+                </div>
              </div>
 
              <div className="space-y-4">
@@ -430,10 +510,10 @@ const InvoiceBuilder = () => {
            <div className="sticky top-8 rounded-2xl overflow-hidden border border-border shadow-2xl print:shadow-none print:border-none print:overflow-visible print:static">
               <style>{`
                 @media print {
-                  @page { margin: 0; size: A4 portrait; }
+                  @page { margin: 10mm; size: A4 portrait; }
                   html, body {
-                    width: 210mm;
-                    height: 297mm;
+                    width: auto;
+                    height: auto;
                     margin: 0;
                     padding: 0;
                     background: white;
@@ -467,6 +547,58 @@ const InvoiceBuilder = () => {
         </div>
 
       </div>
+      
+      {/* Select Payment Mode Modal */}
+      <AnimatePresence>
+        {isPayModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPayModalOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-sm bg-card border border-border rounded-3xl shadow-2xl overflow-hidden p-6"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <CheckCircle2 size={18} className="text-blue-500" /> Select Payment Mode
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1">Specify how this invoice payment was processed.</p>
+                </div>
+                <button onClick={() => setIsPayModalOpen(false)} className="text-muted-foreground hover:bg-muted p-2 rounded-full transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Payment Mode</label>
+                  <select
+                    value={selectedPayMode}
+                    onChange={(e) => setSelectedPayMode(e.target.value)}
+                    className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground outline-none focus:border-primary transition-colors"
+                  >
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Card / POS">Card / POS</option>
+                  </select>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
+                  <button onClick={() => setIsPayModalOpen(false)} className="px-4 py-2 text-xs font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors">Cancel</button>
+                  <button 
+                    onClick={handleConfirmPaymentMode}
+                    className="px-6 py-2 bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl hover:shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all flex items-center gap-2"
+                  >
+                    Confirm Payment
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

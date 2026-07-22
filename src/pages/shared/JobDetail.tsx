@@ -10,6 +10,7 @@ import confetti from 'canvas-confetti';
 import { useJobDetail } from '../../hooks/shared/useJobs';
 import { Skeleton } from '../../components/shared/Skeleton';
 import FinanceWarning from '../../components/shared/FinanceWarning';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Tab Components
 import WorkflowProgressTab from '../../components/jobs/WorkflowProgressTab';
@@ -32,6 +33,7 @@ function cn(...inputs: ClassValue[]) {
 const JobDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const isAdmin = window.location.pathname.startsWith('/admin');
   const isEmployee = window.location.pathname.startsWith('/employee');
   const currentUserType = isAdmin ? 'admin' : isEmployee ? 'employee' : 'client'; // basic proxy
@@ -73,6 +75,8 @@ const JobDetail = () => {
 
   const { job, steps, documents, payments, messages, logs } = data;
 
+  const unreadCount = messages ? messages.filter((m: any) => m.sender_id !== profile?.id && !m.is_read).length : 0;
+
   // Milestone logic: trigger if 2 steps remaining and payment pending
   const stepsRemaining = job.total_steps - job.completed_steps;
   const showFinanceWarning = !job.remaining_paid && job.remaining_due_amount > 0 && stepsRemaining <= 2;
@@ -81,7 +85,7 @@ const JobDetail = () => {
     { id: 'workflow', label: 'Workflow Progress', icon: LayoutTemplate },
     { id: 'documents', label: 'Documents', icon: FolderOpen, count: documents.length },
     { id: 'financials', label: 'Financials', icon: DollarSign },
-    { id: 'messages', label: 'Messages', icon: MessageCircle },
+    { id: 'messages', label: 'Chat Support', icon: MessageCircle, count: unreadCount > 0 ? unreadCount : undefined },
     { id: 'logs', label: 'Activity Log', icon: Activity },
   ];
 
@@ -308,8 +312,10 @@ const JobDetail = () => {
             <span>{tab.label}</span>
             {tab.count !== undefined && (
               <span className={cn(
-                "ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold",
-                activeTab === tab.id ? "bg-primary/20 text-primary" : "bg-white/10 text-muted-foreground"
+                "ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all",
+                activeTab === tab.id 
+                  ? "bg-primary/20 text-primary" 
+                  : (tab.id === 'messages' ? "bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse" : "bg-white/10 text-muted-foreground")
               )}>
                 {tab.count}
               </span>
@@ -331,7 +337,7 @@ const JobDetail = () => {
              {activeTab === 'workflow' && <WorkflowProgressTab job={job} steps={steps} isEmployee={isEmployee} isAdmin={isAdmin} onSwitchTab={setActiveTab} />}
              {activeTab === 'documents' && <DocumentsTab jobId={job.id} documents={documents} isEmployee={isEmployee} isAdmin={isAdmin} />}
              {activeTab === 'financials' && <FinancialsTab job={job} steps={steps} isAdmin={isAdmin} isEmployee={isEmployee} />}
-             {activeTab === 'messages' && <MessagesTab jobId={job.id} messages={messages} isAdmin={isAdmin} currentUserType={currentUserType as any} />}
+             {activeTab === 'messages' && <MessagesTab jobId={job.id} messages={messages} isAdmin={isAdmin} currentUserType={currentUserType as any} scope="staff_client" />}
              {activeTab === 'logs' && <ActivityLogTab logs={logs} />}
           </motion.div>
         </AnimatePresence>

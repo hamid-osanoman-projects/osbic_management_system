@@ -11,6 +11,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { JobLedger } from './JobLedger';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+import { useQuery } from '@tanstack/react-query';
+import MessagesTab from '../jobs/MessagesTab';
+import DocumentsTab from '../jobs/DocumentsTab';
 
 const CustomSelect = ({ value, options, onChange, className = '' }: any) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -516,21 +519,119 @@ const StepAccordion = ({ step, job, employees, jobDocuments, onDataRefresh }: an
 
 export const JobDetailsView = ({ job }: { job: any }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'workflow' | 'ledger'>('workflow');
+  const [activeTab, setActiveTab] = useState<'workflow' | 'ledger' | 'messages' | 'documents'>('workflow');
   const [steps, setSteps] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Fetch messages reactively via React Query
+  const { data: messages = [] } = useQuery({
+    queryKey: ['job_messages', job?.id],
+    queryFn: async () => {
+      if (!job?.id) return [];
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*, sender:profiles!messages_sender_id_fkey(full_name, role)')
+        .eq('job_id', job.id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      
+      return (data || []).map((m: any) => ({
+        id: m.id,
+        job_id: m.job_id,
+        sender_id: m.sender_id,
+        sender_type: m.sender?.role || 'client',
+        sender_name: m.sender?.full_name ?? 'Unknown',
+        content: m.content,
+        is_read: m.is_read ?? true,
+        created_at: m.created_at,
+        conversation_scope: m.conversation_scope ?? 'staff_client',
+      }));
+    },
+    enabled: !!job?.id
+  });
+
+  const { profile } = useAuth();
+  const unreadCount = messages ? messages.filter((m: any) => m.sender_id !== profile?.id && !m.is_read).length : 0;
   const [totalMinistryFee, setTotalMinistryFee] = useState<number>(0);
   const [jobDocuments, setJobDocuments] = useState<any[]>([]);
   const [isCustomStepModalOpen, setIsCustomStepModalOpen] = useState(false);
   const [customStepName, setCustomStepName] = useState('');
   const [isAddingStep, setIsAddingStep] = useState(false);
+  const [existingInvoice, setExistingInvoice] = useState<{ id: string; status: string } | null>(null);
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [selectedPayMode, setSelectedPayMode] = useState('Bank Transfer');
 
   useEffect(() => {
     if (job?.id) {
       loadData();
+
+      // Realtime listener for document updates
+      const docChannel = supabase
+        .channel(`job-docs-${job.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'documents',
+            filter: `job_id=eq.${job.id}`
+          },
+          () => {
+            // Refetch document list manually to synchronize view
+            supabase
+              .from('documents')
+              .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name, role)')
+              .eq('job_id', job.id)
+              .then(({ data }) => {
+                if (data) {
+                  const mapped = data.map((d: any) => ({
+                    ...d,
+                    uploaded_by_role: d.uploader?.role ?? 'client',
+                    uploaded_by_name: d.uploader?.full_name ?? 'Unknown'
+                  }));
+                  setJobDocuments(mapped);
+                }
+              });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(docChannel);
+      };
     }
-  }, [job]);
+  }, [job?.id]);
+
+  const handleMarkInvoicePaid = async () => {
+    if (!existingInvoice) return;
+    try {
+      const { error } = await supabase
+        .from('invoices')
+        .update({ 
+          status: 'paid', 
+          paid_date: new Date().toISOString(),
+          terms: selectedPayMode
+        })
+        .eq('id', existingInvoice.id);
+
+      if (error) {
+        import('react-hot-toast').then(toast => {
+          toast.default.error(`Failed to update invoice: ${error.message}`);
+        });
+      } else {
+        import('react-hot-toast').then(toast => {
+          toast.default.success(`Invoice marked as Paid via ${selectedPayMode}`);
+        });
+        setIsPayModalOpen(false);
+        loadData();
+      }
+    } catch (e: any) {
+      import('react-hot-toast').then(toast => {
+        toast.default.error(`Error: ${e.message}`);
+      });
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -556,12 +657,27 @@ export const JobDetailsView = ({ job }: { job: any }) => {
       setTotalMinistryFee(total);
     }
 
+    // Fetch invoice for this job
+    const { data: invoiceData } = await supabase
+      .from('invoices')
+      .select('id, status')
+      .eq('job_id', job.id)
+      .maybeSingle();
+    setExistingInvoice(invoiceData || null);
+
     // Fetch documents
     const { data: docsData } = await supabase
       .from('documents')
-      .select('*')
+      .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name, role)')
       .eq('job_id', job.id);
-    if (docsData) setJobDocuments(docsData);
+    if (docsData) {
+      const mapped = docsData.map((d: any) => ({
+        ...d,
+        uploaded_by_role: d.uploader?.role ?? 'client',
+        uploaded_by_name: d.uploader?.full_name ?? 'Unknown'
+      }));
+      setJobDocuments(mapped);
+    }
 
     // Fetch employees for assignment
     const { data: empData } = await supabase.from('profiles').select('id, full_name, availability_status').eq('role', 'employee');
@@ -678,6 +794,31 @@ export const JobDetailsView = ({ job }: { job: any }) => {
           >
             Financial Ledger
           </button>
+          <button 
+            onClick={() => setActiveTab('documents')}
+            className={`pb-4 text-sm font-bold uppercase tracking-widest border-b-2 transition-colors ${
+              activeTab === 'documents' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Documents
+          </button>
+          <button 
+            onClick={() => setActiveTab('messages')}
+            className={`pb-4 text-sm font-bold uppercase tracking-widest border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === 'messages' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <span>Chat Support</span>
+            {unreadCount > 0 && (
+              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all ${
+                activeTab === 'messages' 
+                  ? 'bg-primary/20 text-primary' 
+                  : 'bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse'
+              }`}>
+                {unreadCount}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -710,6 +851,7 @@ export const JobDetailsView = ({ job }: { job: any }) => {
                       options={[
                         { value: 'draft', label: 'Draft (Pending)' },
                         { value: 'active', label: 'In Progress' },
+                        { value: 'awaiting_govt', label: 'Awaiting Govt' },
                         { value: 'completed', label: 'Completed' },
                         { value: 'cancelled', label: 'Cancelled' }
                       ]}
@@ -717,20 +859,44 @@ export const JobDetailsView = ({ job }: { job: any }) => {
                     />
 
                     <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <button 
-                        onClick={() => {
-                          const url = new URLSearchParams({
-                            job_id: job.id,
-                            client_id: job.client_id,
-                            base_fee: job.base_fee?.toString() || '0',
-                            min_fee: totalMinistryFee.toString() || '0'
-                          });
-                          navigate(`/employee/invoices/new?${url.toString()}`);
-                        }}
-                        className="flex-1 sm:flex-none text-[10px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
-                      >
-                        <FileText size={14} /> Generate Invoice
-                      </button>
+                      {existingInvoice ? (
+                        <>
+                          <button 
+                            onClick={() => navigate(`/employee/invoices/${existingInvoice.id}`)}
+                            className="flex-1 sm:flex-none text-[10px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
+                          >
+                            <FileText size={14} /> Update Invoice
+                          </button>
+                          
+                          {existingInvoice.status !== 'paid' ? (
+                            <button 
+                              onClick={() => setIsPayModalOpen(true)}
+                              className="flex-1 sm:flex-none text-[10px] font-bold uppercase tracking-widest text-blue-500 bg-blue-500/10 hover:bg-blue-500/20 px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap animate-pulse"
+                            >
+                              <CheckCircle2 size={14} /> Mark Paid
+                            </button>
+                          ) : (
+                            <div className="flex-1 sm:flex-none text-[10px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 whitespace-nowrap">
+                              <CheckCircle2 size={14} className="text-emerald-500" /> Invoice Paid
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <button 
+                          onClick={() => {
+                            const url = new URLSearchParams({
+                              job_id: job.id,
+                              client_id: job.client_id,
+                              base_fee: job.work_fee?.toString() || '0',
+                              min_fee: totalMinistryFee > 0 ? totalMinistryFee.toString() : (job.ministry_fee?.toString() || '0')
+                            });
+                            navigate(`/employee/invoices/new?${url.toString()}`);
+                          }}
+                          className="flex-1 sm:flex-none text-[10px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
+                        >
+                          <FileText size={14} /> Generate Invoice
+                        </button>
+                      )}
 
                       <button 
                         onClick={() => setIsCustomStepModalOpen(true)}
@@ -759,6 +925,14 @@ export const JobDetailsView = ({ job }: { job: any }) => {
                  ))}
                </div>
              )}
+          </div>
+        ) : activeTab === 'documents' ? (
+           <div className="max-w-4xl mx-auto pb-12">
+             <DocumentsTab jobId={job.id} documents={jobDocuments} isEmployee={true} isAdmin={false} />
+           </div>
+         ) : activeTab === 'messages' ? (
+          <div className="max-w-3xl mx-auto h-[600px] pb-12">
+            <MessagesTab jobId={job.id} messages={messages} isAdmin={false} currentUserType="employee" scope="staff_client" />
           </div>
         ) : (
           <JobLedger job={job} onPaymentReceived={loadData} />
@@ -818,7 +992,57 @@ export const JobDetailsView = ({ job }: { job: any }) => {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+
+          {/* Select Payment Mode Modal */}
+          {isPayModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPayModalOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="relative w-full max-w-sm bg-card border border-border rounded-3xl shadow-2xl overflow-hidden p-6"
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                      <CheckCircle2 size={18} className="text-blue-500" /> Select Payment Mode
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1">Specify how the payment was processed.</p>
+                  </div>
+                  <button onClick={() => setIsPayModalOpen(false)} className="text-muted-foreground hover:bg-muted p-2 rounded-full transition-colors">
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Payment Mode</label>
+                    <select
+                      value={selectedPayMode}
+                      onChange={(e) => setSelectedPayMode(e.target.value)}
+                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground outline-none focus:border-primary transition-colors"
+                    >
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Card / POS">Card / POS</option>
+                    </select>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
+                    <button onClick={() => setIsPayModalOpen(false)} className="px-4 py-2 text-xs font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors">Cancel</button>
+                    <button 
+                      onClick={handleMarkInvoicePaid}
+                      className="px-6 py-2 bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl hover:shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all flex items-center gap-2"
+                    >
+                      Confirm Payment
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
     </div>
   );
 };

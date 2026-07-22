@@ -15,14 +15,29 @@ interface Props {
   currentStatus: string;
 }
 
+import { useTranslation } from 'react-i18next';
+
 const PizzaTracker = ({ steps, currentStatus }: Props) => {
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const [showAllSteps, setShowAllSteps] = useState(false);
   
   const visibleSteps = useMemo(() => steps.filter(s => s.is_client_visible), [steps]);
   
-  if (visibleSteps.length === 0) return null;
+  if (visibleSteps.length === 0) {
+    return (
+      <div className="py-12 text-center text-muted-foreground/40 text-[10px] font-black uppercase tracking-[0.2em] flex flex-col items-center justify-center gap-2">
+        <Clock size={24} className="opacity-20 animate-pulse text-primary mb-2" />
+        <span>
+          {currentStatus === 'completed' 
+            ? 'Service completed successfully' 
+            : 'Processing request — Steps will appear shortly'}
+        </span>
+      </div>
+    );
+  }
 
   const activeIndex = visibleSteps.findIndex(s => s.status !== 'completed');
   const normalizedActiveIndex = activeIndex === -1 ? visibleSteps.length : activeIndex;
@@ -94,7 +109,7 @@ const PizzaTracker = ({ steps, currentStatus }: Props) => {
                         "text-base sm:text-lg font-syne font-bold mb-0.5 tracking-tight",
                         isCurrent ? "text-primary" : isCompleted ? "text-foreground" : "text-muted-foreground/40"
                       )}>
-                        {step.name_en}
+                        {isRtl ? (step.name_ar || step.name_en) : step.name_en}
                       </h4>
                       <p className="text-[9px] font-mono font-bold text-muted-foreground/40 uppercase tracking-[0.2em]">
                         Phase {idx + 1} / {visibleSteps.length}
@@ -103,10 +118,36 @@ const PizzaTracker = ({ steps, currentStatus }: Props) => {
                   </div>
                   
                   <div className="flex items-center gap-3 shrink-0">
-                    {isCurrent && (
+                    {step.status === 'completed' && (
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1.5">
+                        <span className="w-1 h-1 rounded-full bg-emerald-500" />
+                        <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">
+                          {isRtl ? 'مكتمل' : 'Completed'}
+                        </span>
+                      </div>
+                    )}
+                    {step.status === 'in_progress' && (
                       <div className="bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full flex items-center gap-1.5">
                         <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />
-                        <span className="text-[8px] font-black text-primary uppercase tracking-widest">Ongoing</span>
+                        <span className="text-[8px] font-black text-primary uppercase tracking-widest">
+                          {isRtl ? 'قيد المعالجة' : 'Ongoing'}
+                        </span>
+                      </div>
+                    )}
+                    {step.status === 'rejected' && (
+                      <div className="bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1.5">
+                        <span className="w-1 h-1 rounded-full bg-red-500" />
+                        <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">
+                          {isRtl ? 'مطلوب إجراء' : 'Blocked'}
+                        </span>
+                      </div>
+                    )}
+                    {step.status === 'pending' && (
+                      <div className="bg-white/5 border border-white/5 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+                        <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                        <span className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">
+                          {isRtl ? 'قيد الانتظار' : 'Pending'}
+                        </span>
                       </div>
                     )}
                     <div className={cn("text-muted-foreground/20 transition-transform", isExpanded && "rotate-180")}>

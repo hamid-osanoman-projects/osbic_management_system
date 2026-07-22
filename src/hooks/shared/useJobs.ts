@@ -35,6 +35,8 @@ export interface Job {
   remaining_receipt_url?: string;
   notes?: string | null;
   documents?: JobDocument[];
+  client_rating?: number | null;
+  client_feedback?: string | null;
 }
 
 export interface JobStep {
@@ -69,6 +71,7 @@ export interface JobDocument {
   file_path: string;
   file_type: string;
   uploaded_by_name: string;
+  uploaded_by_role?: string;
   uploaded_at: string;
   status: 'approved' | 'pending' | 'rejected';
   rejection_reason?: string;
@@ -83,6 +86,7 @@ export interface JobMessage {
   content: string;
   is_read: boolean;
   created_at: string;
+  conversation_scope?: 'staff_client' | 'admin_client';
 }
 
 export interface JobAuditLog {
@@ -136,11 +140,15 @@ export const useAdminJobs = () => {
           total_fee: Number(j.total_fee) || 0,
           work_fee: Number(j.work_fee) || 0,
           ministry_fee: Number(j.ministry_fee) || 0,
-          advance_paid: j.advance_paid ?? false,
+           advance_paid: j.advance_paid ?? false,
           remaining_paid: j.remaining_paid ?? false,
           advance_due_amount: Number(j.advance_amount) || 0,
           remaining_due_amount: Number(j.remaining_amount) || 0,
+          advance_receipt_url: j.advance_receipt_url,
+          remaining_receipt_url: j.remaining_receipt_url,
           notes: j.notes,
+          client_rating: j.client_rating,
+          client_feedback: j.client_feedback,
         };
       });
     },
@@ -302,6 +310,10 @@ export const useClientJobs = (clientId: string) => {
           remaining_paid: j.remaining_paid ?? false,
           advance_due_amount: Number(j.advance_amount) || 0,
           remaining_due_amount: Number(j.remaining_amount) || 0,
+          advance_receipt_url: j.advance_receipt_url,
+          remaining_receipt_url: j.remaining_receipt_url,
+          client_rating: j.client_rating,
+          client_feedback: j.client_feedback,
         };
       });
     },
@@ -345,7 +357,7 @@ export const useJobDetail = (jobId: string) => {
 
       const { data: docsData } = await supabase
         .from('documents')
-        .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name)')
+        .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name, role)')
         .eq('job_id', jobId);
 
       const { data: msgData } = await supabase
@@ -376,18 +388,22 @@ export const useJobDetail = (jobId: string) => {
         remaining_paid: j.remaining_paid ?? false,
         advance_due_amount: Number(j.advance_amount) || 0,
         remaining_due_amount: Number(j.remaining_amount) || 0,
+        advance_receipt_url: j.advance_receipt_url,
+        remaining_receipt_url: j.remaining_receipt_url,
         documents: docsData || [],
+        client_rating: j.client_rating,
+        client_feedback: j.client_feedback,
       };
 
       const steps: JobStep[] = (stepsData || []).map((s: any) => ({
         id: s.id,
         job_id: jobId,
         step_definition_id: s.workflow_step_id,
-        name_en: s.step_def?.name_en ?? 'Step',
-        name_ar: s.step_def?.name_ar ?? '',
+        name_en: s.step_def?.name_en ?? s.custom_name ?? 'Step',
+        name_ar: s.step_def?.name_ar ?? s.custom_name ?? '',
         order_index: s.step_def?.step_order ?? 0,
         status: s.status,
-        is_client_visible: s.step_def?.is_client_visible ?? true,
+        is_client_visible: s.is_client_visible ?? s.step_def?.is_client_visible ?? true,
         notes: s.notes,
         started_at: s.started_at,
         completed_at: s.completed_at,
@@ -406,6 +422,7 @@ export const useJobDetail = (jobId: string) => {
         file_path: d.file_path,
         file_type: d.file_type || 'document',
         uploaded_by_name: d.uploader?.full_name ?? 'Unknown',
+        uploaded_by_role: d.uploader?.role ?? 'client',
         uploaded_at: d.created_at,
         status: d.status,
       }));
@@ -419,6 +436,7 @@ export const useJobDetail = (jobId: string) => {
         content: m.content,
         is_read: m.is_read ?? true,
         created_at: m.created_at,
+        conversation_scope: m.conversation_scope ?? 'staff_client',
       }));
 
       return { job, steps, documents, messages, payments: [], logs: [] };
@@ -751,16 +769,37 @@ export const useUpdateJobPayment = () => {
       type, 
       paid, 
       amount,
-      receiptUrl 
+      receiptUrl,
+      file
     }: { 
       jobId: string; 
       type: 'advance' | 'remaining'; 
       paid: boolean;
       amount?: number;
       receiptUrl?: string;
+      file?: File;
     }) => {
       const now = new Date().toISOString();
       const updates: any = {};
+      let finalReceiptUrl = receiptUrl;
+
+      // 1. Upload file if provided
+      if (file) {
+        const fileExt = file.name.split('.').pop();
+        const filePath = `receipts/${jobId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('job-documents')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('job-documents')
+          .getPublicUrl(filePath);
+
+        finalReceiptUrl = publicUrl;
+      }
       
       // Fetch current job fees to perform smart re-balancing
       const { data, error: fetchError } = await supabase
@@ -781,7 +820,7 @@ export const useUpdateJobPayment = () => {
           // Invariant: Total Fee = Advance + Remaining
           updates.remaining_amount = Math.max(0, totalFee - amount);
         }
-        if (receiptUrl) updates.advance_receipt_url = receiptUrl;
+        if (finalReceiptUrl) updates.advance_receipt_url = finalReceiptUrl;
       } else {
         updates.remaining_paid = paid;
         updates.remaining_paid_at = paid ? now : null;
@@ -791,7 +830,7 @@ export const useUpdateJobPayment = () => {
           // Usually, the Remaining is the 'slack' variable, but if they forced it, we adjust advance.
           updates.advance_amount = Math.max(0, totalFee - amount);
         }
-        if (receiptUrl) updates.remaining_receipt_url = receiptUrl;
+        if (finalReceiptUrl) updates.remaining_receipt_url = finalReceiptUrl;
       }
 
         // 1. Perform primary job financial update
@@ -1029,16 +1068,63 @@ export const useUpdateDocumentStatus = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ docId, status, rejectionReason }: { docId: string; status: 'approved' | 'rejected' | 'pending'; rejectionReason?: string }) => {
+      // 1. Fetch document metadata to find the job_id and file name
+      const { data: docData, error: docErr } = await (supabase as any)
+        .from('documents')
+        .select('job_id, file_name')
+        .eq('id', docId)
+        .single();
+      if (docErr) throw docErr;
+
+      const jobId = docData.job_id;
+      const fileName = docData.file_name;
+
+      // 2. Fetch client_id from the job
+      const { data: jobData, error: jobErr } = await (supabase as any)
+        .from('jobs')
+        .select('client_id, job_code')
+        .eq('id', jobId)
+        .single();
+      if (jobErr) throw jobErr;
+
+      const clientId = jobData.client_id;
+      const jobCode = jobData.job_code;
+
+      // 3. Update the document status and keep it visible if approved/rejected so the client can inspect it
       const { error } = await (supabase as any)
         .from('documents')
         .update({ 
           status, 
           rejection_reason: rejectionReason || null,
-          is_client_visible: status === 'approved' // Auto-reveal on approval
+          is_client_visible: status === 'approved' || status === 'rejected'
         })
         .eq('id', docId);
       
       if (error) throw error;
+
+      // 4. Create Notification for the client
+      const titleEn = status === 'approved' ? 'Document Approved' : 'Document Rejected';
+      const titleAr = status === 'approved' ? 'تم قبول المستند' : 'تم رفض المستند';
+      
+      const bodyEn = status === 'approved' 
+        ? `Your document "${fileName}" for job ${jobCode} has been approved.` 
+        : `Your document "${fileName}" for job ${jobCode} was rejected. Reason: ${rejectionReason || 'No reason specified'}`;
+      const bodyAr = status === 'approved'
+        ? `تمت الموافقة على المستند الخاص بك "${fileName}" للمشروع ${jobCode}.`
+        : `تم رفض المستند الخاص بك "${fileName}" للمشروع ${jobCode}. السبب: ${rejectionReason || 'لم يتم تحديد سبب'}`;
+
+      await supabase.from('notifications').insert({
+        recipient_id: clientId,
+        job_id: jobId,
+        type: status === 'approved' ? 'system' : 'action_required',
+        title_en: titleEn,
+        title_ar: titleAr,
+        body_en: bodyEn,
+        body_ar: bodyAr,
+        action_required: status === 'rejected',
+        action_url: `/portal/jobs/${jobId}`
+      } as any);
+
       return docId;
     },
     onSuccess: () => {
@@ -1172,7 +1258,7 @@ export const useSendMessage = () => {
   const { profile } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ jobId, content }: { jobId: string; content: string }) => {
+    mutationFn: async ({ jobId, content, scope = 'staff_client' }: { jobId: string; content: string; scope?: 'staff_client' | 'admin_client' }) => {
       if (!profile) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
@@ -1181,7 +1267,8 @@ export const useSendMessage = () => {
           job_id: jobId,
           sender_id: profile.id,
           content: content,
-          is_read: false
+          is_read: false,
+          conversation_scope: scope
         } as any)
         .select()
         .single();
@@ -1190,8 +1277,11 @@ export const useSendMessage = () => {
       return data;
     },
     onSuccess: (data) => {
-      // Optmistically invalidate the job detail to show the new message
+      // Invalidate the job detail and messages queries to show the new message
       qc.invalidateQueries({ queryKey: ['job', (data as any).job_id] });
+      qc.invalidateQueries({ queryKey: ['job_messages', (data as any).job_id] });
+      qc.invalidateQueries({ queryKey: ['employee_jobs_latest_messages'] });
+      qc.invalidateQueries({ queryKey: ['client_jobs_latest_messages'] });
     },
   });
 };
@@ -1228,3 +1318,64 @@ export const useUnreadMessageCount = (clientId?: string) => {
     refetchInterval: 30000, // Refresh every 30s for the badge
   });
 };
+
+// ─── Client Feedback ────────────────────────────────────────────────────────
+export const useSubmitJobFeedback = () => {
+  const qc = useQueryClient();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ 
+      jobId, 
+      rating, 
+      feedback,
+      jobCode
+    }: { 
+      jobId: string; 
+      rating: number; 
+      feedback: string;
+      jobCode: string;
+    }) => {
+      if (!profile) throw new Error('Not authenticated');
+
+      // 1. Update the jobs table
+      const { error: jobError } = await supabase
+        .from('jobs')
+        .update({
+          client_rating: rating,
+          client_feedback: feedback
+        } as any)
+        .eq('id', jobId);
+
+      if (jobError) throw jobError;
+
+      // 2. Insert record in audit_logs
+      const { error: auditError } = await supabase
+        .from('audit_logs')
+        .insert({
+          actor_id: profile.id,
+          action: 'CLIENT_FEEDBACK_SUBMITTED',
+          entity_type: 'job',
+          entity_id: jobId,
+          new_values: {
+            rating,
+            feedback,
+            job_code: jobCode
+          }
+        } as any);
+
+      if (auditError) {
+        console.error('Failed to write to audit log:', auditError);
+      }
+
+      return { jobId };
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['job', data.jobId] });
+      qc.invalidateQueries({ queryKey: ['client', 'jobs'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'jobs'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'audit-logs'] });
+    }
+  });
+};
+

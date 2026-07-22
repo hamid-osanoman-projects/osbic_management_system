@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, AlertCircle, Clock, CheckCircle2, ChevronRight, Plus } from 'lucide-react';
+import { Search, AlertCircle, Clock, CheckCircle2, ChevronRight, Plus, Filter, X, ArrowUpDown, RotateCcw } from 'lucide-react';
 import { useEmployeeJobs } from '../../hooks/shared/useJobs';
 import CreateJobModal from '../../components/jobs/CreateJobModal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -21,8 +21,11 @@ const MyJobs = () => {
   const { profile } = useAuth();
   const { data: jobs, isLoading } = useEmployeeJobs(profile?.id || '');
   
-  const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'on_hold'>('active');
+  const [filter, setFilter] = useState<'all' | 'active' | 'awaiting_govt' | 'completed' | 'on_hold'>('active');
   const [searchQuery, setSearchQuery] = useState('');
+  const [serviceFilter, setServiceFilter] = useState<string>('all');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending'>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'fee_desc' | 'progress_desc'>('newest');
   const [isCreateJobOpen, setIsCreateJobOpen] = useState(false);
   const queryClient = useQueryClient();
 
@@ -51,22 +54,59 @@ const MyJobs = () => {
 
   const pendingJobs = jobs?.filter(job => job.status === 'pending' && job.assigned_by !== profile?.id) || [];
 
+  // Dynamically extract unique services for filter dropdown
+  const availableServices = Array.from(new Set(jobs?.map(j => j.service_name).filter(Boolean) || []));
+
+  const hasActiveFilters = searchQuery.trim() !== '' || serviceFilter !== 'all' || paymentFilter !== 'all' || filter !== 'active' || sortBy !== 'newest';
+
+  const resetAllFilters = () => {
+    setSearchQuery('');
+    setFilter('active');
+    setServiceFilter('all');
+    setPaymentFilter('all');
+    setSortBy('newest');
+  };
+
   const filteredJobs = jobs?.filter(job => {
     // Exclude pending jobs from the main active list, they live in the tray
     if (job.status === 'pending' && job.assigned_by !== profile?.id) return false;
+
     // 1. Filter by Status
     let matchStatus = true;
-    if (filter === 'active') matchStatus = job.status === 'active' || job.status === 'in_progress' || job.status === 'awaiting_govt' || job.status === 'pending';
+    if (filter === 'active') matchStatus = job.status === 'active' || job.status === 'in_progress' || job.status === 'pending';
+    else if (filter === 'awaiting_govt') matchStatus = job.status === 'awaiting_govt';
     else if (filter === 'completed') matchStatus = job.status === 'completed';
     else if (filter === 'on_hold') matchStatus = job.status === 'on_hold';
 
-    // 2. Filter by Search Query
-    const matchSearch = 
-      job.job_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.client_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.service_name.toLowerCase().includes(searchQuery.toLowerCase());
+    // 2. Filter by Service Name
+    let matchService = true;
+    if (serviceFilter !== 'all') {
+      matchService = job.service_name === serviceFilter;
+    }
 
-    return matchStatus && matchSearch;
+    // 3. Filter by Payment Status
+    let matchPayment = true;
+    if (paymentFilter === 'paid') {
+      matchPayment = job.remaining_paid === true;
+    } else if (paymentFilter === 'pending') {
+      matchPayment = job.remaining_paid === false;
+    }
+
+    // 4. Multi-field Search Query (Client Name, Service Name, Job Code)
+    const q = searchQuery.trim().toLowerCase();
+    const matchSearch = !q || (
+      job.job_code.toLowerCase().includes(q) ||
+      job.client_name.toLowerCase().includes(q) ||
+      job.service_name.toLowerCase().includes(q)
+    );
+
+    return matchStatus && matchService && matchPayment && matchSearch;
+  })?.sort((a, b) => {
+    if (sortBy === 'newest') return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    if (sortBy === 'oldest') return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+    if (sortBy === 'fee_desc') return (b.total_fee || 0) - (a.total_fee || 0);
+    if (sortBy === 'progress_desc') return ((b.completed_steps || 0) / (b.total_steps || 1)) - ((a.completed_steps || 0) / (a.total_steps || 1));
+    return 0;
   });
 
   const stats = {
@@ -161,29 +201,100 @@ const MyJobs = () => {
         </div>
       )}
 
-      {/* Toolbar */}
-      <div className="bg-background border border-border p-2 rounded-2xl flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="flex bg-white/5 p-1 rounded-xl w-full sm:w-auto">
-          {['active', 'completed', 'on_hold', 'all'].map(f => (
-            <button 
-              key={f}
-              onClick={() => setFilter(f as any)} 
-              className={cn("px-4 py-2 flex-1 sm:flex-none rounded-lg text-xs font-bold uppercase tracking-wider transition-colors", filter === f ? "bg-white/10 text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}
-            >
-              {f.replace('_', ' ')}
-            </button>
-          ))}
-        </div>
+      {/* Single-Line Toolbar & Filters */}
+      <div className="bg-card border border-border p-3 rounded-2xl shadow-sm mb-6 flex flex-col md:flex-row items-center justify-between gap-3">
         
-        <div className="flex-1 w-full sm:w-auto relative max-w-sm">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+        {/* Left Section: Expanded Search Bar */}
+        <div className="w-full md:flex-1 relative min-w-[220px]">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input 
             type="text" 
-            placeholder="Search my jobs..." 
+            placeholder="Search Client Name, Service, or Task ID..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white/5 border-none outline-none pl-10 pr-4 py-2.5 rounded-xl text-foreground placeholder:text-muted-foreground/60 text-sm"
+            className="w-full bg-background border border-border outline-none pl-9 pr-8 py-2 rounded-xl text-foreground placeholder:text-muted-foreground/60 text-xs focus:border-primary transition-all"
           />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Right Section: Single Horizontal Row of Compact Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-between md:justify-end text-xs">
+          
+          {/* Status Filter Dropdown */}
+          <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status:</span>
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as any)}
+              className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer"
+            >
+              <option value="active" className="bg-[#0A0F1E] text-slate-100 py-1">Active Workload</option>
+              <option value="awaiting_govt" className="bg-[#0A0F1E] text-slate-100 py-1">Awaiting Govt</option>
+              <option value="completed" className="bg-[#0A0F1E] text-slate-100 py-1">Completed</option>
+              <option value="on_hold" className="bg-[#0A0F1E] text-slate-100 py-1">On Hold</option>
+              <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">All Tasks</option>
+            </select>
+          </div>
+
+          {/* Service Filter Dropdown */}
+          <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
+            <Filter size={13} className="text-primary" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Service:</span>
+            <select
+              value={serviceFilter}
+              onChange={(e) => setServiceFilter(e.target.value)}
+              className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer max-w-[140px] truncate"
+            >
+              <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">All Services</option>
+              {availableServices.map((svc, i) => (
+                <option key={i} value={svc} className="bg-[#0A0F1E] text-slate-100 py-1">{svc}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Payment Filter Dropdown */}
+          <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Payment:</span>
+            <select
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value as any)}
+              className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer"
+            >
+              <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">All Payments</option>
+              <option value="paid" className="bg-[#0A0F1E] text-slate-100 py-1">Fully Paid</option>
+              <option value="pending" className="bg-[#0A0F1E] text-slate-100 py-1">Pending Payment</option>
+            </select>
+          </div>
+
+          {/* Sorting Dropdown */}
+          <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
+            <ArrowUpDown size={13} className="text-muted-foreground" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Sort:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer"
+            >
+              <option value="newest" className="bg-[#0A0F1E] text-slate-100 py-1">Newest First</option>
+              <option value="oldest" className="bg-[#0A0F1E] text-slate-100 py-1">Oldest First</option>
+              <option value="fee_desc" className="bg-[#0A0F1E] text-slate-100 py-1">Highest Fee</option>
+              <option value="progress_desc" className="bg-[#0A0F1E] text-slate-100 py-1">Highest Progress %</option>
+            </select>
+          </div>
+
+          {/* Reset Filters Button */}
+          {hasActiveFilters && (
+            <button 
+              onClick={resetAllFilters}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-xl text-xs font-bold transition-all whitespace-nowrap"
+            >
+              <RotateCcw size={13} /> Reset
+            </button>
+          )}
         </div>
       </div>
 

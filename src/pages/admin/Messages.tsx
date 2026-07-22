@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChatRooms, useChatMessages, useSendChatMessage, useCreateDirectChat, useCreateGroupChat, useMarkChatRead } from '../../hooks/shared/useChat';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,14 @@ import { format } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
+import { useAdminJobs, useJobDetail } from '../../hooks/shared/useJobs';
+import MessagesTab from '../../components/jobs/MessagesTab';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 export default function AdminMessages() {
   const { profile } = useAuth();
@@ -14,6 +22,7 @@ export default function AdminMessages() {
   const isRtl = i18n.dir() === 'rtl';
 
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'team' | 'clients'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -24,6 +33,62 @@ export default function AdminMessages() {
   const { data: messages = [], isLoading: loadingMessages } = useChatMessages(activeChatId);
   const sendMutation = useSendChatMessage();
   const markReadMutation = useMarkChatRead();
+
+  const adminQuery = useAdminJobs();
+  // Admin always sees all jobs for admin_client conversations
+  const jobs = adminQuery.data;
+  const loadingJobs = adminQuery.isLoading;
+
+
+  // Fetch latest message for each job to support sorting and snippets
+  const { data: latestJobMessages = {} } = useQuery({
+    queryKey: ['employee_jobs_latest_messages', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return {};
+      const { data, error } = await supabase
+        .from('messages')
+        .select('job_id, created_at, content, sender_id, is_read, conversation_scope, sender:profiles!messages_sender_id_fkey(full_name)')
+        .eq('conversation_scope', 'admin_client')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      
+      const mapping: Record<string, any> = {};
+      (data || []).forEach((m: any) => {
+        if (!mapping[m.job_id]) {
+          mapping[m.job_id] = { ...m, sender_name: m.sender?.full_name ?? 'Unknown' };
+        }
+      });
+      return mapping;
+    },
+    enabled: !!profile?.id
+  });
+
+  const sortedJobs = useMemo(() => {
+    if (!jobs) return [];
+    
+    // Filter by search query if any
+    let result = jobs;
+    if (searchQuery) {
+      result = jobs.filter(j => 
+        j.service_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        j.job_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        j.client_name?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    return [...result].sort((a, b) => {
+      const aMsg = latestJobMessages[a.id];
+      const bMsg = latestJobMessages[b.id];
+      
+      const aTime = aMsg ? new Date(aMsg.created_at).getTime() : 0;
+      const bTime = bMsg ? new Date(bMsg.created_at).getTime() : 0;
+      
+      if (aTime || bTime) {
+        return bTime - aTime;
+      }
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+  }, [jobs, latestJobMessages, searchQuery]);
 
   const [messageInput, setMessageInput] = useState('');
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
@@ -197,64 +262,157 @@ export default function AdminMessages() {
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-1">
-          {loadingRooms ? (
-            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
-          ) : filteredRooms.length === 0 ? (
-            <div className="text-center text-muted-foreground text-sm p-8">
-              No conversations found.
-            </div>
+          {filter === 'clients' ? (
+            loadingJobs ? (
+              <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
+            ) : !sortedJobs || sortedJobs.length === 0 ? (
+              <div className="text-center text-muted-foreground text-sm p-8">
+                No active client cases.
+              </div>
+            ) : (
+              sortedJobs.map((jb: any) => {
+                const isSelected = selectedJobId === jb.id;
+                const isUnread = latestJobMessages[jb.id] && latestJobMessages[jb.id].sender_id !== profile?.id && !latestJobMessages[jb.id].is_read;
+                
+                return (
+                  <button
+                    key={jb.id}
+                    onClick={() => {
+                      setSelectedJobId(jb.id);
+                      setActiveChatId(null);
+                    }}
+                    className={`w-full text-left p-3.5 rounded-xl transition-all flex gap-3 border ${
+                      isSelected 
+                        ? 'bg-primary/10 border-primary/20 shadow-sm' 
+                        : (isUnread ? 'bg-primary/[0.04] border-primary/40 shadow-sm' : 'border-transparent hover:bg-muted/50')
+                    }`}
+                  >
+                    <div className="relative shrink-0">
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
+                        <MessageSquare size={20} />
+                      </div>
+                      {isUnread && (
+                        <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full border border-card flex items-center justify-center">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-baseline mb-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <h3 className={cn("text-sm text-foreground truncate", isUnread ? "font-extrabold" : "font-bold")}>
+                            {jb.client_name}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {latestJobMessages[jb.id] && (
+                            <span className={cn("font-mono text-[8px]", isUnread ? "text-primary font-bold" : "text-muted-foreground/40")}>
+                              {new Date(latestJobMessages[jb.id].created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                          <span className="text-[8px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider bg-muted text-muted-foreground border border-border">
+                            {jb.job_code}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground/60 truncate font-semibold">
+                        Service: {jb.service_name}
+                      </p>
+                      
+                      {latestJobMessages[jb.id] ? (
+                        <p className={cn("text-xs truncate my-1.5 font-medium bg-muted/20 px-2.5 py-1 rounded-lg border", isUnread ? "text-foreground border-primary/20 bg-primary/5 font-semibold animate-pulse" : "text-muted-foreground/60 border-border/30")}>
+                          <span className={cn("mr-1", isUnread ? "font-black text-primary" : "font-bold text-primary")}>
+                            {latestJobMessages[jb.id].sender_id === profile?.id ? 'You' : latestJobMessages[jb.id].sender_name}:
+                          </span>
+                          {latestJobMessages[jb.id].content}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground/40 italic my-1.5">No messages yet</p>
+                      )}
+
+                      <div className="flex-1 flex gap-1.5 items-center mt-1">
+                        <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest border ${
+                          jb.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                          jb.status === 'active' || jb.status === 'in_progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                          jb.status === 'draft' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                          'bg-muted text-muted-foreground border-border'
+                        }`}>
+                          {jb.status === 'active' ? 'In Progress' : jb.status}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            )
           ) : (
-            filteredRooms.map((room: any) => (
-              <button
-                key={room.id}
-                onClick={() => setActiveChatId(room.id)}
-                className={`w-full text-left p-3 rounded-xl transition-all flex gap-3 ${
-                  activeChatId === room.id 
-                    ? 'bg-primary/10 border border-primary/20' 
-                    : 'hover:bg-muted/50 border border-transparent'
-                }`}
-              >
-                <div className="relative shrink-0">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${room.type === 'group' ? 'bg-primary/10 text-primary' : 'bg-muted text-foreground'}`}>
-                    {room.display_avatar ? (
-                      <img src={room.display_avatar} alt="avatar" className="w-full h-full rounded-full object-cover" />
-                    ) : room.type === 'group' ? (
-                      <Hash size={20} />
+            loadingRooms ? (
+              <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
+            ) : filteredRooms.length === 0 ? (
+              <div className="text-center text-muted-foreground text-sm p-8">
+                No conversations found.
+              </div>
+            ) : (
+              filteredRooms.map((room: any) => (
+                <button
+                  key={room.id}
+                  onClick={() => {
+                    setActiveChatId(room.id);
+                    setSelectedJobId(null);
+                  }}
+                  className={`w-full text-left p-3 rounded-xl transition-all flex gap-3 ${
+                    activeChatId === room.id 
+                      ? 'bg-primary/10 border border-primary/20' 
+                      : 'hover:bg-muted/50 border border-transparent'
+                  }`}
+                >
+                  <div className="relative shrink-0">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${room.type === 'group' ? 'bg-primary/10 text-primary' : 'bg-muted text-foreground'}`}>
+                      {room.display_avatar ? (
+                        <img src={room.display_avatar} alt="avatar" className="w-full h-full rounded-full object-cover" />
+                      ) : room.type === 'group' ? (
+                        <Hash size={20} />
+                      ) : (
+                        <User size={20} />
+                      )}
+                    </div>
+                    {room.has_unread && (
+                      <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-card"></div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline mb-1">
+                      <h3 className="font-bold text-sm text-foreground truncate">{room.display_name}</h3>
+                      {room.last_message && (
+                        <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+                          {format(new Date(room.last_message.created_at), 'hh:mm a')}
+                        </span>
+                      )}
+                    </div>
+                    {room.last_message ? (
+                      <p className={`text-xs truncate ${room.has_unread ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>
+                        {room.last_message.sender_id === profile?.id ? 'You: ' : ''}
+                        {room.last_message.content}
+                      </p>
                     ) : (
-                      <User size={20} />
+                      <p className="text-xs text-muted-foreground italic">No messages yet</p>
                     )}
                   </div>
-                  {room.has_unread && (
-                    <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-card"></div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline mb-1">
-                    <h3 className="font-bold text-sm text-foreground truncate">{room.display_name}</h3>
-                    {room.last_message && (
-                      <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
-                        {format(new Date(room.last_message.created_at), 'hh:mm a')}
-                      </span>
-                    )}
-                  </div>
-                  {room.last_message ? (
-                    <p className={`text-xs truncate ${room.has_unread ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>
-                      {room.last_message.sender_id === profile?.id ? 'You: ' : ''}
-                      {room.last_message.content}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic">No messages yet</p>
-                  )}
-                </div>
-              </button>
-            ))
+                </button>
+              ))
+            )
           )}
         </div>
       </div>
 
       {/* ── Main Area: Chat Window ── */}
       <div className="flex-1 flex flex-col bg-background relative">
-        {activeChatId && activeRoom ? (
+        {selectedJobId && jobDetail ? (
+          <div className="flex-1 flex flex-col h-full bg-card overflow-hidden">
+            <MessagesTab jobId={selectedJobId} messages={jobDetail.messages || []} isAdmin={true} currentUserType="admin" scope="admin_client" />
+          </div>
+        ) : activeChatId && activeRoom ? (
           <>
             <div className="h-20 border-b border-border bg-card/50 flex items-center justify-between px-8 shrink-0">
               <div className="flex items-center gap-4">

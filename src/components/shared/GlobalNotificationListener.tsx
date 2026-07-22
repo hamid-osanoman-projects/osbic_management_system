@@ -131,8 +131,106 @@ export const GlobalNotificationListener = () => {
       )
       .subscribe();
 
+      // 2. Listen to jobs updates for real-time status transitions & additions
+      const jobsChannel = supabase
+        .channel('public:jobs-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'jobs' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['admin', 'jobs'] });
+            queryClient.invalidateQueries({ queryKey: ['employee', 'jobs'] });
+            queryClient.invalidateQueries({ queryKey: ['client', 'jobs'] });
+            queryClient.invalidateQueries({ queryKey: ['job'] });
+          }
+        )
+        .subscribe();
+ 
+      // 3. Listen to job_steps updates for workflow progression & additions
+      const stepsChannel = supabase
+        .channel('public:job_steps-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'job_steps' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['job'] });
+            queryClient.invalidateQueries({ queryKey: ['client', 'active-steps'] });
+          }
+        )
+        .subscribe();
+ 
+      // 4. Listen to documents updates for verification status updates
+      const docsChannel = supabase
+        .channel('public:documents-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'documents' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['job'] });
+            queryClient.invalidateQueries({ queryKey: ['client', 'documents'] });
+            queryClient.invalidateQueries({ queryKey: ['client', 'vault'] });
+          }
+        )
+        .subscribe();
+ 
+      // 5. Listen to new messages for real-time chat updates
+      const msgsChannel = supabase
+        .channel('public:messages-realtime')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['job'] });
+            queryClient.invalidateQueries({ queryKey: ['messages'] });
+          }
+        )
+        .subscribe();
+
+      // 6. Listen to sub-tasks updates for workflow updates
+      const subTasksChannel = supabase
+        .channel('public:job_sub_tasks-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'job_sub_tasks' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['job'] });
+          }
+        )
+        .subscribe();
+
+      // 7. Listen to additional charges updates for financial ledger sync
+      const chargesChannel = supabase
+        .channel('public:job_additional_charges-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'job_additional_charges' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['job'] });
+          }
+        )
+        .subscribe();
+
+      // 8. Listen to custom invoices changes for billing page sync
+      const invoicesChannel = supabase
+        .channel('public:invoices-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'invoices' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
+          }
+        )
+        .subscribe();
+ 
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(jobsChannel);
+      supabase.removeChannel(stepsChannel);
+      supabase.removeChannel(docsChannel);
+      supabase.removeChannel(msgsChannel);
+      supabase.removeChannel(subTasksChannel);
+      supabase.removeChannel(chargesChannel);
+      supabase.removeChannel(invoicesChannel);
     };
   }, [user?.id, navigate, profile?.role]);
 

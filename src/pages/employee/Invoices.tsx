@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Search, FileText, CheckCircle2, FileClock, Eye, Edit, Trash2 } from 'lucide-react';
 import { useInvoices, useDeleteInvoice } from '../../hooks/employee/useInvoices';
 import { format } from 'date-fns';
+import { useAuth } from '../../contexts/AuthContext';
 import Skeleton from '../../components/ui/Skeleton';
 import ConfirmModal from '../../components/shared/ConfirmModal';
 
 const EmployeeInvoices = () => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const { data: invoices, isLoading } = useInvoices();
   const { mutateAsync: deleteInvoice } = useDeleteInvoice();
   const [filter, setFilter] = useState<'all' | 'quotations' | 'unpaid' | 'paid'>('all');
@@ -27,6 +29,13 @@ const EmployeeInvoices = () => {
   };
 
   const filteredInvoices = invoices?.filter(inv => {
+    // Strict Privacy Isolation: Non-manager employees only view invoices belonging to them or their jobs
+    if (profile && profile.role === 'employee' && !profile.is_manager) {
+      const isInvoiceOwner = inv.employee_id === profile.id;
+      const isJobWorker = inv.job && (inv.job.employee_id === profile.id || inv.job.assigned_by === profile.id);
+      if (!isInvoiceOwner && !isJobWorker) return false;
+    }
+
     // Status/Type filter
     if (filter === 'quotations' && inv.type !== 'quotation') return false;
     if (filter === 'unpaid' && (inv.type === 'quotation' || inv.status === 'paid')) return false;

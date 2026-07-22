@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TaskDashboard } from './TaskDashboard';
-import { ChevronRight, LayoutGrid, List as ListIcon, Clock, CheckCircle2, Briefcase, Plus, Zap } from 'lucide-react';
+import { ChevronRight, LayoutGrid, List as ListIcon, Clock, CheckCircle2, Briefcase, Plus, Zap, Search, Filter, X, ArrowUpDown, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
@@ -35,6 +35,12 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
 }) => {
   const queryClient = useQueryClient();
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'awaiting_govt' | 'completed' | 'on_hold'>('all');
+  const [serviceFilter, setServiceFilter] = useState<string>('all');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending'>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'fee_desc'>('newest');
+
   const acceptJobMutation = useMutation({
     mutationFn: async (jobId: string) => {
       const { error } = await supabase
@@ -58,20 +64,18 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
 
   const pendingJobs = jobs?.filter(job => job.status === 'pending' && job.assigned_by !== profileId) || [];
 
-  // Apply the same filter logic here
-  let filteredJobs = jobs.filter(job => !(job.status === 'pending' && job.assigned_by !== profileId));
-  if (activeFilter === 'self') {
-    filteredJobs = jobs.filter(j => j.assigned_by === profileId);
-  } else if (activeFilter === 'manager') {
-    filteredJobs = jobs.filter(j => j.assigned_by_role === 'admin' || j.assigned_by_role === 'manager');
-  } else if (activeFilter === 'coworker') {
-    filteredJobs = jobs.filter(j => j.assigned_by !== profileId && j.assigned_by_role === 'employee');
-  }
+  // Extract unique services dynamically
+  const availableServices = Array.from(new Set(jobs?.map(j => j.service_name).filter(Boolean) || []));
 
-  const quickTasks = filteredJobs.filter(j => j.service_name === 'Quick Task (POS)');
-  const standardTasks = filteredJobs.filter(j => j.service_name !== 'Quick Task (POS)');
-  
-  const displayJobs = jobTypeFilter === 'quick' ? quickTasks : standardTasks;
+  const hasActiveFilters = searchQuery.trim() !== '' || statusFilter !== 'all' || serviceFilter !== 'all' || paymentFilter !== 'all' || sortBy !== 'newest';
+
+  const resetAllFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setServiceFilter('all');
+    setPaymentFilter('all');
+    setSortBy('newest');
+  };
 
   const getClientName = (job: any) => {
     if (job.service_name === 'Quick Task (POS)' && job.notes) {
@@ -80,8 +84,62 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
         return match[1];
       }
     }
-    return job.client_name;
+    return job.client_name || 'Client';
   };
+
+  // Base filter by assignment tab (All / Self / Manager / Coworker)
+  let filteredJobs = (jobs || []).filter(job => !(job.status === 'pending' && job.assigned_by !== profileId));
+  if (activeFilter === 'self') {
+    filteredJobs = jobs.filter(j => j.assigned_by === profileId);
+  } else if (activeFilter === 'manager') {
+    filteredJobs = jobs.filter(j => j.assigned_by_role === 'admin' || j.assigned_by_role === 'manager');
+  } else if (activeFilter === 'coworker') {
+    filteredJobs = jobs.filter(j => j.assigned_by !== profileId && j.assigned_by_role === 'employee');
+  }
+
+  // 1. Filter by Status Dropdown
+  if (statusFilter !== 'all') {
+    if (statusFilter === 'active') filteredJobs = filteredJobs.filter(j => j.status === 'active' || j.status === 'in_progress' || j.status === 'pending');
+    else if (statusFilter === 'awaiting_govt') filteredJobs = filteredJobs.filter(j => j.status === 'awaiting_govt');
+    else if (statusFilter === 'completed') filteredJobs = filteredJobs.filter(j => j.status === 'completed');
+    else if (statusFilter === 'on_hold') filteredJobs = filteredJobs.filter(j => j.status === 'on_hold');
+  }
+
+  // 2. Filter by Service Dropdown
+  if (serviceFilter !== 'all') {
+    filteredJobs = filteredJobs.filter(j => j.service_name === serviceFilter);
+  }
+
+  // 3. Filter by Payment Status
+  if (paymentFilter === 'paid') {
+    filteredJobs = filteredJobs.filter(j => j.remaining_paid === true || j.total_fee === 0);
+  } else if (paymentFilter === 'pending') {
+    filteredJobs = filteredJobs.filter(j => !j.remaining_paid && j.total_fee > 0);
+  }
+
+  // 4. Filter by Multi-Field Search Query (Client Name, Service Name, Job Code)
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    filteredJobs = filteredJobs.filter(j => {
+      const clientName = getClientName(j).toLowerCase();
+      const serviceName = (j.service_name || '').toLowerCase();
+      const jobCode = (j.job_code || '').toLowerCase();
+      return clientName.includes(q) || serviceName.includes(q) || jobCode.includes(q);
+    });
+  }
+
+  // 5. Sorting
+  filteredJobs.sort((a, b) => {
+    if (sortBy === 'newest') return new Date(b.started_date || b.created_at || 0).getTime() - new Date(a.started_date || a.created_at || 0).getTime();
+    if (sortBy === 'oldest') return new Date(a.started_date || a.created_at || 0).getTime() - new Date(b.started_date || b.created_at || 0).getTime();
+    if (sortBy === 'fee_desc') return (b.total_fee || 0) - (a.total_fee || 0);
+    return 0;
+  });
+
+  const quickTasks = filteredJobs.filter(j => j.service_name === 'Quick Task (POS)');
+  const standardTasks = filteredJobs.filter(j => j.service_name !== 'Quick Task (POS)');
+  
+  const displayJobs = jobTypeFilter === 'quick' ? quickTasks : standardTasks;
 
   const renderJobRow = (job: any, isQuick: boolean) => (
     <tr 
@@ -230,7 +288,103 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
           profileId={profileId} 
         />
 
-        <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm mt-6">
+        {/* Single-Line Search & Multi-Filter Control Bar */}
+        <div className="bg-card border border-border p-3 rounded-2xl shadow-sm mt-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-3">
+          
+          {/* Left Section: Expanded Search Input */}
+          <div className="w-full md:flex-1 relative min-w-[220px]">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input 
+              type="text" 
+              placeholder="Search Client Name, Service, or Task ID..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-background border border-border outline-none pl-9 pr-8 py-2 rounded-xl text-foreground placeholder:text-muted-foreground/60 text-xs focus:border-primary transition-all"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Right Section: Single Horizontal Row of Compact Filter Pills */}
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-between md:justify-end text-xs">
+            
+            {/* Status Filter Dropdown */}
+            <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer"
+              >
+                <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">All Statuses</option>
+                <option value="active" className="bg-[#0A0F1E] text-slate-100 py-1">Active Workload</option>
+                <option value="awaiting_govt" className="bg-[#0A0F1E] text-slate-100 py-1">Awaiting Govt</option>
+                <option value="completed" className="bg-[#0A0F1E] text-slate-100 py-1">Completed</option>
+                <option value="on_hold" className="bg-[#0A0F1E] text-slate-100 py-1">On Hold</option>
+              </select>
+            </div>
+
+            {/* Service Filter Dropdown */}
+            <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
+              <Filter size={13} className="text-primary" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Service:</span>
+              <select
+                value={serviceFilter}
+                onChange={(e) => setServiceFilter(e.target.value)}
+                className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer max-w-[140px] truncate"
+              >
+                <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">All Services</option>
+                {availableServices.map((svc, i) => (
+                  <option key={i} value={svc} className="bg-[#0A0F1E] text-slate-100 py-1">{svc}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Payment Filter Dropdown */}
+            <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Payment:</span>
+              <select
+                value={paymentFilter}
+                onChange={(e) => setPaymentFilter(e.target.value as any)}
+                className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer"
+              >
+                <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">All Payments</option>
+                <option value="paid" className="bg-[#0A0F1E] text-slate-100 py-1">Fully Paid</option>
+                <option value="pending" className="bg-[#0A0F1E] text-slate-100 py-1">Pending Payment</option>
+              </select>
+            </div>
+
+            {/* Sorting Dropdown */}
+            <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
+              <ArrowUpDown size={13} className="text-muted-foreground" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Sort:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer"
+              >
+                <option value="newest" className="bg-[#0A0F1E] text-slate-100 py-1">Newest First</option>
+                <option value="oldest" className="bg-[#0A0F1E] text-slate-100 py-1">Oldest First</option>
+                <option value="fee_desc" className="bg-[#0A0F1E] text-slate-100 py-1">Highest Fee</option>
+              </select>
+            </div>
+
+            {/* Reset Filters Button */}
+            {hasActiveFilters && (
+              <button 
+                onClick={resetAllFilters}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-xl text-xs font-bold transition-all whitespace-nowrap"
+              >
+                <RotateCcw size={13} /> Reset
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm mt-4">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>

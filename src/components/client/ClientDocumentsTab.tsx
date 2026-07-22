@@ -28,6 +28,7 @@ const ClientDocumentsTab = ({ jobId, steps, documents }: Props) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<string | null>(null); // 'general' or stepId
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [vaultTab, setVaultTab] = useState<'deliverables' | 'uploads'>('deliverables');
 
   // 1. Identify Required Documents (from all steps)
   const requiredDocs = steps.flatMap(step => 
@@ -50,6 +51,8 @@ const ClientDocumentsTab = ({ jobId, steps, documents }: Props) => {
 
   // 2. Filter Client-Visible Vault (Approved ones or ones they uploaded)
   const vaultDocs = documents.filter(d => d.is_client_visible || d.status === 'approved' || d.uploaded_by === profile?.id);
+  const deliverables = vaultDocs.filter(d => d.uploaded_by !== profile?.id);
+  const clientUploads = vaultDocs.filter(d => d.uploaded_by === profile?.id);
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>, stepId?: string, docType?: string) => {
     const file = event.target.files?.[0];
@@ -114,6 +117,23 @@ const ClientDocumentsTab = ({ jobId, steps, documents }: Props) => {
       link.remove();
     } catch (err: any) {
       toast.error('Download failed');
+    }
+  };
+
+  const [viewingId, setViewingId] = useState<string | null>(null);
+
+  const handleView = async (path: string, docId: string) => {
+    setViewingId(docId);
+    try {
+      const { data, error } = await supabase.storage.from('documents').createSignedUrl(path, 3600);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      }
+    } catch (err: any) {
+      toast.error('Could not view document');
+    } finally {
+      setViewingId(null);
     }
   };
 
@@ -191,50 +211,95 @@ const ClientDocumentsTab = ({ jobId, steps, documents }: Props) => {
           </div>
         </div>
 
-        {vaultDocs.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-             {vaultDocs.map((doc) => (
-               <div key={doc.id} className="bg-muted/20 border border-border rounded-3xl p-6 hover:border-primary/40 hover:bg-card hover:shadow-2xl shadow-black/5 transition-all group flex flex-col">
-                 <div className="flex items-start justify-between mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-card border border-border text-muted-foreground flex items-center justify-center shrink-0 shadow-sm group-hover:bg-primary/10 group-hover:text-primary transition-all">
-                      <FileText size={20} />
-                    </div>
-                    <div className={cn(
-                      "text-[8px] font-black uppercase tracking-tighter px-2 py-0.5 rounded border",
-                      doc.status === 'approved' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
-                      doc.status === 'rejected' ? "bg-destructive/10 text-destructive border-destructive/20" :
-                      "bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse"
-                    )}>
-                      {doc.status}
-                    </div>
-                 </div>
+        {/* Vault Tab Switcher */}
+        <div className="flex p-1 bg-muted/60 border border-border rounded-2xl mb-8 max-w-md">
+          <button
+            onClick={() => setVaultTab('deliverables')}
+            className={cn(
+              "flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5",
+              vaultTab === 'deliverables' 
+                ? "bg-card text-foreground shadow-lg shadow-black/5" 
+                : "text-muted-foreground/60 hover:text-foreground"
+            )}
+          >
+            Official Deliverables
+          </button>
+          <button
+            onClick={() => setVaultTab('uploads')}
+            className={cn(
+              "flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5",
+              vaultTab === 'uploads' 
+                ? "bg-card text-foreground shadow-lg shadow-black/5" 
+                : "text-muted-foreground/60 hover:text-foreground"
+            )}
+          >
+            My Uploaded Files
+          </button>
+        </div>
 
-                 <div className="flex-1 mb-8">
-                    <p className="text-[13px] font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors mb-1">{doc.file_name}</p>
-                    <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest truncate">{doc.document_type}</p>
-                 </div>
+        {(() => {
+          const currentDocs = vaultTab === 'deliverables' ? deliverables : clientUploads;
+          if (currentDocs.length > 0) {
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                 {currentDocs.map((doc) => (
+                   <div key={doc.id} className="bg-muted/20 border border-border rounded-3xl p-6 hover:border-primary/40 hover:bg-card hover:shadow-2xl shadow-black/5 transition-all group flex flex-col">
+                     <div className="flex items-start justify-between mb-6">
+                        <div className="w-10 h-10 rounded-xl bg-card border border-border text-muted-foreground flex items-center justify-center shrink-0 shadow-sm group-hover:bg-primary/10 group-hover:text-primary transition-all">
+                          <FileText size={20} />
+                        </div>
+                        <div className={cn(
+                          "text-[8px] font-black uppercase tracking-tighter px-2 py-0.5 rounded border",
+                          doc.status === 'approved' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                          doc.status === 'rejected' ? "bg-destructive/10 text-destructive border-destructive/20" :
+                          "bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse"
+                        )}>
+                          {doc.status}
+                        </div>
+                     </div>
 
-                 <div className="pt-4 border-t border-border flex items-center gap-2">
-                    <button 
-                      onClick={() => handleDownload(doc.file_path, doc.file_name)}
-                      className="flex-1 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background rounded-xl py-3 text-[9px] font-extrabold uppercase tracking-widest transition-all"
-                    >
-                      <Download size={14} /> Get
-                    </button>
-                    {/* Add metadata/view button if needed */}
+                     <div className="flex-1 mb-8">
+                        <p className="text-[13px] font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors mb-1">{doc.file_name}</p>
+                        <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest truncate">{doc.document_type}</p>
+                     </div>
+
+                      <div className="pt-4 border-t border-border flex items-center gap-2">
+                        <button 
+                          onClick={() => handleDownload(doc.file_path, doc.file_name)}
+                          className="flex-1 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background rounded-xl py-3 text-[9px] font-extrabold uppercase tracking-widest transition-all"
+                        >
+                          <Download size={14} /> Get
+                        </button>
+                        <button 
+                          onClick={() => handleView(doc.file_path, doc.id)}
+                          disabled={viewingId === doc.id}
+                          className="flex-1 flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-foreground rounded-xl py-3 text-[9px] font-extrabold uppercase tracking-widest transition-all disabled:opacity-50"
+                          title="View in Browser"
+                        >
+                          {viewingId === doc.id ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
+                          View
+                        </button>
+                      </div>
+                   </div>
+                 ))}
+              </div>
+            );
+          } else {
+            return (
+              <div className="py-24 text-center border-2 border-dashed border-border rounded-[2rem] bg-muted/10">
+                 <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-border">
+                   <FolderOpen size={32} className="text-muted-foreground/20" />
                  </div>
-               </div>
-             ))}
-          </div>
-        ) : (
-          <div className="py-24 text-center border-2 border-dashed border-border rounded-[2rem] bg-muted/10">
-             <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-border">
-               <FolderOpen size={32} className="text-muted-foreground/20" />
-             </div>
-             <p className="text-foreground font-extrabold uppercase tracking-widest text-[11px] mb-2">Vault Unpopulated</p>
-             <p className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-widest max-w-[200px] mx-auto leading-relaxed">Your digital twin assets and official certifications will appear here.</p>
-          </div>
-        )}
+                 <p className="text-foreground font-extrabold uppercase tracking-widest text-[11px] mb-2">Vault Unpopulated</p>
+                 <p className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-widest max-w-[250px] mx-auto leading-relaxed">
+                   {vaultTab === 'deliverables' 
+                     ? 'No official deliverables or certificates have been issued yet. They will appear here once finalized by our team.' 
+                     : 'You have not uploaded any personal documents or assets to the general vault yet.'}
+                 </p>
+              </div>
+            );
+          }
+        })()}
       </section>
 
       {/* Hidden File Input */}

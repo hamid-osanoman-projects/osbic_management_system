@@ -159,7 +159,7 @@ const InvoicePDF = ({ job, type, date = format(new Date(), 'dd MMMM yyyy') }: In
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoSection}>
-            <Text style={styles.logo}>OSBIC OS</Text>
+            <Text style={styles.logo}>OSBIC CONNECT</Text>
             <Text style={styles.subLogo}>Operational Service Blueprint</Text>
           </View>
           <View style={styles.invoiceMeta}>
@@ -226,7 +226,7 @@ const InvoicePDF = ({ job, type, date = format(new Date(), 'dd MMMM yyyy') }: In
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.bankInfo}>
-            OSBIC OS - MUSCAT OFFICE | SULTANATE OF OMAN{"\n"}
+            OSBIC CONNECT - MUSCAT OFFICE | SULTANATE OF OMAN{"\n"}
             BANK: MUSCAT BANK | IBAN: OMXX XXXX XXXX XXXX XXXX XXXX{"\n"}
             TERMS: Please pay within 7 days. This is a computer-generated document.
           </Text>

@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ChevronLeft, LayoutTemplate, FolderOpen, 
-  MessageCircle, DollarSign, Download, Lock, CheckCircle2, Clock
+  MessageCircle, DollarSign, Download, Lock, CheckCircle2, Clock,
+  Star, Sparkles, Eye
 } from 'lucide-react';
-import { useJobDetail } from '../../hooks/shared/useJobs';
+import { useJobDetail, useSubmitJobFeedback } from '../../hooks/shared/useJobs';
+import { useInvoices } from '../../hooks/employee/useInvoices';
+import { downloadCustomInvoice } from '../../utils/invoiceGenerator';
+import { useAuth } from '../../contexts/AuthContext';
 import PizzaTracker from '../../components/client/PizzaTracker';
 import Skeleton from '../../components/ui/Skeleton';
 import MessagesTab from '../../components/jobs/MessagesTab'; 
@@ -13,6 +18,9 @@ import ClientDocumentsTab from '../../components/client/ClientDocumentsTab';
 import { downloadInvoice } from '../../utils/invoiceGenerator';
 import confetti from 'canvas-confetti';
 import { useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -24,9 +32,52 @@ function cn(...inputs: ClassValue[]) {
 const ClientJobDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
   const { data, isLoading } = useJobDetail(id || '');
+  const { profile } = useAuth();
+  const { data: invoices } = useInvoices(profile?.id);
+  const customInvoice = invoices?.find(inv => inv.job_id === id);
 
   const [activeTab, setActiveTab] = useState<'progress' | 'documents' | 'messages' | 'payment'>('progress');
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    if (id) {
+      // Realtime listener for document updates
+      const docChannel = supabase
+        .channel(`client-job-docs-${id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'documents',
+            filter: `job_id=eq.${id}`
+          },
+          () => {
+            qc.invalidateQueries({ queryKey: ['job', id] });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(docChannel);
+      };
+    }
+  }, [id]);
+  
+  const feedbackMutation = useSubmitJobFeedback();
+  const [clientRating, setClientRating] = useState<number>(0);
+  const [clientFeedbackText, setClientFeedbackText] = useState<string>('');
+  const [hoveredRating, setHoveredRating] = useState<number>(0);
+
+  useEffect(() => {
+    if (data?.job) {
+      setClientRating(data.job.client_rating || 0);
+      setClientFeedbackText(data.job.client_feedback || '');
+    }
+  }, [data?.job]);
 
   useEffect(() => {
     if (data?.job?.status === 'completed') {
@@ -60,6 +111,64 @@ const ClientJobDetail = () => {
     .filter(s => s.is_client_visible && s.status === 'completed' && s.completed_at)
     .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime());
 
+  const unreadCount = messages ? messages.filter((m: any) => m.sender_id !== profile?.id && !m.is_read).length : 0;
+
+  const uploadedInvoiceDoc = documents.find(d => 
+    d.status === 'approved' && 
+    (d.file_name.toLowerCase().includes('invoice') || 
+     d.document_type.toLowerCase().includes('invoice') ||
+     d.file_name.includes('فاتورة') || 
+     d.document_type.includes('فاتورة'))
+  );
+
+  const handleDownloadUploadedInvoice = async (doc: any) => {
+    try {
+      const { data: signData, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(doc.file_path, 3600);
+      if (error) throw error;
+      if (signData?.signedUrl) {
+        const link = document.createElement('a');
+        link.href = signData.signedUrl;
+        link.download = doc.file_name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err: any) {
+      toast.error('Could not download file: ' + err.message);
+    }
+  };
+
+  const handleViewUploadedInvoice = async (doc: any) => {
+    try {
+      const { data: signData, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(doc.file_path, 3600);
+      if (error) throw error;
+      if (signData?.signedUrl) {
+        window.open(signData.signedUrl, '_blank');
+      }
+    } catch (err: any) {
+      toast.error('Could not view file: ' + err.message);
+    }
+  };
+
+  const handleDownloadInvoice = () => {
+    if (customInvoice) {
+      downloadCustomInvoice(customInvoice);
+    } else if (job.advance_paid) {
+      downloadInvoice(job);
+    } else {
+      toast.error(
+        isRtl 
+          ? 'لم يتم إصدار الفاتورة بعد. يرجى التواصل مع الدعم.' 
+          : 'Invoice has not been generated yet. Please contact support.'
+      );
+    }
+  };
+
   return (
     <div className="h-full flex flex-col overflow-hidden bg-background">
       
@@ -87,6 +196,26 @@ const ClientJobDetail = () => {
                     Completed
                   </span>
                 )}
+                {(job.status === 'active' || job.status === 'in_progress') && (
+                  <span className="bg-blue-500/10 text-blue-400 text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-widest border border-blue-500/20">
+                    In Progress
+                  </span>
+                )}
+                {job.status === 'draft' && (
+                  <span className="bg-amber-500/10 text-amber-500 text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-widest border border-amber-500/20">
+                    Pending Setup
+                  </span>
+                )}
+                {job.status === 'on_hold' && (
+                  <span className="bg-orange-500/10 text-orange-400 text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-widest border border-orange-500/20">
+                    On Hold
+                  </span>
+                )}
+                {job.status === 'cancelled' && (
+                  <span className="bg-red-500/10 text-red-400 text-[8px] px-2 py-0.5 rounded font-black uppercase tracking-widest border border-red-500/20">
+                    Cancelled
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -96,53 +225,46 @@ const ClientJobDetail = () => {
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-primary/5 border border-primary/20 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 shadow-inner"
+              className="bg-primary/5 border border-primary/20 rounded-2xl p-5 flex items-center gap-4 mb-8 shadow-inner"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary shadow-xl shrink-0">
-                  <CheckCircle2 size={20} />
-                </div>
-                <div>
-                  <h3 className="text-[11px] font-black text-foreground uppercase tracking-widest">Service Completed</h3>
-                  <p className="text-[10px] text-muted-foreground/60 leading-tight mt-0.5 uppercase tracking-wider font-bold">Requirement fulfilled successfully</p>
-                </div>
+              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary shadow-xl shrink-0">
+                <CheckCircle2 size={20} />
               </div>
-              <button 
-                onClick={() => job.advance_paid && downloadInvoice(job)}
-                disabled={!job.advance_paid}
-                className={cn(
-                  "font-black px-6 py-2.5 rounded-xl transition-all text-[9px] uppercase tracking-widest flex items-center gap-2 shadow-lg",
-                  job.advance_paid 
-                    ? "bg-primary text-[#0A0F1E] hover:scale-105 active:scale-95" 
-                    : "bg-muted text-muted-foreground/40 cursor-not-allowed border border-border"
-                )}
-              >
-                {job.remaining_paid ? <CheckCircle2 size={12} /> : (job.advance_paid ? <Download size={12} /> : <Lock size={12} />)}
-                {job.remaining_paid ? 'Final Receipt' : (job.advance_paid ? 'Receipt' : 'Locked')}
-              </button>
+              <div>
+                <h3 className="text-[11px] font-black text-foreground uppercase tracking-widest">Service Completed</h3>
+                <p className="text-[10px] text-muted-foreground/60 leading-tight mt-0.5 uppercase tracking-wider font-bold">Requirement fulfilled successfully</p>
+              </div>
             </motion.div>
           )}
 
           {/* Navigation Tabs */}
-          <div className="bg-card border border-border p-1 rounded-[20px] flex overflow-x-auto no-scrollbar shadow-sm">
+          <div className="bg-muted/50 border border-border p-1 rounded-2xl flex overflow-x-auto no-scrollbar shadow-inner scroll-smooth max-w-full">
             {[
               { id: 'progress', label: 'Progress', icon: LayoutTemplate },
               { id: 'documents', label: 'Documents', icon: FolderOpen },
-              { id: 'messages', label: 'Support', icon: MessageCircle },
+              { id: 'messages', label: 'Chat Support', icon: MessageCircle, count: unreadCount > 0 ? unreadCount : undefined },
               { id: 'payment', label: 'Pricing', icon: DollarSign },
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-[16px] text-[10px] font-black tracking-[0.2em] uppercase transition-all whitespace-nowrap min-w-[120px]",
+                  "flex-1 shrink-0 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider sm:tracking-widest transition-all whitespace-nowrap",
                   activeTab === tab.id 
-                    ? "bg-foreground text-background shadow-lg active:scale-95" 
-                    : "text-muted-foreground/40 hover:text-foreground hover:bg-muted"
+                    ? "bg-primary text-[#0A0F1E] shadow-lg scale-[1.02]" 
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                 )}
               >
-                <tab.icon size={14} strokeWidth={2.5} className={activeTab === tab.id ? "text-primary" : "opacity-30"} />
-                {tab.label}
+                <tab.icon size={13} strokeWidth={2.5} className={activeTab === tab.id ? "text-[#0A0F1E]" : "opacity-40 text-muted-foreground"} />
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold shadow-sm transition-all",
+                    activeTab === tab.id ? "bg-[#0A0F1E]/20 text-[#0A0F1E]" : "bg-white/10 text-muted-foreground"
+                  )}>
+                    {tab.count}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -181,7 +303,7 @@ const ClientJobDetail = () => {
                       </h3>
                     </div>
                     <div className="border-border border-l ml-3 relative space-y-10">
-                      {job.status === 'in_progress' && (
+                      {(job.status === 'active' || job.status === 'in_progress') && (
                         <div className="relative pl-8">
                           <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] animate-pulse" />
                           <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Team is processing next stage...</p>
@@ -206,11 +328,112 @@ const ClientJobDetail = () => {
                         </div>
                       ))}
 
-                      {timelineEvents.length === 0 && job.status !== 'in_progress' && (
+                      {timelineEvents.length === 0 && job.status !== 'active' && job.status !== 'in_progress' && (
                         <div className="pl-8 text-[10px] font-black text-muted-foreground/20 uppercase tracking-[0.3em]">No history records available</div>
                       )}
                     </div>
                   </div>
+
+                  {job.status === 'completed' && (
+                    <div className="bg-card border border-border rounded-[2.5rem] p-6 sm:p-10 shadow-xl shadow-black/5 relative overflow-hidden">
+                      <div className="absolute -top-12 -right-12 p-10 opacity-[0.02] pointer-events-none">
+                        <Star size={240} className="text-foreground" />
+                      </div>
+                      
+                      <div className="flex items-center gap-3 mb-8">
+                        <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
+                          <Sparkles size={16} strokeWidth={2.5} />
+                        </div>
+                        <h3 className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">
+                          {isRtl ? 'تقييم الخدمة' : 'Service Feedback'}
+                        </h3>
+                      </div>
+
+                      {job.client_rating ? (
+                        <div className="space-y-4">
+                          <h4 className="text-lg font-bold text-foreground">
+                            {isRtl ? 'شكراً لتقييمك!' : 'Thank you for your review!'}
+                          </h4>
+                          <div className="flex items-center gap-1.5">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star 
+                                key={star} 
+                                size={24} 
+                                fill={star <= job.client_rating ? '#D4AF37' : 'none'} 
+                                className={star <= job.client_rating ? 'text-primary' : 'text-muted-foreground/20'}
+                              />
+                            ))}
+                          </div>
+                          {job.client_feedback && (
+                            <div className="p-5 bg-white/5 border border-white/5 rounded-2xl relative italic text-xs text-muted-foreground leading-relaxed max-w-xl">
+                              "{job.client_feedback}"
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          <div>
+                            <h4 className="text-lg font-bold text-foreground">
+                              {isRtl ? 'كيف كانت تجربتك معنا؟' : 'How was your experience?'}
+                            </h4>
+                            <p className="text-xs text-muted-foreground/60 mt-1 font-medium">
+                              {isRtl ? 'يرجى تزويدنا بتقييمك لتحسين مستوى الخدمة لدينا.' : 'Please rate this completed service and leave a review.'}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {[1, 2, 3, 4, 5].map((star) => {
+                              const isFilled = hoveredRating ? star <= hoveredRating : star <= clientRating;
+                              return (
+                                <Star 
+                                  key={star} 
+                                  size={32}
+                                  fill={isFilled ? '#D4AF37' : 'none'}
+                                  onMouseEnter={() => setHoveredRating(star)}
+                                  onMouseLeave={() => setHoveredRating(0)}
+                                  onClick={() => setClientRating(star)}
+                                  className={cn(
+                                    "transition-all cursor-pointer active:scale-95", 
+                                    isFilled ? "text-primary filter drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]" : "text-muted-foreground/30 hover:text-primary/60"
+                                  )}
+                                />
+                              );
+                            })}
+                          </div>
+
+                          <div className="space-y-2 max-w-xl">
+                            <textarea
+                              rows={3}
+                              placeholder={isRtl ? 'اكتب تعليقك هنا...' : 'Write your comments here...'}
+                              value={clientFeedbackText}
+                              onChange={(e) => setClientFeedbackText(e.target.value)}
+                              className="w-full bg-background border border-border focus:border-primary/40 rounded-2xl p-4 text-xs text-foreground outline-none transition-all placeholder:text-muted-foreground/30 leading-relaxed font-medium"
+                            />
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              if (clientRating === 0) return toast.error('Please choose a rating');
+                              feedbackMutation.mutate({
+                                jobId: job.id,
+                                rating: clientRating,
+                                feedback: clientFeedbackText,
+                                jobCode: job.job_code
+                              }, {
+                                onSuccess: () => {
+                                  toast.success('Feedback submitted successfully!');
+                                }
+                              });
+                            }}
+                            disabled={clientRating === 0 || feedbackMutation.isPending}
+                            className="bg-primary text-[#0A0F1E] font-black px-8 py-3.5 rounded-xl hover:scale-105 active:scale-95 transition-all text-[9px] uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100 shadow-xl shadow-primary/10"
+                          >
+                            {feedbackMutation.isPending ? 'Submitting...' : 'Submit Review'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -224,7 +447,7 @@ const ClientJobDetail = () => {
               {/* —— MESSAGES TAB —— */}
               {activeTab === 'messages' && (
                 <div className="bg-card border border-border rounded-[2.5rem] shadow-xl shadow-black/5 overflow-hidden h-[600px]">
-                  <MessagesTab jobId={id || ''} messages={messages} isAdmin={false} currentUserType="client" />
+                  <MessagesTab jobId={id || ''} messages={messages} isAdmin={false} currentUserType="client" scope="staff_client" />
                 </div>
               )}
 
@@ -232,76 +455,180 @@ const ClientJobDetail = () => {
               {activeTab === 'payment' && (
                 <div className="space-y-8">
                   <div className="bg-card border border-border rounded-[2.5rem] p-6 sm:p-12 shadow-xl shadow-black/5 relative overflow-hidden">
-                    <div className="absolute -top-12 -right-12 p-10 opacity-[0.02]">
+                    <div className="absolute -top-12 -right-12 p-10 opacity-[0.02] pointer-events-none">
                       <DollarSign size={240} className="text-foreground" />
                     </div>
 
-                    <div className="flex items-center gap-3 mb-12">
-                      <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
-                        <DollarSign size={16} strokeWidth={3} />
-                      </div>
-                      <h2 className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">
-                        Service Pricing
-                      </h2>
-                    </div>
-                    
-                    <div className="flex flex-col md:flex-row gap-12 md:gap-24 items-start relative z-10">
-                      <div className="space-y-2">
-                        <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">Total Value</p>
-                        <p className="text-5xl font-mono font-bold text-foreground tracking-tighter">
-                          {job.total_fee.toLocaleString()} 
-                          <span className="text-sm font-black text-muted-foreground/20 uppercase tracking-widest ms-3 font-syne">OMR</span>
-                        </p>
+                    <div className="flex items-center justify-between gap-3 mb-12">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
+                          <DollarSign size={16} strokeWidth={3} />
+                        </div>
+                        <h2 className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">
+                          Service Pricing
+                        </h2>
                       </div>
                       
-                      <div className="space-y-2">
-                        <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">Amount Cleared</p>
-                        <p className="text-5xl font-mono font-bold text-emerald-500 tracking-tighter">
-                          {job.remaining_paid ? job.total_fee.toLocaleString() : (job.total_fee - job.remaining_due_amount).toLocaleString()} 
-                          <span className="text-sm font-black text-emerald-500/30 uppercase tracking-widest ms-3 font-syne">OMR</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {(!job.remaining_paid && job.remaining_due_amount > 0) && (
-                      <div className="border-border border-t mt-16 pt-12">
-                        <div className="bg-amber-500/5 border border-amber-500/10 rounded-[2.5rem] p-8 sm:p-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8 shadow-inner">
-                          <div className="space-y-2">
-                            <p className="text-amber-500 uppercase tracking-[0.3em] font-black text-[9px] flex items-center gap-2">
-                              <Clock size={14} strokeWidth={3} /> Outstanding Balance
-                            </p>
-                            <p className="text-5xl font-mono font-bold text-amber-500 tracking-tighter">
-                              {job.remaining_due_amount.toLocaleString()} 
-                              <span className="text-sm font-black text-amber-500/30 uppercase tracking-widest ms-3 font-syne">OMR</span>
-                            </p>
-                          </div>
-                          <button 
-                            onClick={() => job.advance_paid && downloadInvoice(job)}
-                            disabled={!job.advance_paid}
-                            className={cn(
-                              "px-12 py-6 rounded-2xl transition-all w-full lg:w-auto text-[10px] uppercase tracking-[0.3em] font-black shadow-2xl active:scale-95",
-                              job.advance_paid 
-                                ? "bg-foreground text-background hover:opacity-90" 
-                                : "bg-muted text-muted-foreground/40 cursor-not-allowed"
-                            )}
+                      {uploadedInvoiceDoc ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleViewUploadedInvoice(uploadedInvoiceDoc)}
+                            className="bg-white/5 border border-white/10 hover:bg-white/10 text-foreground font-black px-4 py-2.5 rounded-xl hover:scale-105 active:scale-95 transition-all text-[9px] uppercase tracking-widest shadow-md flex items-center gap-1.5 shrink-0"
+                            title="View Uploaded Invoice File"
                           >
-                            {job.remaining_paid ? 'Get Receipt' : (job.advance_paid ? 'Get Receipt' : 'Awaiting Action')}
+                            <Eye size={12} /> View
+                          </button>
+                          <button
+                            onClick={() => handleDownloadUploadedInvoice(uploadedInvoiceDoc)}
+                            className="bg-primary text-[#0A0F1E] font-black px-4 py-2.5 rounded-xl hover:scale-105 active:scale-95 transition-all text-[9px] uppercase tracking-widest shadow-lg shadow-primary/10 flex items-center gap-1.5 shrink-0"
+                            title="Download Uploaded Invoice File"
+                          >
+                            <Download size={12} /> Download
                           </button>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      ) : (
+                        !!customInvoice && (
+                          <button
+                            onClick={handleDownloadInvoice}
+                            className="bg-primary text-[#0A0F1E] font-black px-5 py-2 rounded-xl hover:scale-105 active:scale-95 transition-all text-[9px] uppercase tracking-widest shadow-lg shadow-primary/10 shrink-0"
+                          >
+                            Download Invoice
+                          </button>
+                        )
+                      )}
+                    </div>
+                    
+                    {customInvoice ? (
+                      <div className="space-y-8 relative z-10">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6 items-start">
+                          <div className="space-y-2 sm:col-span-2 md:col-span-1">
+                            <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">Invoice Number</p>
+                            <p className="text-xl sm:text-2xl font-mono font-bold text-foreground truncate">
+                              {customInvoice.invoice_number}
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">Subtotal</p>
+                            <p className="text-2xl font-mono font-bold text-foreground">
+                              {customInvoice.subtotal.toLocaleString()} <span className="text-xs font-sans text-muted-foreground">OMR</span>
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">Discount</p>
+                            <p className="text-2xl font-mono font-bold text-amber-500">
+                              {customInvoice.discount_amount.toLocaleString()} <span className="text-xs font-sans text-amber-500/60">OMR</span>
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">VAT Tax</p>
+                            <p className="text-2xl font-mono font-bold text-foreground">
+                              {customInvoice.tax_percentage || 0}%
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">Total Amount</p>
+                            <p className="text-2xl font-mono font-bold text-emerald-500">
+                              {customInvoice.total_amount.toLocaleString()} <span className="text-xs font-sans text-emerald-500/60">OMR</span>
+                            </p>
+                          </div>
+                        </div>
 
-                  <div className="p-8 bg-muted/20 border border-border rounded-[2rem] flex items-start gap-6">
-                    <div className="shrink-0 w-12 h-12 rounded-2xl bg-card border border-border flex items-center justify-center text-primary/40 shadow-sm">
-                      <Lock size={20} strokeWidth={2.5} />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-black text-foreground uppercase tracking-widest mb-1">Encrypted Billing</p>
-                      <p className="text-[10px] text-muted-foreground/40 font-bold uppercase tracking-widest leading-loose max-w-xl">
-                        Transactional records are secured via end-to-end encryption. Contact support for billing inquiries.
-                      </p>
-                    </div>
+                        {/* Items Desktop Table View */}
+                        <div className="hidden sm:block border border-border rounded-2xl overflow-hidden bg-white/[0.01]">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr className="bg-muted/50 border-b border-border text-[9px] font-black text-muted-foreground/60 uppercase tracking-wider">
+                                <th className="p-4 w-12">#</th>
+                                <th className="p-4">Item Description</th>
+                                <th className="p-4 text-center w-20">Qty</th>
+                                <th className="p-4 text-right w-28">Unit Price</th>
+                                <th className="p-4 text-right w-28">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(customInvoice.items || []).map((item: any, idx: number) => (
+                                <tr key={idx} className="border-b border-border/50 text-muted-foreground hover:bg-white/[0.01]">
+                                  <td className="p-4 font-mono">{idx + 1}</td>
+                                  <td className="p-4 text-foreground font-bold">{item.description}</td>
+                                  <td className="p-4 text-center font-mono">{item.quantity}</td>
+                                  <td className="p-4 text-right font-mono">{Number(item.unit_price).toFixed(3)} OMR</td>
+                                  <td className="p-4 text-right font-mono text-foreground font-bold">{Number(item.total).toFixed(3)} OMR</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Items Mobile Card List View */}
+                        <div className="block sm:hidden space-y-4">
+                          {(customInvoice.items || []).map((item: any, idx: number) => (
+                            <div key={idx} className="bg-white/5 border border-white/5 rounded-2xl p-4 space-y-2">
+                              <div className="flex justify-between items-start gap-4">
+                                <div>
+                                  <p className="text-[9px] font-mono text-muted-foreground/40 font-bold uppercase">Item #{idx + 1}</p>
+                                  <h4 className="text-xs font-bold text-foreground mt-1">{item.description}</h4>
+                                </div>
+                                <span className="text-[9px] font-black text-primary uppercase tracking-widest px-2.5 py-1 bg-primary/10 rounded-full border border-primary/20 shrink-0">
+                                  Qty: {item.quantity}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px] pt-2 border-t border-white/5 font-mono">
+                                <span className="text-muted-foreground">Unit: {Number(item.unit_price).toFixed(3)} OMR</span>
+                                <span className="text-foreground font-bold">Total: {Number(item.total).toFixed(3)} OMR</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex flex-col md:flex-row gap-12 md:gap-24 items-start relative z-10">
+                          <div className="space-y-2">
+                            <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">Total Value</p>
+                            <p className="text-5xl font-mono font-bold text-foreground tracking-tighter">
+                              {job.total_fee.toLocaleString()} 
+                              <span className="text-sm font-black text-muted-foreground/20 uppercase tracking-widest ms-3 font-syne">OMR</span>
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">Amount Cleared</p>
+                            <p className="text-5xl font-mono font-bold text-emerald-500 tracking-tighter">
+                              {job.remaining_paid ? job.total_fee.toLocaleString() : (job.total_fee - job.remaining_due_amount).toLocaleString()} 
+                              <span className="text-sm font-black text-emerald-500/30 uppercase tracking-widest ms-3 font-syne">OMR</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {(!job.remaining_paid && job.remaining_due_amount > 0) && (
+                          <div className="border-border border-t mt-16 pt-12">
+                            <div className="bg-amber-500/5 border border-amber-500/10 rounded-[2.5rem] p-8 sm:p-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8 shadow-inner">
+                              <div className="space-y-2">
+                                <p className="text-amber-500 uppercase tracking-[0.3em] font-black text-[9px] flex items-center gap-2">
+                                  <Clock size={14} strokeWidth={3} /> Outstanding Balance
+                                </p>
+                                <p className="text-5xl font-mono font-bold text-amber-500 tracking-tighter">
+                                  {job.remaining_due_amount.toLocaleString()} 
+                                  <span className="text-sm font-black text-amber-500/30 uppercase tracking-widest ms-3 font-syne">OMR</span>
+                                </p>
+                              </div>
+                              <button 
+                                onClick={() => job.advance_paid && downloadInvoice(job)}
+                                disabled={!job.advance_paid}
+                                className={cn(
+                                  "px-12 py-6 rounded-2xl transition-all w-full lg:w-auto text-[10px] uppercase tracking-[0.3em] font-black shadow-2xl active:scale-95",
+                                  job.advance_paid 
+                                    ? "bg-foreground text-background hover:opacity-90" 
+                                    : "bg-muted text-muted-foreground/40 cursor-not-allowed"
+                                )}
+                              >
+                                {job.remaining_paid ? 'Get Receipt' : (job.advance_paid ? 'Get Receipt' : 'Awaiting Action')}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               )}

@@ -30,7 +30,7 @@ export const useAdminSettings = () => {
         // Return defaults if table or row not found (fallback)
         return {
           id: 'global',
-          company_name: 'OSBIC OS',
+          company_name: 'OSBIC CONNECT',
           company_email: 'operations@osbic.com',
           company_phone: '+968 9000 0000',
           company_address: 'Muscat, Oman',

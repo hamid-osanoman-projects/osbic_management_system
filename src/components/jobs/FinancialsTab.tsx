@@ -21,6 +21,7 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
   const { mutate: updatePayment, isPending } = useUpdateJobPayment();
   const [uploadingFor, setUploadingFor] = useState<'advance' | 'remaining' | null>(null);
   const [customAmount, setCustomAmount] = useState<number>(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const isStaff = isAdmin || isEmployee;
 
@@ -47,6 +48,23 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
       onSuccess: () => {
         setUploadingFor(null);
         setCustomAmount(0);
+        setSelectedFile(null);
+      }
+    });
+  };
+
+  const handleConfirmPayment = (type: 'advance' | 'remaining') => {
+    updatePayment({
+      jobId: job.id,
+      type,
+      paid: true,
+      amount: customAmount,
+      file: selectedFile || undefined
+    }, {
+      onSuccess: () => {
+        setUploadingFor(null);
+        setCustomAmount(0);
+        setSelectedFile(null);
       }
     });
   };
@@ -54,6 +72,7 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
   const openVerification = (type: 'advance' | 'remaining') => {
     const defaultAmt = type === 'advance' ? (Number(job.advance_due_amount) || 0) : (Number(job.remaining_due_amount) || 0);
     setCustomAmount(defaultAmt);
+    setSelectedFile(null);
     setUploadingFor(type);
   };
 
@@ -247,8 +266,7 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
               <div className="space-y-3">
                 {uploadingFor === 'advance' ? (
                   <div className="p-4 bg-black/20 rounded-xl border border-dashed border-border space-y-4">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase font-bold mb-2">Verify Received Amount</p>
-                    <div className="space-y-2">
+                     <div className="space-y-2">
                        <label className="text-[10px] text-muted-foreground">Actual OMR Received:</label>
                        <input 
                          type="number" 
@@ -256,7 +274,22 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
                          onChange={(e) => setCustomAmount(Number(e.target.value))}
                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground font-mono text-sm focus:border-gold outline-none"
                        />
-                    </div>
+                     </div>
+                     <div className="space-y-2">
+                       <label className="text-[10px] text-muted-foreground">Upload Invoice/Receipt (PDF/Image):</label>
+                       <input 
+                         type="file" 
+                         accept="application/pdf,image/*"
+                         onChange={(e) => {
+                           const file = e.target.files?.[0];
+                           if (file) setSelectedFile(file);
+                         }}
+                         className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-xs focus:border-gold outline-none"
+                       />
+                       {selectedFile && (
+                         <p className="text-[9px] text-emerald-400 font-bold truncate">Selected: {selectedFile.name}</p>
+                       )}
+                     </div>
                      <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10 mb-4">
                         <div className="flex justify-between items-center text-[10px] text-muted-foreground mb-1">
                           <span>Resulting Final Balance:</span>
@@ -270,7 +303,7 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
                         </div>
                      </div>
                       <button 
-                        onClick={() => handleTogglePaid('advance', false, undefined, customAmount)}
+                        onClick={() => handleConfirmPayment('advance')}
                        className="w-full py-2.5 bg-emerald-500 text-[#0A0F1E] text-xs font-bold rounded-lg hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/10"
                      >
                        Confirm {customAmount.toLocaleString()} OMR & Unlock Workflow
@@ -346,8 +379,23 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground font-mono text-sm focus:border-gold outline-none"
                        />
                     </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] text-muted-foreground">Upload Invoice/Receipt (PDF/Image):</label>
+                       <input 
+                         type="file" 
+                         accept="application/pdf,image/*"
+                         onChange={(e) => {
+                           const file = e.target.files?.[0];
+                           if (file) setSelectedFile(file);
+                         }}
+                         className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-xs focus:border-gold outline-none"
+                       />
+                       {selectedFile && (
+                         <p className="text-[9px] text-emerald-400 font-bold truncate">Selected: {selectedFile.name}</p>
+                       )}
+                    </div>
                     <button 
-                      onClick={() => handleTogglePaid('remaining', false, undefined, customAmount)}
+                      onClick={() => handleConfirmPayment('remaining')}
                       className="w-full py-2.5 bg-emerald-500 text-[#0A0F1E] text-xs font-bold rounded-lg hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/10"
                     >
                       Confirm Final Settlement

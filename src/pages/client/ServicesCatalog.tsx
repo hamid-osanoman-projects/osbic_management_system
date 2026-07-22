@@ -40,7 +40,7 @@ const ServicesCatalog = () => {
   const { data: assignedEmployee } = useLastAssignedEmployee(profile?.id);
   const { createInterest } = useSupport();
 
-  const [activeTab, setActiveTab] = useState<'packages' | 'services'>('packages');
+  const [activeTab, setActiveTab] = useState<'packages' | 'services'>('services');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
@@ -125,6 +125,15 @@ Please guide me on the documents and fees required to initiate this project. Tha
           {/* Toggle Switch */}
           <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 self-start shrink-0 shadow-inner">
             <button 
+              onClick={() => setActiveTab('services')}
+              className={cn(
+                "px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                activeTab === 'services' ? "bg-primary text-primary-foreground shadow-lg scale-105" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Briefcase size={14} strokeWidth={2.5} /> Services
+            </button>
+            <button 
               onClick={() => setActiveTab('packages')}
               className={cn(
                 "px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
@@ -132,15 +141,6 @@ Please guide me on the documents and fees required to initiate this project. Tha
               )}
             >
               <Boxes size={14} strokeWidth={2.5} /> Packages
-            </button>
-            <button 
-              onClick={() => setActiveTab('services')}
-              className={cn(
-                "px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                activeTab === 'services' ? "bg-primary text-primary-foreground shadow-lg scale-105" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Briefcase size={14} strokeWidth={2.5} /> Individual
             </button>
           </div>
         </div>
