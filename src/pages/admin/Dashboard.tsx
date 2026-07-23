@@ -151,15 +151,37 @@ const Dashboard = () => {
           <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={revenue ?? []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsla(var(--border), 0.1)" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148,163,184,0.12)" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'currentColor', opacity: 0.6, fontSize: 12, fontWeight: 700 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: 'currentColor', opacity: 0.6, fontSize: 12 }} />
                 <Tooltip
-                  cursor={{ fill: 'hsla(var(--primary), 0.05)' }}
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--primary))', borderRadius: 16, border: '1px solid hsla(var(--primary), 0.2)', color: 'hsl(var(--foreground))', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
+                  cursor={{ fill: 'rgba(148,163,184,0.1)' }}
+                  wrapperStyle={{ zIndex: 50, outline: 'none' }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    return (
+                      <div style={{
+                        background: 'var(--card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 14,
+                        padding: '12px 18px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                        minWidth: 180,
+                      }}>
+                        <p style={{ color: 'var(--foreground)', fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{label}</p>
+                        {payload.map((entry: any) => (
+                          <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: '50%', background: entry.fill, display: 'inline-block', flexShrink: 0 }} />
+                            <span style={{ color: 'var(--muted-foreground)', fontSize: 12, fontWeight: 600 }}>{entry.name}:</span>
+                            <span style={{ color: 'var(--foreground)', fontSize: 12, fontWeight: 700 }}>{entry.value?.toLocaleString()} OMR</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }}
                 />
                 <Legend iconType="circle" wrapperStyle={{ paddingTop: 20, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
-                <Bar dataKey="service" name="Agency Revenue" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} barSize={24} />
+                <Bar dataKey="service" name="Agency Revenue" fill="#D4AF37" radius={[6, 6, 0, 0]} barSize={24} />
                 <Bar dataKey="ministry" name="Ministry Fees" fill="#3B82F6" radius={[6, 6, 0, 0]} barSize={24} />
               </BarChart>
             </ResponsiveContainer>

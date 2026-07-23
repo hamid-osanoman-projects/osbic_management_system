@@ -86,6 +86,13 @@ const Clients = () => {
           <h1 className="text-2xl font-syne font-bold text-foreground">Client Portal Registry</h1>
           <p className="text-sm text-muted-foreground">Manage multi-portal client accounts and business profiles</p>
         </div>
+        <button
+          onClick={() => setIsRegisterOpen(true)}
+          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all shadow-lg shadow-primary/20 shrink-0"
+        >
+          <UserPlus size={16} />
+          Register Client
+        </button>
       </div>
 
       {/* Stats Summary */}

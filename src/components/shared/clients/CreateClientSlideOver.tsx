@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, User, Mail, 
   Phone, Shield, Loader2, 
@@ -106,7 +107,7 @@ const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit }: Props) => {
     onClose();
   };
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
@@ -378,7 +379,8 @@ const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit }: Props) => {
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 };
 
