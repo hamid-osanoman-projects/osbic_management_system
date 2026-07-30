@@ -18,6 +18,7 @@ import DocumentsTab from '../../components/jobs/DocumentsTab';
 import FinancialsTab from '../../components/jobs/FinancialsTab';
 import MessagesTab from '../../components/jobs/MessagesTab';
 import ActivityLogTab from '../../components/jobs/ActivityLogTab';
+import { JobTimelinePanel } from '../../components/jobs/JobTimelinePanel';
 import DeleteJobModal from '../../components/jobs/DeleteJobModal';
 import JobDeletionRequestModal from '../../components/jobs/JobDeletionRequestModal';
 import { useAdminDeleteJob, useRequestJobDeletion } from '../../hooks/shared/useJobs';
@@ -39,7 +40,7 @@ const JobDetail = () => {
   const currentUserType = isAdmin ? 'admin' : isEmployee ? 'employee' : 'client'; // basic proxy
   
   const { data, isLoading } = useJobDetail(id || '');
-  const [activeTab, setActiveTab] = useState<'workflow' | 'documents' | 'financials' | 'messages' | 'logs'>('workflow');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'documents' | 'financials' | 'messages' | 'logs'>('timeline');
   const [hasCelebrated, setHasCelebrated] = useState(false);
   
   // Deletion States
@@ -82,7 +83,7 @@ const JobDetail = () => {
   const showFinanceWarning = !job.remaining_paid && job.remaining_due_amount > 0 && stepsRemaining <= 2;
 
   const tabs = [
-    { id: 'workflow', label: 'Workflow Progress', icon: LayoutTemplate },
+    { id: 'timeline', label: 'Timeline & Progress', icon: Clock },
     { id: 'documents', label: 'Documents', icon: FolderOpen, count: documents.length },
     { id: 'financials', label: 'Financials', icon: DollarSign },
     { id: 'messages', label: 'Chat Support', icon: MessageCircle, count: unreadCount > 0 ? unreadCount : undefined },
@@ -204,10 +205,10 @@ const JobDetail = () => {
               {!isAdmin && (
                 <>
                   <button 
-                    onClick={() => setActiveTab('workflow')}
+                    onClick={() => setActiveTab('timeline')}
                     className={cn(
                       "px-4 py-2 border rounded-xl bg-muted/50 text-sm font-medium transition-all active:scale-95",
-                      activeTab === 'workflow' ? "border-gold text-primary" : "border-border text-foreground hover:bg-white/10"
+                      activeTab === 'timeline' ? "border-gold text-primary" : "border-border text-foreground hover:bg-white/10"
                     )}
                   >
                     Update Status
@@ -334,7 +335,16 @@ const JobDetail = () => {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
           >
-             {activeTab === 'workflow' && <WorkflowProgressTab job={job} steps={steps} isEmployee={isEmployee} isAdmin={isAdmin} onSwitchTab={setActiveTab} />}
+             {activeTab === 'timeline' && (
+               <JobTimelinePanel 
+                 jobId={job.id} 
+                 job={job} 
+                 steps={steps} 
+                 isEmployee={isEmployee} 
+                 isAdmin={isAdmin} 
+                 onSwitchTab={setActiveTab} 
+               />
+             )}
              {activeTab === 'documents' && <DocumentsTab jobId={job.id} documents={documents} isEmployee={isEmployee} isAdmin={isAdmin} />}
              {activeTab === 'financials' && <FinancialsTab job={job} steps={steps} isAdmin={isAdmin} isEmployee={isEmployee} />}
              {activeTab === 'messages' && <MessagesTab jobId={job.id} messages={messages} isAdmin={isAdmin} currentUserType={currentUserType as any} scope="staff_client" />}

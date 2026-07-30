@@ -5,26 +5,12 @@ import { useAdminPackages } from '../../hooks/admin/useAdminPackages';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   X, Zap, Search, ChevronRight, User, 
-  Building2, Briefcase, Plus, GripVertical, CheckCircle2, ArrowLeft, ArrowRight 
+  Building2, Briefcase, Plus, CheckCircle2, ArrowLeft, ArrowRight,
+  Hash, Users, Shield, GitBranch, Layers
 } from 'lucide-react';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '../../lib/supabase';
 import CreateClientSlideOver from '../shared/clients/CreateClientSlideOver';
+import toast from 'react-hot-toast';
 
 // SortableStep from previous implementation, styled for dark theme
 const SortableStep = ({ step, onRemove, onAssign, onUpdate, employees, currentUserId }: any) => {
@@ -116,6 +102,23 @@ const SortableStep = ({ step, onRemove, onAssign, onUpdate, employees, currentUs
   );
 };
 
+// Per-service quantity + fee line item for the wizard
+interface ServiceLineItem {
+  service_id: string;
+  service_name: string;
+  service_name_ar: string;
+  quantity: number;
+  work_fee: number;
+  ministry_fee: number;
+  is_optional: boolean;
+  is_parallel: boolean;
+  notes: string;
+  estimated_days_min: number;
+  estimated_days_max: number;
+  requires_pro: boolean;
+  isCustom?: boolean;
+}
+
 export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, onJobCreated: () => void }) => {
   const { profile } = useAuth();
   const { data: services, isLoading: loadingServices } = useAdminServices();
@@ -137,19 +140,12 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
   const [serviceTab, setServiceTab] = useState<'services' | 'packages'>('services');
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
-  const [packageServices, setPackageServices] = useState<any[]>([]);
-  const [isAddingCustomService, setIsAddingCustomService] = useState(false);
-  const [customServiceName, setCustomServiceName] = useState('');
-  const [isServiceDropdownOpen, setIsServiceDropdownOpen] = useState(false);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
 
-  // Step 3: Configuration
-  const [serviceFee, setServiceFee] = useState<number>(0);
-  const [ministryFee, setMinistryFee] = useState<number>(0);
+  // Step 3: Configuration — service line items with quantities & fees
+  const [serviceLines, setServiceLines] = useState<ServiceLineItem[]>([]);
   const [assignedTo, setAssignedTo] = useState<string>('');
-
-  // Step 4: Workflow Canvas
-  const [customSteps, setCustomSteps] = useState<any[]>([]);
+  const [entryType, setEntryType] = useState<'lead' | 'walkin' | 'direct' | 'renewal'>('direct');
 
   // Init Data
   useEffect(() => {
@@ -160,7 +156,6 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
       if (clis) setClients(clis);
     };
     fetchDropdownData();
-    
     if (profile) setAssignedTo(profile.id);
   }, [profile]);
 
@@ -176,186 +171,116 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
     setStep(2);
   };
 
-  const handleSelectService = async (service: Service) => {
+  const handleSelectService = (service: Service) => {
     setSelectedService(service);
     setSelectedPackage(null);
-    setServiceFee(service.work_fee || 0);
-    setMinistryFee(service.ministry_fee || 0);
-    
-    // Pre-fetch workflow steps for Step 4
-    const { data: wfSteps } = await supabase
-      .from('workflow_steps')
-      .select('*')
-      .eq('service_id', service.id)
-      .order('step_order', { ascending: true });
-
-    if (wfSteps) {
-      setCustomSteps((wfSteps as any[]).map(st => ({
-        ...st,
-        id: `template-${st.id}`,
-        original_step_id: st.id,
-        assigned_to: assignedTo
-      })));
-    } else {
-      setCustomSteps([]);
-    }
+    setServiceLines([{
+      service_id: service.id,
+      service_name: service.name_en,
+      service_name_ar: service.name_ar,
+      quantity: 1,
+      work_fee: service.work_fee || 0,
+      ministry_fee: service.ministry_fee || 0,
+      is_optional: false,
+      is_parallel: false,
+      notes: '',
+      estimated_days_min: service.estimated_days || 0,
+      estimated_days_max: service.estimated_days || 0,
+      requires_pro: service.requires_pro || false,
+    }]);
   };
 
-  const handleSelectPackage = async (pkg: any) => {
+  const handleSelectPackage = (pkg: any) => {
     setSelectedPackage(pkg);
     setSelectedService(null);
-    setPackageServices(pkg.services || []);
-    
-    const totalWorkFee = pkg.services.reduce((acc: number, s: any) => acc + (s.work_fee || 0), 0);
-    const totalMinFee = pkg.services.reduce((acc: number, s: any) => acc + (s.ministry_fee || 0), 0);
-    const discount = pkg.discount_percentage || 0;
-    const discountedWorkFee = totalWorkFee * (1 - (discount / 100));
-    
-    setServiceFee(discountedWorkFee);
-    setMinistryFee(totalMinFee);
-  };
-
-  // DnD Setup
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = (event: any) => {
-    const { active, over } = event;
-    if (active.id !== over.id) {
-      setCustomSteps((items) => {
-        const oldIndex = items.findIndex(i => i.id === active.id);
-        const newIndex = items.findIndex(i => i.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
+    // Map PackageServiceRelation → ServiceLineItem
+    const lines: ServiceLineItem[] = (pkg.services || []).map((ps: any) => {
+      const svc = ps.service || ps;
+      return {
+        service_id: ps.service_id || svc.id,
+        service_name: svc.name_en || '',
+        service_name_ar: svc.name_ar || '',
+        quantity: ps.default_quantity || 1,
+        work_fee: svc.work_fee || 0,
+        ministry_fee: svc.ministry_fee || 0,
+        is_optional: ps.is_optional || false,
+        is_parallel: ps.is_parallel || false,
+        notes: ps.notes || '',
+        estimated_days_min: ps.estimated_days_min || 0,
+        estimated_days_max: ps.estimated_days_max || 0,
+        requires_pro: svc.requires_pro || false,
+      };
+    });
+    setServiceLines(lines);
   };
 
   const handleInitiateJob = async () => {
-    if ((!selectedService && !selectedPackage) || !selectedClient) return;
+    if (serviceLines.length === 0 || !selectedClient) return;
     setIsCreating(true);
 
     try {
-      if (selectedPackage) {
-        const jobCodePrefix = `JOB-${Math.floor(Math.random() * 100000)}`;
-        
-        // Fetch default workflow steps for all selected package services
-        const serviceIds = packageServices.map(s => s.id);
-        const { data: defaultSteps } = await supabase
-          .from('workflow_steps')
-          .select('*')
-          .in('service_id', serviceIds)
-          .order('step_order', { ascending: true });
+      // Calculate totals from service lines
+      const totalWork = serviceLines.reduce((s, l) => s + (l.work_fee * l.quantity), 0);
+      const totalMin = serviceLines.reduce((s, l) => s + (l.ministry_fee * l.quantity), 0);
+      const primaryService = serviceLines[0];
 
-        for (let i = 0; i < packageServices.length; i++) {
-           let srv = packageServices[i];
-           
-           // If it's a custom on-the-fly service, insert it first
-           if (srv.isNew) {
-              const { data: newSrv, error: createSrvErr } = await supabase.from('services').insert({
-                 name_en: srv.name_en,
-                 name_ar: srv.name_en,
-                 category: 'other',
-                 icon: 'Briefcase',
-                 description_en: 'Custom requirement for client',
-                 description_ar: 'متطلب خاص للعميل',
-                 is_active: false,
-                 estimated_days: 7,
-                 work_fee: 0,
-                 ministry_fee: 0
-              } as any).select().single() as any;
-              
-              if (createSrvErr) throw createSrvErr;
-              srv = newSrv;
-           }
+      // 1. Create the master Job record
+      const { data: jobData, error: jobError } = await (supabase.from('jobs').insert({
+        job_code: `JOB-${Math.floor(Math.random() * 100000)}`,
+        client_id: selectedClient.id,
+        employee_id: profile?.id,
+        assigned_by: profile?.id,
+        service_id: primaryService.service_id,
+        status: 'draft',
+        total_fee: totalWork + totalMin,
+        work_fee: totalWork,
+        ministry_fee: totalMin,
+        ministry_fee_type: 'fixed',
+        advance_percentage: 0,
+        advance_amount: 0,
+        remaining_amount: totalWork + totalMin,
+        advance_paid: false,
+        remaining_paid: false,
+        entry_type: entryType,
+        sales_employee_id: profile?.id,
+        ops_employee_id: assignedTo || profile?.id,
+      } as any).select().single() as any);
 
-           const jWorkFee = i === 0 ? serviceFee : 0;
-           const jMinFee = i === 0 ? ministryFee : 0;
-           
-           const { data: jobData, error: jobError } = await supabase.from('jobs').insert({
-              job_code: `${jobCodePrefix}-${i+1}`,
-              client_id: selectedClient.id,
-              employee_id: profile?.id,
-              assigned_by: profile?.id,
-              service_id: srv.id,
-              status: 'draft',
-              total_fee: jWorkFee + jMinFee,
-              work_fee: jWorkFee,
-              ministry_fee: jMinFee,
-              ministry_fee_type: 'fixed',
-              advance_percentage: 0,
-              advance_amount: 0,
-              remaining_amount: jWorkFee + jMinFee,
-              advance_paid: false,
-              remaining_paid: false,
-           } as any).select().single();
-           
-           if (jobError) throw jobError;
-           
-           const serviceSteps = (defaultSteps || []).filter(st => st.service_id === srv.id);
-           
-           const stepsToInsert = serviceSteps.map(st => ({
-              job_id: jobData.id,
-              workflow_step_id: st.id,
-              custom_name: null,
-              assigned_to: assignedTo,
-              assigned_by: profile?.id,
-              status: 'pending',
-              is_client_visible: st.is_client_visible,
-              notes: null
-           }));
-           
-           if (stepsToInsert.length > 0) {
-              const { error: stepsError } = await supabase.from('job_steps').insert(stepsToInsert as any);
-              if (stepsError) throw stepsError;
-           }
-        }
-      } else if (selectedService) {
-        const { data, error: jobError } = await supabase.from('jobs').insert({
-          job_code: `JOB-${Math.floor(Math.random() * 100000)}`,
-          client_id: selectedClient.id,
-          employee_id: profile?.id,
-          assigned_by: profile?.id,
-          service_id: selectedService.id,
-          status: 'draft',
-          total_fee: serviceFee + ministryFee,
-          work_fee: serviceFee,
-          ministry_fee: ministryFee,
-          ministry_fee_type: 'fixed',
-          advance_percentage: 0,
-          advance_amount: 0,
-          remaining_amount: serviceFee + ministryFee,
-          advance_paid: false,
-          remaining_paid: false,
-        } as any).select().single();
+      if (jobError) throw jobError;
+      const job = jobData;
 
-        if (jobError) throw jobError;
-        const job = data as any;
-
-        const stepsToInsert = customSteps.map((st) => ({
+      // 2. Create job_services rows — one per applicant per service
+      let displayOrder = 1;
+      for (const line of serviceLines) {
+        // Create quantity copies for this service
+        const rows = Array.from({ length: line.quantity }, (_, i) => ({
           job_id: job.id,
-          workflow_step_id: st.original_step_id || null,
-          custom_name: st.is_custom ? st.name_en : null,
-          assigned_to: st.assigned_to,
-          assigned_by: profile?.id,
+          service_id: line.service_id,
+          service_name: line.service_name,
+          display_order: displayOrder + i,
+          quantity: line.quantity,
+          item_number: i + 1,
+          applicant_name: null,
           status: 'pending',
-          is_client_visible: true,
-          notes: st.is_custom ? `Custom Step: ${st.description_en}` : null
+          work_fee: line.work_fee,
+          ministry_fee: line.ministry_fee,
+          total_fee: line.work_fee + line.ministry_fee,
+          ops_employee_id: assignedTo || profile?.id,
+          assigned_by: profile?.id,
+          assigned_at: new Date().toISOString(),
+          notes: line.notes || null,
         }));
 
-        if (stepsToInsert.length > 0) {
-          const { error: stepsError } = await supabase.from('job_steps').insert(stepsToInsert as any);
-          if (stepsError) throw stepsError;
-        }
+        const { error: svcErr } = await (supabase.from('job_services').insert(rows as any) as any);
+        if (svcErr) throw svcErr;
+        displayOrder += line.quantity;
       }
 
+      toast.success('Job created successfully!');
       onJobCreated();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to initiate job');
+      toast.error(err.message || 'Failed to initiate job');
     } finally {
       setIsCreating(false);
     }
@@ -582,259 +507,175 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
             </motion.div>
           )}
 
-          {/* STEP 3: CONFIGURATION */}
+          {/* STEP 3: CONFIGURE QUANTITIES & FEES */}
           {step === 3 && (
             <motion.div 
               key="step3"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="max-w-3xl mx-auto space-y-6"
+              className="space-y-6 max-w-4xl mx-auto"
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 {/* Financials Box */}
-                 <div className="bg-[#131824] border border-white/10 rounded-[32px] p-8">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-4">Target {selectedPackage ? 'Package' : 'Service'}</p>
-                    <h3 className="text-2xl font-bold font-syne text-white mb-8">{selectedPackage ? selectedPackage.name_en : selectedService?.name_en}</h3>
-                    
-                    <div className="space-y-4 mb-8 border-b border-white/10 pb-8">
-                       <div className="flex items-center justify-between group">
-                          <span className="text-[11px] font-bold uppercase tracking-widest text-white/70">Service Fee</span>
-                          <div className="flex items-center gap-3">
-                             <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">OMR</span>
-                             <input 
-                               type="number"
-                               value={serviceFee}
-                               onChange={(e) => setServiceFee(Number(e.target.value))}
-                               className="w-24 bg-black/40 border border-white/10 focus:border-gold rounded-lg px-3 py-2 text-right text-sm font-bold text-white outline-none transition-colors"
-                             />
-                          </div>
-                       </div>
-                       <div className="flex items-center justify-between group">
-                          <span className="text-[11px] font-bold uppercase tracking-widest text-white/70">Ministry Fee</span>
-                          <div className="flex items-center gap-3">
-                             <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">OMR</span>
-                             <input 
-                               type="number"
-                               value={ministryFee}
-                               onChange={(e) => setMinistryFee(Number(e.target.value))}
-                               className="w-24 bg-black/40 border border-white/10 focus:border-gold rounded-lg px-3 py-2 text-right text-sm font-bold text-white outline-none transition-colors"
-                             />
-                          </div>
-                       </div>
-                    </div>
-                    
-                    <div className="flex items-end justify-between">
-                       <span className="text-[10px] font-bold uppercase tracking-widest text-gold">Launch Total</span>
-                       <span className="text-3xl font-bold text-white">{(serviceFee + ministryFee).toFixed(2)} <span className="text-sm text-white/50">OMR</span></span>
-                    </div>
-                 </div>
-
-                 {/* Assignment Box */}
-                 <div className="space-y-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/50">Ownership Assignment</p>
-                    <div className="bg-[#131824] border border-white/10 hover:border-white/30 transition-all rounded-3xl p-6 flex items-center gap-4 cursor-pointer">
-                       <div className="w-12 h-12 rounded-full bg-[#1e3a8a] flex items-center justify-center text-blue-100 font-bold text-lg font-syne">
-                         {employees.find(e => e.id === assignedTo)?.full_name?.charAt(0) || 'A'}
-                       </div>
-                       <div>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-400 mb-1">
-                            {assignedTo === profile?.id ? 'Self-Assigned' : 'Delegated to Coworker'}
-                          </p>
-                          <select
-                            value={assignedTo}
-                            onChange={(e) => setAssignedTo(e.target.value)}
-                            className="bg-transparent text-white font-bold text-lg outline-none cursor-pointer appearance-none"
-                          >
-                             {employees.map(emp => (
-                               <option key={emp.id} value={emp.id} className="bg-[#131824] text-sm">
-                                 {emp.full_name}
-                               </option>
-                             ))}
-                          </select>
-                       </div>
-                    </div>
-                 </div>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="font-syne font-bold text-lg">
+                    {selectedPackage ? selectedPackage.name_en : selectedService?.name_en}
+                  </h3>
+                  <p className="text-xs text-white/40 mt-1">
+                    {selectedPackage ? `Package · ${serviceLines.length} service(s)` : 'Single Service'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Total</p>
+                  <p className="text-2xl font-bold font-syne text-gold">
+                    {(serviceLines.reduce((s, l) => s + (l.work_fee + l.ministry_fee) * l.quantity, 0)).toFixed(2)}
+                    <span className="text-sm text-white/40 ml-1">OMR</span>
+                  </p>
+                </div>
               </div>
-            </motion.div>
-          )}
 
-          {/* STEP 4: WORKFLOW CANVAS */}
-          {step === 4 && (
-            <motion.div 
-              key="step4"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="space-y-6"
-            >
-              <div className="flex items-center justify-between mb-4 bg-black/20 p-4 rounded-2xl border border-white/5">
-                <h3 className="font-syne font-bold text-lg flex items-center gap-2">
-                  <Building2 size={18} className="text-gold" />
-                  {selectedPackage ? 'Package Contents: ' + selectedPackage.name_en : 'Editing Canvas: ' + selectedService?.name_en}
-                </h3>
-                <span className="text-xs bg-gold/10 text-gold px-3 py-1 rounded-full font-bold border border-gold/20">
-                  {selectedPackage ? `${packageServices.length} Services` : `${customSteps.length} Steps`}
-                </span>
-              </div>
-              
-              {selectedPackage ? (
-                <div className="space-y-3">
-                  {packageServices.map((srv: any) => (
-                    <div key={srv.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-white/50">
-                          <Building2 size={20} />
-                        </div>
-                        <div>
-                          <p className="font-syne font-bold text-white text-sm">{srv.name_en}</p>
-                          <p className="text-xs text-white/50 line-clamp-1">{srv.description_en || 'Standard Service'}</p>
+              {/* Service Lines Table */}
+              <div className="space-y-3">
+                {serviceLines.map((line, idx) => (
+                  <div key={line.service_id + idx} className="bg-[#131824] border border-white/10 rounded-2xl p-5">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center text-gold text-xs font-bold">{idx + 1}</div>
+                      <div className="flex-1">
+                        <p className="font-bold text-white text-sm">{line.service_name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {line.requires_pro && (
+                            <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
+                              <Shield size={8} /> PRO Required
+                            </span>
+                          )}
+                          {line.is_optional && (
+                            <span className="text-[9px] font-bold text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded uppercase tracking-widest">Optional</span>
+                          )}
+                          {line.is_parallel && (
+                            <span className="text-[9px] font-bold text-purple-400 bg-purple-400/10 px-1.5 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
+                              <GitBranch size={8} /> Parallel
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <button 
-                        onClick={() => setPackageServices(packageServices.filter(s => s.id !== srv.id))}
-                        className="p-2 text-white/40 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                        title="Remove Service"
-                      >
-                        <X size={16} />
-                      </button>
                     </div>
-                  ))}
-                  
-                  <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="relative flex-1">
-                        <div 
-                          className="w-full bg-black/20 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-sm text-white/50 hover:text-white cursor-pointer flex justify-between items-center transition-all"
-                          onClick={() => setIsServiceDropdownOpen(!isServiceDropdownOpen)}
-                        >
-                          <span className="flex items-center gap-2"><Plus size={16} /> Add Existing Service...</span>
-                          <ChevronRight size={16} className={`transform transition-transform ${isServiceDropdownOpen ? 'rotate-90' : ''}`} />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end mt-4">
+                      {/* Quantity */}
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-1">
+                          <Users size={10} /> Applicants
+                        </label>
+                        <div className="flex items-center bg-black/30 border border-white/10 rounded-xl p-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newLines = [...serviceLines];
+                              newLines[idx].quantity = Math.max(1, newLines[idx].quantity - 1);
+                              setServiceLines(newLines);
+                            }}
+                            className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xs font-bold transition-colors"
+                          >−</button>
+                          <span className="flex-1 text-center text-white font-bold text-sm">{line.quantity}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newLines = [...serviceLines];
+                              newLines[idx].quantity = newLines[idx].quantity + 1;
+                              setServiceLines(newLines);
+                            }}
+                            className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xs font-bold transition-colors"
+                          >+</button>
                         </div>
-
-                        {isServiceDropdownOpen && (
-                          <div className="absolute top-full left-0 right-0 mt-2 bg-[#131824] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col">
-                            <div className="p-2 border-b border-white/5 relative">
-                               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={14} />
-                               <input 
-                                 type="text"
-                                 placeholder="Search services..."
-                                 value={serviceSearchQuery}
-                                 onChange={e => setServiceSearchQuery(e.target.value)}
-                                 className="w-full bg-black/20 border border-white/5 rounded-lg pl-8 pr-3 py-2 text-xs text-white outline-none focus:border-gold transition-colors"
-                                 autoFocus
-                               />
-                            </div>
-                            <div className="max-h-[200px] overflow-y-auto p-1 custom-scrollbar">
-                              {services
-                                ?.filter(s => s.is_active)
-                                ?.filter(s => !packageServices.find(ps => ps.id === s.id))
-                                ?.filter(s => s.name_en.toLowerCase().includes(serviceSearchQuery.toLowerCase()) || s.name_ar.includes(serviceSearchQuery))
-                                .map(s => (
-                                  <button
-                                    key={s.id}
-                                    onClick={() => {
-                                      setPackageServices([...packageServices, s]);
-                                      setIsServiceDropdownOpen(false);
-                                      setServiceSearchQuery('');
-                                    }}
-                                    className="w-full text-left px-3 py-2.5 text-sm text-white/70 hover:text-white hover:bg-gold/10 rounded-lg transition-colors flex items-center justify-between group"
-                                  >
-                                    {s.name_en}
-                                    <Plus size={14} className="opacity-0 group-hover:opacity-100 text-gold transition-opacity" />
-                                  </button>
-                              ))}
-                              {services?.filter(s => !packageServices.find(ps => ps.id === s.id) && (s.name_en.toLowerCase().includes(serviceSearchQuery.toLowerCase()) || s.name_ar.includes(serviceSearchQuery))).length === 0 && (
-                                <div className="p-4 text-center text-white/30 text-xs">No services found matching your search.</div>
-                              )}
-                            </div>
-                          </div>
-                        )}
                       </div>
 
-                      <button 
-                        onClick={() => {
-                          setIsAddingCustomService(!isAddingCustomService);
-                          setIsServiceDropdownOpen(false);
-                        }}
-                        className={`px-6 py-3 border rounded-xl text-xs font-bold uppercase tracking-widest transition-colors whitespace-nowrap ${
-                          isAddingCustomService 
-                            ? 'bg-gold/10 border-gold/30 text-gold' 
-                            : 'bg-white/5 hover:bg-white/10 border-white/10 text-white'
-                        }`}
-                      >
-                        + Custom
-                      </button>
+                      {/* Work Fee */}
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest">Work Fee / item</label>
+                        <div className="flex items-center gap-1.5 bg-black/30 border border-white/10 focus-within:border-gold rounded-xl px-3 py-2 transition-colors min-w-0">
+                          <span className="text-white/30 text-[9px] font-bold shrink-0">OMR</span>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={line.work_fee}
+                            onChange={(e) => {
+                              const newLines = [...serviceLines];
+                              newLines[idx].work_fee = Number(e.target.value);
+                              setServiceLines(newLines);
+                            }}
+                            className="w-full min-w-0 bg-transparent outline-none text-sm text-white font-bold text-right"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Ministry Fee */}
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest">Ministry Fee / item</label>
+                        <div className="flex items-center gap-1.5 bg-black/30 border border-white/10 focus-within:border-gold rounded-xl px-3 py-2 transition-colors min-w-0">
+                          <span className="text-white/30 text-[9px] font-bold shrink-0">OMR</span>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={line.ministry_fee}
+                            onChange={(e) => {
+                              const newLines = [...serviceLines];
+                              newLines[idx].ministry_fee = Number(e.target.value);
+                              setServiceLines(newLines);
+                            }}
+                            className="w-full min-w-0 bg-transparent outline-none text-sm text-white font-bold text-right"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Line Total */}
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest">Line Total</label>
+                        <div className="bg-gold/10 border border-gold/20 rounded-xl px-3 py-2 text-right h-[38px] flex items-center justify-end">
+                          <span className="text-gold font-bold text-xs">
+                            {((line.work_fee + line.ministry_fee) * line.quantity).toFixed(3)} OMR
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    
-                    {isAddingCustomService && (
-                      <div className="flex items-center gap-2 bg-black/40 p-2 rounded-xl border border-white/10">
-                         <input 
-                           type="text"
-                           value={customServiceName}
-                           onChange={e => setCustomServiceName(e.target.value)}
-                           placeholder="Type custom service name..."
-                           className="flex-1 bg-transparent border-none text-sm text-white px-2 py-1 outline-none"
-                           autoFocus
-                         />
-                         <button 
-                           onClick={() => {
-                             if (customServiceName.trim()) {
-                               setPackageServices([...packageServices, { 
-                                 id: `custom-${Date.now()}`, 
-                                 name_en: customServiceName.trim(), 
-                                 description_en: 'Custom client requirement',
-                                 isNew: true 
-                               }]);
-                               setCustomServiceName('');
-                               setIsAddingCustomService(false);
-                             }
-                           }}
-                           className="px-4 py-2 bg-gold text-black font-bold text-xs uppercase rounded-lg hover:bg-yellow-500 transition-colors"
-                         >
-                           Add
-                         </button>
-                      </div>
+
+                    {line.notes && (
+                      <p className="mt-3 text-[10px] text-white/30 italic border-t border-white/5 pt-3">{line.notes}</p>
                     )}
                   </div>
-                </div>
-              ) : (
-                <>
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                    <SortableContext items={customSteps} strategy={verticalListSortingStrategy}>
-                      <div className="space-y-3">
-                        {customSteps.map(st => (
-                           <SortableStep 
-                             key={st.id} 
-                             step={st} 
-                             onRemove={(id: string) => setCustomSteps(customSteps.filter(s => s.id !== id))}
-                             onAssign={(id: string, empId: string) => setCustomSteps(customSteps.map(s => s.id === id ? { ...s, assigned_to: empId } : s))}
-                             onUpdate={(id: string, updates: any) => setCustomSteps(customSteps.map(s => s.id === id ? { ...s, ...updates } : s))}
-                             employees={employees}
-                             currentUserId={profile?.id}
-                           />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
+                ))}
+              </div>
 
-                  <button 
-                    onClick={() => {
-                      const newStep = {
-                        id: `custom-${Date.now()}`,
-                        name_en: 'New Custom Step',
-                        description_en: 'Edit description...',
-                        assigned_to: profile?.id,
-                        is_custom: true
-                      };
-                      setCustomSteps([...customSteps, newStep]);
-                    }}
-                    className="w-full py-4 mt-4 border-2 border-dashed border-white/10 rounded-xl text-white/40 hover:text-gold hover:border-gold/30 hover:bg-gold/5 transition-all flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-widest"
+              {/* Assignment */}
+              <div className="bg-[#131824] border border-white/10 rounded-2xl p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest block">Operations Handler</label>
+                  <select
+                    value={assignedTo}
+                    onChange={(e) => setAssignedTo(e.target.value)}
+                    className="w-full bg-black/30 border border-white/10 focus:border-gold rounded-xl px-4 py-2.5 text-xs text-white font-bold outline-none cursor-pointer transition-colors"
                   >
-                    <Plus size={16} /> Add Custom Step
-                  </button>
-                </>
-              )}
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id} className="bg-[#131824] text-white">
+                        {emp.full_name}{emp.id === profile?.id ? ' (Me)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest block">Entry Type</label>
+                  <select
+                    value={entryType}
+                    onChange={(e) => setEntryType(e.target.value as any)}
+                    className="w-full bg-black/30 border border-white/10 focus:border-gold rounded-xl px-4 py-2.5 text-xs text-white font-bold outline-none cursor-pointer transition-colors"
+                  >
+                    <option value="direct" className="bg-[#131824]">Direct</option>
+                    <option value="lead" className="bg-[#131824]">From Lead</option>
+                    <option value="walkin" className="bg-[#131824]">Walk-in</option>
+                    <option value="renewal" className="bg-[#131824]">Renewal</option>
+                  </select>
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -852,35 +693,29 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
              </button>
            )}
         </div>
-        <div>
+        <div className="flex items-center gap-3">
+           {/* Step indicator */}
+           <div className="flex items-center gap-1.5">
+             {[1,2,3].map(s => (
+               <div key={s} className={`h-1 rounded-full transition-all ${s === step ? 'w-6 bg-gold' : s < step ? 'w-3 bg-gold/40' : 'w-3 bg-white/10'}`} />
+             ))}
+           </div>
            {step === 2 && (
              <button 
                onClick={() => setStep(3)}
-               disabled={!selectedService && !selectedPackage}
-               className="px-8 py-3 bg-[#64748b] hover:bg-[#475569] text-white font-bold rounded-xl shadow-lg transition-all disabled:opacity-30 disabled:scale-100 flex items-center gap-2"
+               disabled={serviceLines.length === 0}
+               className="px-8 py-3 bg-[#64748b] hover:bg-[#475569] text-white font-bold rounded-xl shadow-lg transition-all disabled:opacity-30 flex items-center gap-2"
              >
-               Configure Entry <ArrowRight size={16} />
+               Configure <ArrowRight size={16} />
              </button>
            )}
            {step === 3 && (
              <button 
-               onClick={() => {
-                 // Set assignedTo for all customSteps to the selected assignee if they were defaults
-                 setCustomSteps(steps => steps.map(s => ({...s, assigned_to: assignedTo})));
-                 setStep(4);
-               }}
-               className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all flex items-center gap-2"
-             >
-               Launch Job Workflow <ArrowRight size={16} />
-             </button>
-           )}
-           {step === 4 && (
-             <button 
                onClick={handleInitiateJob}
-               disabled={isCreating}
-               className="px-8 py-3 bg-gold hover:bg-yellow-500 text-black font-bold rounded-xl shadow-[0_0_30px_rgba(212,175,55,0.4)] transition-all disabled:opacity-50"
+               disabled={isCreating || serviceLines.length === 0}
+               className="px-8 py-3 bg-gold hover:bg-yellow-500 text-black font-bold rounded-xl shadow-[0_0_30px_rgba(212,175,55,0.4)] transition-all disabled:opacity-50 flex items-center gap-2"
              >
-               {isCreating ? 'Initiating...' : 'Initiate Job'}
+               {isCreating ? 'Launching...' : (<>Launch Job <Zap size={16} /></>)}
              </button>
            )}
         </div>

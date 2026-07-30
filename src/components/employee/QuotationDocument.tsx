@@ -33,11 +33,11 @@ export const QuotationDocument = forwardRef<HTMLDivElement, QuotationDocumentPro
       <div className="grid grid-cols-2 border border-[#0088cc]/30 mb-8">
         <div className="p-3 border-r border-b border-[#0088cc]/30" style={{ backgroundColor: lightBg }}>
           <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: themeColor }}>Client Name</p>
-          <p className="font-bold text-xs uppercase">{invoice.client?.full_name || 'CLIENT NAME'}</p>
+          <p className="font-bold text-xs uppercase">{invoice.client?.full_name || invoice.lead?.contact_name || 'CLIENT NAME'}</p>
         </div>
         <div className="p-3 border-b border-[#0088cc]/30" style={{ backgroundColor: lightBg }}>
           <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: themeColor }}>Contact</p>
-          <p className="font-bold text-xs uppercase">{invoice.client?.phone || 'CONTACT NUMBER'}</p>
+          <p className="font-bold text-xs uppercase">{invoice.client?.phone || invoice.lead?.contact_phone || 'CONTACT NUMBER'}</p>
         </div>
         <div className="p-3 border-r border-[#0088cc]/30" style={{ backgroundColor: lightBg }}>
           <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: themeColor }}>Prepared By</p>
@@ -91,34 +91,42 @@ export const QuotationDocument = forwardRef<HTMLDivElement, QuotationDocumentPro
 
       {/* Processing Timeline */}
       <div className="mb-6">
-        <div className="py-1 px-3 mb-2 font-bold text-white uppercase tracking-widest text-[10px] flex justify-between" style={{ backgroundColor: themeColor }}>
-          <span>Processing Timeline</span>
-          <span>Payment Schedule</span>
+        <div className="py-1 px-3 mb-2 font-bold text-white uppercase tracking-widest text-[10px]" style={{ backgroundColor: themeColor }}>
+          Processing Timeline
+        </div>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 px-2 text-[10px]">
+          {(() => {
+             let timeline = invoice.metadata?.timeline;
+             if (typeof timeline === 'string') {
+               timeline = timeline.split('\n').filter(Boolean).map((line: string) => {
+                 const [task, ...rest] = line.split(':');
+                 return { task: task?.trim() || '', days: rest.join(':')?.trim() || '' };
+               });
+             }
+             if (!timeline || timeline.length === 0) return <p className="text-gray-400 italic pt-1">No timeline specified.</p>;
+             
+             return timeline.map((item: any, idx: number) => (
+               <div key={idx} className="flex justify-between border-b border-gray-100 pb-1">
+                 <span className="font-medium text-gray-800">{item.task}</span>
+                 <span className="font-bold" style={{ color: themeColor }}>{item.days}</span>
+               </div>
+             ));
+          })()}
+        </div>
+      </div>
+
+      {/* Payment Schedule */}
+      <div className="mb-6">
+        <div className="py-1 px-3 mb-2 font-bold text-white uppercase tracking-widest text-[10px]" style={{ backgroundColor: themeColor }}>
+          Payment Schedule
         </div>
         <div className="grid grid-cols-2 px-2 text-[10px]">
-          <div className="space-y-1 border-r border-[#0088cc]/20 pr-4">
-            {(() => {
-               let timeline = invoice.metadata?.timeline;
-               if (typeof timeline === 'string') {
-                 timeline = timeline.split('\n').filter(Boolean).map((line: string) => {
-                   const [task, ...rest] = line.split(':');
-                   return { task: task?.trim() || '', days: rest.join(':')?.trim() || '' };
-                 });
-               }
-               if (!timeline || timeline.length === 0) return <p className="text-gray-400 italic pt-1">No timeline specified.</p>;
-               
-               return timeline.map((item: any, idx: number) => (
-                 <div key={idx} className={`flex justify-between ${idx !== timeline.length - 1 ? 'border-b border-[#0088cc]/10 pb-1 pt-1' : 'pt-1'}`}>
-                   <span className="font-medium text-gray-800">{item.task}</span>
-                   <span className="font-bold" style={{ color: themeColor }}>{item.days}</span>
-                 </div>
-               ));
-            })()}
-          </div>
-          <div className="pl-4 pt-1">
-            <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mb-1">Advance Payment</p>
+          <div>
+            <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mb-0.5">Advance Payment</p>
             <p className="text-gray-500">Upon signing the quotation: 50%</p>
-            <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mt-3 mb-1">Balance Payment</p>
+          </div>
+          <div>
+            <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mb-0.5">Balance Payment</p>
             <p className="text-gray-500">Upon completion of Visa: 50%</p>
           </div>
         </div>

@@ -31,6 +31,7 @@ import EmployeeDashboard from './pages/employee/Dashboard';
 import EmployeeNotifications from './pages/employee/Notifications';
 import EmployeeInvoices from './pages/employee/Invoices';
 import InvoiceBuilder from './pages/employee/InvoiceBuilder';
+import QuotationBuilder from './pages/employee/QuotationBuilder';
 import Jobs from './pages/admin/Jobs';
 import JobDetail from './pages/shared/JobDetail';
 import Notifications from './pages/admin/Notifications';
@@ -39,6 +40,7 @@ import Finance from './pages/admin/Finance';
 import Audit from './pages/admin/Audit';
 import AdminMessages from './pages/admin/Messages';
 import Settings from './pages/admin/Settings';
+import AdminLeads from './pages/admin/AdminLeads';
 import MyJobs from './pages/employee/MyJobs';
 import EmployeeProfile from './pages/employee/Profile';
 import EmployeeRequests from './pages/employee/Requests';
@@ -48,6 +50,8 @@ import ClientJobDetail from './pages/client/ClientJobDetail';
 import UnifiedWorkspace from './pages/employee/UnifiedWorkspace';
 import EmployeeMessages from './pages/employee/Messages';
 import EmployeeReports from './pages/employee/Reports';
+import EmployeeLeads from './pages/employee/Leads';
+import PackageGroupDetail from './pages/employee/PackageGroupDetail';
 import ClientProfile from './pages/client/Profile';
 import ClientMessages from './pages/client/Messages';
 import PackagesList from './pages/admin/Packages';
@@ -57,6 +61,8 @@ import ClientHistory from './pages/client/History';
 import ClientDocuments from './pages/client/Documents';
 import ClientPayments from './pages/client/Payments';
 import ClientNotifications from './pages/client/Notifications';
+import MyTasks from './pages/employee/MyTasks';
+import ProQueue from './pages/employee/ProQueue';
 
 
 
@@ -432,6 +438,7 @@ function App() {
               <Route path="notifications" element={<Notifications />} />
               <Route path="audit" element={<Audit />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="leads" element={<AdminLeads />} />
             </Route>
 
             {/* Employee Portal */}
@@ -450,6 +457,11 @@ function App() {
               <Route path="reports" element={<EmployeeReports />} />
               <Route path="invoices" element={<EmployeeInvoices />} />
               <Route path="invoices/:id" element={<InvoiceBuilder />} />
+              <Route path="quotations/:id" element={<QuotationBuilder />} />
+              <Route path="leads" element={<EmployeeLeads />} />
+              <Route path="packages/groups/:id" element={<PackageGroupDetail />} />
+              <Route path="my-tasks" element={<MyTasks />} />
+              <Route path="pro-queue" element={<ProQueue />} />
             </Route>
 
             {/* Client Portal */}

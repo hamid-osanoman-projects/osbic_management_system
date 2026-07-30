@@ -85,7 +85,7 @@ I am interested in the following service:
 
 Please guide me on the documents and fees required to initiate this project. Thank you!`;
 
-    const waUrl = `https://wa.me/${cleanPhone.startsWith('968') ? cleanPhone : '968' + cleanPhone}?text=${encodeURIComponent(message)}`;
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone.startsWith('968') ? cleanPhone : '968' + cleanPhone}&text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
     
     toast.success('Interest logged. Redirecting to your manager...');

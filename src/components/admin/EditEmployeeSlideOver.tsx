@@ -17,6 +17,10 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
     phone: '',
     notes: '',
     services: [] as string[],
+    is_manager: false,
+    can_do_sales: false,
+    can_do_ops: false,
+    is_pro: false,
   });
 
   const { mutate: updateEmployee, isPending } = useUpdateEmployee();
@@ -29,6 +33,10 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
         phone: employee.phone ? employee.phone.replace('+968 ', '') : '',
         notes: employee.notes || '',
         services: employee.assigned_services || [],
+        is_manager: employee.is_manager || false,
+        can_do_sales: employee.can_do_sales || false,
+        can_do_ops: employee.can_do_ops || false,
+        is_pro: employee.is_pro || false,
       });
     }
   }, [employee]);
@@ -45,6 +53,10 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
         full_name: formData.fullName,
         email: formData.email,
         phone: formData.phone ? `+968 ${formData.phone}` : null,
+        is_manager: formData.is_manager,
+        can_do_sales: formData.can_do_sales,
+        can_do_ops: formData.can_do_ops,
+        is_pro: formData.is_pro,
         // Assuming profiles table has a notes field or it's handled via metadata
         // assigned_services: formData.services,
       } as any
@@ -118,6 +130,70 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
                         className="flex-1 bg-white/5 border border-border rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-gold transition-colors"
                         placeholder="9123 4567"
                       />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    <h4 className="text-sm font-bold text-foreground">Permissions & Roles</h4>
+                    
+                    {/* Is Manager Toggle */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-border">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Is Manager</p>
+                        <p className="text-[10px] text-muted-foreground/60">Grants full manager pipeline and data access</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, is_manager: !formData.is_manager })}
+                        className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ${formData.is_manager ? 'bg-primary' : 'bg-white/10'}`}
+                      >
+                        <div className={`bg-card w-4 h-4 rounded-full shadow-md transform duration-200 ease-in-out ${formData.is_manager ? 'translate-x-5' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* Can do Sales Toggle */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-border">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Can do Sales</p>
+                        <p className="text-[10px] text-muted-foreground/60">Enables CRM access, leads, and quotations</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, can_do_sales: !formData.can_do_sales })}
+                        className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ${formData.can_do_sales ? 'bg-primary' : 'bg-white/10'}`}
+                      >
+                        <div className={`bg-card w-4 h-4 rounded-full shadow-md transform duration-200 ease-in-out ${formData.can_do_sales ? 'translate-x-5' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* Can do Operations Toggle */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-border">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Can do Operations</p>
+                        <p className="text-[10px] text-muted-foreground/60">Enables job steps, tasks, and document management</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, can_do_ops: !formData.can_do_ops })}
+                        className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ${formData.can_do_ops ? 'bg-primary' : 'bg-white/10'}`}
+                      >
+                        <div className={`bg-card w-4 h-4 rounded-full shadow-md transform duration-200 ease-in-out ${formData.can_do_ops ? 'translate-x-5' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* Is PRO Toggle */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-border">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Is PRO</p>
+                        <p className="text-[10px] text-muted-foreground/60">Enables PRO Work Queue access and agent assignments</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, is_pro: !formData.is_pro })}
+                        className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ${formData.is_pro ? 'bg-primary' : 'bg-white/10'}`}
+                      >
+                        <div className={`bg-card w-4 h-4 rounded-full shadow-md transform duration-200 ease-in-out ${formData.is_pro ? 'translate-x-5' : ''}`} />
+                      </button>
                     </div>
                   </div>
                </div>

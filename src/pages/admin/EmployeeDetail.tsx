@@ -164,8 +164,13 @@ const EmployeeDetail = () => {
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
               <div className="flex-1">
                 <h1 className="text-3xl font-syne font-bold text-foreground mb-2">{emp.full_name}</h1>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="text-muted-foreground font-mono tracking-widest text-xs uppercase bg-muted/50 px-2 py-1 rounded inline-block">{emp.employee_code}</p>
+
+                  {emp.is_manager && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-400 border border-purple-500/20">Manager</span>}
+                  {emp.can_do_sales && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20">Sales</span>}
+                  {emp.can_do_ops && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Operations</span>}
+                  {emp.is_pro && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">PRO</span>}
 
                   <div className="relative">
                     <select
@@ -417,6 +422,90 @@ const EmployeeDetail = () => {
             <div className="py-12 bg-black/20 border border-border rounded-3xl text-center text-muted-foreground/40 text-xs font-bold uppercase tracking-widest">
               Advanced Trend Charts will appear as more jobs are completed
             </div>
+
+            {/* Sales & CRM Analytics */}
+            {emp.can_do_sales && (
+              <div className="mt-8 pt-8 border-t border-border space-y-6">
+                <h3 className="text-xl font-syne font-bold text-foreground flex items-center gap-3">
+                  <TrendingUp className="text-primary" size={24} />
+                  Sales & CRM Performance
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="p-6 rounded-3xl bg-muted/30 border border-border">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Total Leads Assigned</p>
+                    <p className="text-4xl font-mono font-bold text-foreground mb-1">
+                      {emp.leads?.length || 0}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/60 font-bold">Total pipeline allocation</p>
+                  </div>
+                  <div className="p-6 rounded-3xl bg-muted/30 border border-border">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Leads Converted</p>
+                    <p className="text-4xl font-mono font-bold text-emerald-500 mb-1">
+                      {emp.leads?.filter((l: any) => l.status === 'converted').length || 0}
+                    </p>
+                    <p className="text-[10px] text-emerald-500/60 font-bold">Successfully converted to jobs</p>
+                  </div>
+                  <div className="p-6 rounded-3xl bg-primary/5 border border-gold/20">
+                    <p className="text-xs font-bold text-primary uppercase tracking-widest mb-4">Sales Conversion Rate</p>
+                    <p className="text-4xl font-mono font-bold text-primary mb-1">
+                      {emp.leads?.length > 0 
+                        ? Math.round((emp.leads.filter((l: any) => l.status === 'converted').length / emp.leads.length) * 100)
+                        : 0}%
+                    </p>
+                    <p className="text-[10px] text-primary/60 font-bold">Pipeline closure efficiency</p>
+                  </div>
+                </div>
+
+                {/* Leads List Table */}
+                <div className="bg-black/20 border border-border rounded-3xl overflow-hidden mt-6">
+                  <div className="p-5 border-b border-border bg-white/[0.01]">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Assigned Leads History</h4>
+                  </div>
+                  {emp.leads && emp.leads.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-border text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest bg-white/[0.01]">
+                            <th className="p-4">Lead Code</th>
+                            <th className="p-4">Name</th>
+                            <th className="p-4">Source</th>
+                            <th className="p-4">Status</th>
+                            <th className="p-4">Date Created</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/40 text-xs">
+                          {emp.leads.map((lead: any) => (
+                            <tr key={lead.id} className="hover:bg-white/[0.01] transition-colors">
+                              <td className="p-4 font-mono font-bold text-primary">{lead.lead_code || '—'}</td>
+                              <td className="p-4 font-bold text-foreground">{lead.contact_name}</td>
+                              <td className="p-4">{lead.lead_sources?.name || 'Unknown'}</td>
+                              <td className="p-4 capitalize">
+                                <span 
+                                  className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border"
+                                  style={{
+                                    borderColor: lead.status === 'converted' ? '#10B98140' : lead.status === 'lost' ? '#EF444440' : '#E2E8F020',
+                                    backgroundColor: lead.status === 'converted' ? '#10B98110' : lead.status === 'lost' ? '#EF444410' : '#E2E8F005',
+                                    color: lead.status === 'converted' ? '#10B981' : lead.status === 'lost' ? '#EF4444' : '#94A3B8'
+                                  }}
+                                >
+                                  {lead.status.replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td className="p-4 text-muted-foreground/60">{new Date(lead.created_at).toLocaleDateString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-xs text-muted-foreground italic">
+                      No leads have been assigned to this employee yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

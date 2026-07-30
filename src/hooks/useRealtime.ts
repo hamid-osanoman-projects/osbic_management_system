@@ -1,43 +1,77 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../lib/supabase';
+import { useNotificationSound } from './useNotificationSound';
 
+const showBrowserNotification = (title: string, body: string, actionUrl?: string) => {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "granted") {
+    const notif = new Notification(title, {
+      body,
+      icon: "/logo-192.png",
+      tag: "osbic-alert",
+    });
+    if (actionUrl) {
+      notif.onclick = () => {
+        window.focus();
+        const fullUrl = window.location.origin + actionUrl;
+        window.location.href = fullUrl;
+      };
+    }
+  }
+};
 
-// Mock Supabase Realtime Hook for the prototype environment
+// Live Supabase Realtime Hook — pushes updates to all portals instantly with sound/native alerts
 export const useRealtime = (userId: string | undefined) => {
   const queryClient = useQueryClient();
+  const { playChime } = useNotificationSound();
 
   useEffect(() => {
     if (!userId) return;
 
-    /* 
-     * In a live Supabase environment, this bridges PostgREST payloads back into the local query client.
-     * 
-     * const channel = supabase.channel('osbic-pipeline')
-     *   .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${userId}` }, (payload) => {
-     *       queryClient.invalidateQueries({ queryKey: ['notifications'] });
-     *       toast.success(`New Alert: ${payload.new.title}`);
-     *   })
-     *   .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
-     *       queryClient.invalidateQueries({ queryKey: ['messages'] });
-     *   })
-     *   .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'job_steps' }, () => {
-     *       queryClient.invalidateQueries({ queryKey: ['job'] });
-     *   })
-     *   .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'jobs' }, () => {
-     *       queryClient.invalidateQueries({ queryKey: ['admin', 'jobs'] });
-     *       queryClient.invalidateQueries({ queryKey: ['employee', 'jobs'] });
-     *   })
-     *   .subscribe();
-     *
-     * return () => {
-     *   supabase.removeChannel(channel);
-     * };
-     */
+    // Request notification permission if not asked yet
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
 
-    console.log(`[Realtime Socket] Initialized active listener block for User ${userId}`);
+    const channel = supabase.channel('osbic-pipeline')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${userId}` }, (payload) => {
+          queryClient.invalidateQueries({ queryKey: ['notifications'] });
+          playChime();
+          
+          const newNotif = payload.new as any;
+          if (newNotif) {
+            showBrowserNotification(
+              newNotif.title_en || 'New Task Assignment',
+              newNotif.body_en || 'Open OSBIC Staff portal to view details.',
+              newNotif.action_url || '/employee/notifications'
+            );
+          }
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['job'] });
+          queryClient.invalidateQueries({ queryKey: ['employee_jobs_latest_messages'] });
+          queryClient.invalidateQueries({ queryKey: ['client_jobs_latest_messages'] });
+          playChime();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'job_steps' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['job'] });
+          queryClient.invalidateQueries({ queryKey: ['employee', 'jobs'] });
+          queryClient.invalidateQueries({ queryKey: ['client', 'jobs'] });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'jobs' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['admin', 'jobs'] });
+          queryClient.invalidateQueries({ queryKey: ['employee', 'jobs'] });
+          queryClient.invalidateQueries({ queryKey: ['client', 'jobs'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['job'] });
+          queryClient.invalidateQueries({ queryKey: ['client', 'documents'] });
+      })
+      .subscribe();
 
     return () => {
-      console.log(`[Realtime Socket] Dismantled listener block for User ${userId}`);
+      supabase.removeChannel(channel);
     };
-  }, [userId, queryClient]);
+  }, [userId, queryClient, playChime]);
 };

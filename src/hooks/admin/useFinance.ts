@@ -15,6 +15,7 @@ export interface FinanceMetrics {
 export const useFinanceMetrics = () => {
   return useQuery({
     queryKey: ['admin', 'finance'],
+    refetchInterval: 60000, // Auto-refresh every 60s
     queryFn: async (): Promise<FinanceMetrics> => {
       const { data: jobs, error } = await supabase
         .from('jobs')

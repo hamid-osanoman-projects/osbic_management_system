@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -13,6 +13,8 @@ import Skeleton from '../../components/ui/Skeleton';
 import { toast } from 'react-hot-toast';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '../../lib/supabase';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -30,12 +32,74 @@ const Jobs = () => {
   const navigate = useNavigate();
   const { data: jobs, isLoading } = useAdminJobs();
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'completed' | 'on_hold'>('all');
+  const [mainTab, setMainTab] = useState<'jobs' | 'packages'>('jobs');
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'active' | 'awaiting_govt' | 'completed' | 'on_hold' | 'cancelled'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateJobOpen, setIsCreateJobOpen] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<{ id: string, code: string } | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedAssociate, setSelectedAssociate] = useState<string>('all');
 
   const deleteMutation = useAdminDeleteJob();
+
+  // Query package groups
+  const { data: packageGroups, isLoading: isGroupsLoading } = useQuery({
+    queryKey: ['admin_package_groups'],
+    enabled: mainTab === 'packages',
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('package_job_groups')
+        .select(`
+          id,
+          group_code,
+          created_at,
+          status,
+          client:profiles!client_id(full_name),
+          package:service_packages!package_id(name_en),
+          creator:profiles!sales_employee_id(full_name),
+          jobs(
+            id,
+            job_code,
+            status,
+            updated_at,
+            hold_reason,
+            service:services!service_id(name_en),
+            ops:profiles!ops_employee_id(full_name)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  const toggleGroup = (groupId: string) => {
+    if (expandedGroups.includes(groupId)) {
+      setExpandedGroups(expandedGroups.filter(id => id !== groupId));
+    } else {
+      setExpandedGroups([...expandedGroups, groupId]);
+    }
+  };
+
+  const getComputedStatus = (childJobs: any[]) => {
+    if (childJobs.length === 0) return { label: 'EMPTY', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
+    
+    const allCompleted = childJobs.every((j: any) => j.status === 'completed');
+    if (allCompleted) return { label: 'COMPLETED', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+
+    const anyOnHold = childJobs.some((j: any) => j.status === 'on_hold');
+    if (anyOnHold) return { label: 'ON HOLD', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
+
+    const anyActive = childJobs.some((j: any) => j.status === 'active' || j.status === 'in_progress' || j.status === 'awaiting_govt');
+    if (anyActive) return { label: 'IN PROGRESS', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+
+    const allDraft = childJobs.every((j: any) => j.status === 'draft' || j.status === 'pending');
+    if (allDraft) return { label: 'NOT STARTED', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
+
+    return { label: 'IN PROGRESS', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('osbic_admin_jobs_view');
@@ -47,20 +111,46 @@ const Jobs = () => {
     localStorage.setItem('osbic_admin_jobs_view', v);
   };
 
+  // Dynamically compute unique categories and associates from jobs list
+  const categories = Array.from(new Set((jobs || []).map(j => j.service_category).filter(Boolean)));
+  const associates = Array.from(new Set((jobs || []).map(j => j.employee_name).filter(Boolean)));
+
   const filteredJobs = jobs?.filter(j => {
     const matchesSearch = j.client_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         j.job_code.toLowerCase().includes(searchQuery.toLowerCase());
+                          j.job_code.toLowerCase().includes(searchQuery.toLowerCase());
     
-    if (activeTab === 'all') return matchesSearch;
-    if (activeTab === 'active') return matchesSearch && (j.status === 'in_progress' || j.status === 'pending' || j.status === 'awaiting_govt' || j.status === 'active');
-    return matchesSearch && j.status === activeTab;
+    let matchesTab = true;
+    if (activeTab === 'pending') {
+      matchesTab = j.status === 'pending' || j.status === 'draft';
+    } else if (activeTab === 'active') {
+      matchesTab = j.status === 'in_progress' || j.status === 'active';
+    } else if (activeTab === 'awaiting_govt') {
+      matchesTab = j.status === 'awaiting_govt';
+    } else if (activeTab !== 'all') {
+      matchesTab = j.status === activeTab;
+    }
+
+    let matchesCategory = true;
+    if (selectedCategory !== 'all') {
+      matchesCategory = j.service_category === selectedCategory;
+    }
+
+    let matchesAssociate = true;
+    if (selectedAssociate !== 'all') {
+      matchesAssociate = j.employee_name === selectedAssociate;
+    }
+
+    return matchesSearch && matchesTab && matchesCategory && matchesAssociate;
   });
 
   const counts = {
     all: jobs?.length || 0,
-    active: jobs?.filter(j => j.status === 'in_progress' || j.status === 'pending' || j.status === 'awaiting_govt' || j.status === 'active').length || 0,
+    pending: jobs?.filter(j => j.status === 'pending' || j.status === 'draft').length || 0,
+    active: jobs?.filter(j => j.status === 'in_progress' || j.status === 'active').length || 0,
+    awaiting_govt: jobs?.filter(j => j.status === 'awaiting_govt').length || 0,
     completed: jobs?.filter(j => j.status === 'completed').length || 0,
     on_hold: jobs?.filter(j => j.status === 'on_hold').length || 0,
+    cancelled: jobs?.filter(j => j.status === 'cancelled').length || 0,
   };
 
   const getStatusBadge = (status: string) => {
@@ -237,13 +327,154 @@ const Jobs = () => {
     );
   };
 
+  const renderPackages = () => {
+    if (isGroupsLoading) {
+      return (
+        <div className="bg-card border border-border rounded-2xl p-6">
+           <Skeleton height={300} rounded="xl" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xl">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-border bg-black/20">
+                <th className="py-4 px-6 text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/50">Group Code</th>
+                <th className="py-4 px-6 text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/50">Client Name</th>
+                <th className="py-4 px-6 text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/50">Package Name</th>
+                <th className="py-4 px-6 text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/50">Created By</th>
+                <th className="py-4 px-6 text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/50">Status</th>
+                <th className="py-4 px-6 text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/50">Progress</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {packageGroups?.map((group: any) => {
+                const childJobs = group.jobs || [];
+                const completedCount = childJobs.filter((j: any) => j.status === 'completed').length;
+                const totalCount = childJobs.length;
+                const statusBadge = getComputedStatus(childJobs);
+                const isExpanded = expandedGroups.includes(group.id);
+
+                return (
+                  <React.Fragment key={group.id}>
+                    <tr 
+                      onClick={() => toggleGroup(group.id)} 
+                      className="group hover:bg-primary/[0.01] transition-all cursor-pointer border-b border-border/30"
+                    >
+                      <td className="py-5 px-6 font-mono text-xs text-primary/80 font-bold">
+                        <div className="flex items-center gap-2">
+                          <span>{isExpanded ? '▼' : '►'}</span>
+                          <span>{group.group_code}</span>
+                        </div>
+                      </td>
+                      <td className="py-5 px-6 text-sm font-bold text-foreground">{group.client?.full_name || 'Unknown'}</td>
+                      <td className="py-5 px-6 text-xs text-foreground font-medium">{group.package?.name_en || 'Custom Bundle Package'}</td>
+                      <td className="py-5 px-6 text-xs text-muted-foreground">{group.creator?.full_name || 'System'}</td>
+                      <td className="py-5 px-6">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${statusBadge.color}`}>
+                          {statusBadge.label}
+                        </span>
+                      </td>
+                      <td className="py-5 px-6 text-xs font-semibold text-foreground">
+                        {completedCount} of {totalCount} services complete
+                      </td>
+                    </tr>
+                    
+                    {/* Expanded child list */}
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={6} className="bg-muted/10 p-6 border-b border-border/40">
+                          <div className="space-y-4">
+                            <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-2">Associated Service Jobs</h4>
+                            
+                            <div className="space-y-2">
+                              {childJobs.map((job: any) => (
+                                <div 
+                                  key={job.id} 
+                                  onClick={() => navigate(`/admin/jobs/${job.id}`)}
+                                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-border/80 bg-card rounded-xl hover:border-gold/30 transition-all cursor-pointer"
+                                >
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] font-mono text-primary font-bold">{job.job_code}</span>
+                                      <span className="text-sm font-bold text-foreground">{job.service?.name_en || 'Service'}</span>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      Assigned Ops: <span className="text-foreground font-medium">{job.ops?.full_name || 'Unassigned'}</span>
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-6">
+                                    <div className="text-right">
+                                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                        job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'
+                                      }`}>
+                                        {job.status.replace('_', ' ')}
+                                      </span>
+                                      {job.status === 'on_hold' && job.hold_reason && (
+                                        <p className="text-[9px] text-amber-500 mt-1">Reason: {job.hold_reason}</p>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-muted-foreground font-medium shrink-0">
+                                      Updated: {job.updated_at ? new Date(job.updated_at).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+          {(!packageGroups || packageGroups.length === 0) && (
+            <div className="py-20 flex flex-col items-center justify-center text-center">
+              <h3 className="text-lg font-bold text-foreground">No Package Groups</h3>
+              <p className="text-sm text-muted-foreground">There are no multi-job packages registered in the pipeline yet.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 pb-16 h-full flex flex-col min-h-[calc(100vh-100px)]">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-syne font-bold text-foreground">Job Pipeline</h1>
-          <p className="text-sm text-muted-foreground">Monitor and manage active service workflows</p>
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-2xl font-syne font-bold text-foreground">Job Pipeline</h1>
+            <p className="text-sm text-muted-foreground">Monitor and manage active service workflows</p>
+          </div>
+          
+          <div className="flex bg-card border border-border p-1 rounded-xl w-fit">
+            <button
+              onClick={() => setMainTab('jobs')}
+              className={cn(
+                "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
+                mainTab === 'jobs' ? "bg-primary text-[#0A0F1E]" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              All Jobs
+            </button>
+            <button
+              onClick={() => setMainTab('packages')}
+              className={cn(
+                "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
+                mainTab === 'packages' ? "bg-primary text-[#0A0F1E]" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Packages
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <button 
@@ -269,32 +500,48 @@ const Jobs = () => {
         </div>
       </div>
 
-      {/* Toolbar & Pipeline Tabs */}
+      {/* Toolbar & Pipeline Filters */}
       <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-card border border-border p-2 rounded-2xl shrink-0 shadow-lg">
-        <div className="flex items-center p-1 bg-background/50 border border-border rounded-xl w-full lg:w-auto overflow-x-auto no-scrollbar">
-          {(['all', 'active', 'completed', 'on_hold'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
-                activeTab === tab 
-                  ? "bg-primary text-[#0A0F1E] shadow-[0_4px_12px_rgba(212,175,55,0.2)]" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              )}
-            >
-              <span className="capitalize">{tab.replace('_', ' ')}</span>
-              <span className={cn(
-                "px-1.5 py-0.5 rounded-md text-[10px]",
-                activeTab === tab ? "bg-black/10" : "bg-muted text-muted-foreground"
-              )}>
-                {counts[tab]}
-              </span>
-            </button>
-          ))}
-        </div>
+        <div className="flex flex-wrap items-center gap-2 w-full">
+          {/* Stage Dropdown */}
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as any)}
+            className="bg-background/50 border border-border rounded-xl px-3 py-2 text-xs font-bold text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all cursor-pointer outline-none shrink-0"
+          >
+            <option value="all">All Stages ({counts.all})</option>
+            <option value="pending">Pending ({counts.pending})</option>
+            <option value="active">Active ({counts.active})</option>
+            <option value="awaiting_govt">Awaiting Govt ({counts.awaiting_govt})</option>
+            <option value="on_hold">On Hold ({counts.on_hold})</option>
+            <option value="completed">Completed ({counts.completed})</option>
+            <option value="cancelled">Cancelled ({counts.cancelled})</option>
+          </select>
 
-        <div className="flex items-center gap-2 w-full lg:w-auto">
+          {/* Category Filter */}
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="bg-background/50 border border-border rounded-xl px-3 py-2 text-xs font-bold text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all cursor-pointer outline-none shrink-0"
+          >
+            <option value="all">All Categories</option>
+            {categories.map((cat: string) => (
+              <option key={cat} value={cat}>{cat.toUpperCase()}</option>
+            ))}
+          </select>
+
+          {/* Associate Filter */}
+          <select
+            value={selectedAssociate}
+            onChange={(e) => setSelectedAssociate(e.target.value)}
+            className="bg-background/50 border border-border rounded-xl px-3 py-2 text-xs font-bold text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all cursor-pointer outline-none shrink-0"
+          >
+            <option value="all">All Associates</option>
+            {associates.map((name: string) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+
           <div className="flex-1 lg:w-64 relative bg-background/50 rounded-xl border border-border group-focus-within:border-primary/50 transition-colors">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
             <input 
@@ -306,7 +553,7 @@ const Jobs = () => {
             />
           </div>
           
-          <div className="flex items-center gap-1 bg-background/50 p-1 rounded-xl border border-border">
+          <div className="flex items-center gap-1 bg-background/50 p-1 rounded-xl border border-border ml-auto">
             <button 
               onClick={() => handleSetView('table')} 
               className={cn("p-1.5 rounded-lg transition-all", viewMode === 'table' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground")}
@@ -324,22 +571,26 @@ const Jobs = () => {
       </div>
 
       {/* Content */}
-      {isLoading ? (
-        <div className="flex-1 bg-card border border-border rounded-2xl p-6">
-           <Skeleton height={400} rounded="xl" />
-        </div>
+      {mainTab === 'jobs' ? (
+        isLoading ? (
+          <div className="flex-1 bg-card border border-border rounded-2xl p-6">
+             <Skeleton height={400} rounded="xl" />
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key={viewMode}
+              initial={{ opacity: 0, y: 10 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              exit={{ opacity: 0, y: -10 }}
+              className={cn("flex-1", viewMode === 'kanban' && "overflow-hidden")}
+            >
+              {viewMode === 'table' ? renderTable() : renderKanban()}
+            </motion.div>
+          </AnimatePresence>
+        )
       ) : (
-        <AnimatePresence mode="wait">
-          <motion.div 
-            key={viewMode}
-            initial={{ opacity: 0, y: 10 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            exit={{ opacity: 0, y: -10 }}
-            className={cn("flex-1", viewMode === 'kanban' && "overflow-hidden")}
-          >
-            {viewMode === 'table' ? renderTable() : renderKanban()}
-          </motion.div>
-      </AnimatePresence>
+        renderPackages()
       )}
 
       <CreateJobModal 

@@ -90,7 +90,16 @@ export const useAdminEmployee = (id?: string) => {
 
       if (jobsError) throw jobsError;
 
-      // 3. Calculate Stats
+      // 3. Fetch Associated Leads
+      const { data: leads, error: leadsError } = await supabase
+        .from('leads')
+        .select('*, lead_sources:source_id(name)')
+        .eq('assigned_to', id!)
+        .order('created_at', { ascending: false });
+
+      if (leadsError) throw leadsError;
+
+      // 4. Calculate Stats
       const totalJobs = jobs?.length || 0;
       const activeJobs = jobs?.filter((j: any) => j.status === 'active').length || 0;
       
@@ -120,7 +129,8 @@ export const useAdminEmployee = (id?: string) => {
         active_jobs: activeJobs,
         completed_month: completedMonth,
         avg_completion_days: avgCompletionDays,
-        jobs: jobs || []
+        jobs: jobs || [],
+        leads: leads || []
       };
     },
   });
@@ -317,7 +327,11 @@ export const useDeleteEmployee = () => {
 
       if (error) {
         console.error('Purge error:', error);
-        throw new Error(error.message || 'Operation failed. Check permissions.');
+        let userMessage = error.message;
+        if (error.message?.includes('violates foreign key constraint') || error.message?.includes('jobs_employee_id_fkey')) {
+          userMessage = 'This employee has historical job records and cannot be permanently deleted. Please deactivate their account instead.';
+        }
+        throw new Error(userMessage || 'Operation failed. Check permissions.');
       }
     },
     onSuccess: () => {

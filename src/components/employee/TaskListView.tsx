@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TaskDashboard } from './TaskDashboard';
-import { ChevronRight, LayoutGrid, List as ListIcon, Clock, CheckCircle2, Briefcase, Plus, Zap, Search, Filter, X, ArrowUpDown, RotateCcw } from 'lucide-react';
+import { ChevronRight, LayoutGrid, List as ListIcon, Clock, CheckCircle2, Briefcase, Plus, Zap, Search, Filter, X, ArrowUpDown, RotateCcw, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
@@ -15,7 +15,7 @@ interface TaskListViewProps {
   onViewToggle: (mode: 'split' | 'list') => void;
   currentMode: 'split' | 'list';
   onNewTask: () => void;
-  onQuickTask: () => void;
+  onWalkIn: () => void;
   jobTypeFilter: 'standard' | 'quick';
   onJobTypeChange: (type: 'standard' | 'quick') => void;
 }
@@ -29,7 +29,7 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
   onViewToggle,
   currentMode,
   onNewTask,
-  onQuickTask,
+  onWalkIn,
   jobTypeFilter,
   onJobTypeChange
 }) => {
@@ -216,15 +216,15 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
                 onClick={() => onJobTypeChange('quick')}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${jobTypeFilter === 'quick' ? 'bg-card shadow-sm text-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Zap size={14} /> Quick (POS)
+                <Zap size={14} /> Walk-in
               </button>
             </div>
             
             <button 
-              onClick={onQuickTask}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-amber-950 font-bold text-xs tracking-widest uppercase rounded-xl hover:bg-amber-400 transition-colors shadow-md shadow-amber-500/20"
+              onClick={onWalkIn}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-emerald-950 font-bold text-xs tracking-widest uppercase rounded-xl hover:bg-emerald-400 transition-colors shadow-md shadow-emerald-500/20"
             >
-              <Zap size={16} /> Quick Task
+              <Users size={16} /> Walk-in
             </button>
             <button 
               onClick={onNewTask}

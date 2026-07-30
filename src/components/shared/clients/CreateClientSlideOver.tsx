@@ -16,9 +16,10 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   clientToEdit?: any;
+  onClientCreated?: (client: any) => void;
 }
 
-const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit }: Props) => {
+const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit, onClientCreated }: Props) => {
   const [formData, setFormData] = useState({
     full_name: clientToEdit?.full_name || '',
     email: clientToEdit?.email || '',
@@ -50,6 +51,7 @@ const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit }: Props) => {
     }
   }, [clientToEdit]);
   const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(clientToEdit ? clientToEdit.whatsapp === clientToEdit.phone : false);
+  const isEditing = !!(clientToEdit && clientToEdit.id);
   const { profile } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [createdClient, setCreatedClient] = useState<any>(null);
@@ -77,21 +79,26 @@ const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit }: Props) => {
         phone: formattedPhone,
         whatsapp: whatsappSameAsPhone ? formattedPhone : formData.whatsapp,
       };
+
+      const { countryCode, customCountryCode, ...databasePayload } = payload;
       
-      if (clientToEdit) {
+      if (isEditing) {
         // Exclude password from update payload
-        const { password, ...updatePayload } = payload;
+        const { password, ...updatePayload } = databasePayload;
         await updateClientMutation.mutateAsync({ id: clientToEdit.id, updates: updatePayload });
         toast.success('Client updated successfully!');
         onClose();
       } else {
-        const createPayload = { ...payload, created_by: profile?.id };
+        const createPayload = { ...databasePayload, created_by: profile?.id };
         const data = await createClientMutation.mutateAsync(createPayload);
         setCreatedClient(data);
         toast.success('Client registered successfully!');
+        if (onClientCreated) {
+          onClientCreated(data);
+        }
       }
     } catch (error: any) {
-      toast.error(error.message || `Failed to ${clientToEdit ? 'update' : 'create'} client`);
+      toast.error(error.message || `Failed to ${isEditing ? 'update' : 'create'} client`);
     }
   };
 
@@ -132,8 +139,8 @@ const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit }: Props) => {
                   <UserPlus size={20} />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-syne font-bold text-foreground mb-1">{clientToEdit ? 'Edit Client Profile' : 'Register New Client'}</h2>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{clientToEdit ? 'UPDATE DETAILS' : 'ONBOARDING & CREDENTIALS'}</p>
+                  <h2 className="text-2xl font-syne font-bold text-foreground mb-1">{isEditing ? 'Edit Client Profile' : 'Register New Client'}</h2>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{isEditing ? 'UPDATE DETAILS' : 'ONBOARDING & CREDENTIALS'}</p>
                 </div>
               </div>
               <button onClick={handleClose} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
@@ -166,8 +173,8 @@ const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit }: Props) => {
                     <div className="relative">
                       <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <input
-                        required={!clientToEdit}
-                        disabled={!!clientToEdit}
+                        required={!isEditing}
+                        disabled={isEditing}
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
@@ -282,7 +289,7 @@ const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit }: Props) => {
                   </div>
 
                   {/* Password - Only for new clients */}
-                  {!clientToEdit && (
+                  {!isEditing && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between ml-1">
                         <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Credentials</label>

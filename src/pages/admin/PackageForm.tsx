@@ -73,17 +73,56 @@ const PackageForm = () => {
   }, [pkg, isNew]);
 
   const handleToggleService = (service: any) => {
-    const isSelected = selectedServices.find(s => s.id === service.id || (s.isNew && s.name_en === service.name_en));
+    const isSelected = selectedServices.find(s => 
+      s.service_id === service.id || 
+      s.id === service.id || 
+      (s.isNew && s.name_en === service.name_en)
+    );
     if (isSelected) {
-      setSelectedServices(prev => prev.filter(s => s.id !== service.id && (!s.isNew || s.name_en !== service.name_en)));
+      setSelectedServices(prev => prev.filter(s => 
+        s.service_id !== service.id && 
+        s.id !== service.id && 
+        (!s.isNew || s.name_en !== service.name_en)
+      ));
     } else {
-      setSelectedServices(prev => [...prev, service]);
+      const normalizedRelation = {
+        service_id: service.id,
+        display_order: selectedServices.length,
+        default_quantity: 1,
+        is_optional: false,
+        is_parallel: false,
+        estimated_days_min: service.estimated_days || 1,
+        estimated_days_max: service.estimated_days || 5,
+        notes: '',
+        service: service
+      };
+      setSelectedServices(prev => [...prev, normalizedRelation]);
     }
   };
 
   const handleAddCustom = () => {
     if (!customS.name_en || !customS.name_ar) return toast.error('Custom service names are required');
-    setSelectedServices(prev => [...prev, { ...customS, id: `temp-${Date.now()}` }]);
+    const customServiceRelation = {
+      isNew: true,
+      name_en: customS.name_en,
+      name_ar: customS.name_ar,
+      category: customS.category,
+      display_order: selectedServices.length,
+      default_quantity: 1,
+      is_optional: false,
+      is_parallel: false,
+      estimated_days_min: customS.estimated_days || 1,
+      estimated_days_max: customS.estimated_days || 5,
+      notes: '',
+      service: {
+        id: `temp-${Date.now()}`,
+        name_en: customS.name_en,
+        name_ar: customS.name_ar,
+        category: customS.category,
+        estimated_days: customS.estimated_days
+      }
+    };
+    setSelectedServices(prev => [...prev, customServiceRelation]);
     setCustomS({ name_en: '', name_ar: '', category: 'other', estimated_days: 7, isNew: true });
     setShowCustomForm(false);
     toast.success('Custom service added to bundle draft');
@@ -120,7 +159,7 @@ const PackageForm = () => {
   }
 
   const filteredServicesList = allServices?.filter(s => 
-    !selectedServices.find(ss => ss?.id === s?.id) &&
+    !selectedServices.find(ss => ss?.service_id === s?.id || ss?.id === s?.id) &&
     ((s?.name_en || '').toLowerCase().includes((searchTerm || '').toLowerCase()) || (s?.name_ar || '').includes(searchTerm || ''))
   );
 
@@ -227,36 +266,130 @@ const PackageForm = () => {
                   selectedServices.map((service, index) => (
                     <motion.div 
                       layout
-                      key={service.id || service.name_en} 
+                      key={service.id || service.service_id || (service.service?.id) || service.name_en} 
                       className={cn(
-                        "flex items-center gap-4 p-4 rounded-2xl border transition-all group",
-                        service.isNew ? "bg-emerald-500/5 border-emerald-500/20" : "bg-background border-border"
+                        "flex flex-col gap-4 p-6 rounded-3xl border transition-all group bg-background border-border"
                       )}
                     >
-                       <div className="p-2 text-muted-foreground/20">
-                          <GripVertical size={16} />
+                       <div className="flex items-center gap-4">
+                         <div className="p-2 text-muted-foreground/20 cursor-grab">
+                            <GripVertical size={16} />
+                         </div>
+                         <div className="w-10 h-10 rounded-xl bg-muted text-primary flex items-center justify-center text-sm font-bold">
+                            {index + 1}
+                         </div>
+                         <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                               <p className="text-sm font-bold text-foreground truncate">{service.service?.name_en || service.name_en}</p>
+                               {service.isNew && (
+                                 <span className="text-[8px] bg-emerald-500 text-white px-1.5 py-0.5 rounded uppercase font-bold tracking-widest">Custom New</span>
+                               )}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground/60">{CATEGORY_LABELS[service.service?.category || service.category] || 'General'}</p>
+                         </div>
+                         <button 
+                          onClick={() => {
+                            setSelectedServices(prev => prev.filter((_, i) => i !== index));
+                          }}
+                          className="p-2 text-muted-foreground/20 hover:text-red-500 transition-colors"
+                         >
+                            <Trash2 size={16} />
+                         </button>
                        </div>
-                       <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold",
-                        service.isNew ? "bg-emerald-500/20 text-emerald-600" : "bg-muted text-primary"
-                       )}>
-                          {index + 1}
+
+                       {/* Template Properties Editor */}
+                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-border/40">
+                         <div className="space-y-1">
+                           <label className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-wider block">Default Qty</label>
+                           <input
+                             type="number"
+                             min={1}
+                             value={service.default_quantity || 1}
+                             onChange={(e) => {
+                               const newS = [...selectedServices];
+                               newS[index].default_quantity = Math.max(1, parseInt(e.target.value) || 1);
+                               setSelectedServices(newS);
+                             }}
+                             className="w-full bg-muted/20 border border-border rounded-xl px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary transition-all font-semibold"
+                           />
+                         </div>
+
+                         <div className="space-y-1">
+                           <label className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-wider block">Est Days (Min - Max)</label>
+                           <div className="flex items-center gap-2">
+                             <input
+                               type="number"
+                               min={0}
+                               placeholder="Min"
+                               value={service.estimated_days_min || 0}
+                               onChange={(e) => {
+                                 const newS = [...selectedServices];
+                                 newS[index].estimated_days_min = Math.max(0, parseInt(e.target.value) || 0);
+                                 setSelectedServices(newS);
+                               }}
+                               className="w-full bg-muted/20 border border-border rounded-xl px-2 py-1.5 text-xs text-foreground outline-none focus:border-primary transition-all text-center font-mono"
+                             />
+                             <span className="text-[10px] text-muted-foreground">-</span>
+                             <input
+                               type="number"
+                               min={0}
+                               placeholder="Max"
+                               value={service.estimated_days_max || 0}
+                               onChange={(e) => {
+                                 const newS = [...selectedServices];
+                                 newS[index].estimated_days_max = Math.max(0, parseInt(e.target.value) || 0);
+                                 setSelectedServices(newS);
+                               }}
+                               className="w-full bg-muted/20 border border-border rounded-xl px-2 py-1.5 text-xs text-foreground outline-none focus:border-primary transition-all text-center font-mono"
+                             />
+                           </div>
+                         </div>
+
+                         <div className="flex items-center gap-2 pt-5">
+                           <input
+                             type="checkbox"
+                             id={`opt-${index}`}
+                             checked={service.is_optional || false}
+                             onChange={(e) => {
+                               const newS = [...selectedServices];
+                               newS[index].is_optional = e.target.checked;
+                               setSelectedServices(newS);
+                             }}
+                             className="rounded border-border text-primary focus:ring-primary/20"
+                           />
+                           <label htmlFor={`opt-${index}`} className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider cursor-pointer select-none">Optional</label>
+                         </div>
+
+                         <div className="flex items-center gap-2 pt-5">
+                           <input
+                             type="checkbox"
+                             id={`par-${index}`}
+                             checked={service.is_parallel || false}
+                             onChange={(e) => {
+                               const newS = [...selectedServices];
+                               newS[index].is_parallel = e.target.checked;
+                               setSelectedServices(newS);
+                             }}
+                             className="rounded border-border text-primary focus:ring-primary/20"
+                           />
+                           <label htmlFor={`par-${index}`} className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider cursor-pointer select-none">Parallel</label>
+                         </div>
                        </div>
-                       <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                             <p className="text-sm font-bold text-foreground truncate">{service.name_en}</p>
-                             {service.isNew && (
-                               <span className="text-[8px] bg-emerald-500 text-white px-1.5 py-0.5 rounded uppercase font-bold tracking-widest">Custom New</span>
-                             )}
-                          </div>
-                          <p className="text-[10px] text-muted-foreground/60">{CATEGORY_LABELS[service.category] || 'General'}</p>
+
+                       <div className="space-y-1">
+                         <label className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-wider block">Operational Notes / Instructions</label>
+                         <input
+                           type="text"
+                           value={service.notes || ''}
+                           onChange={(e) => {
+                             const newS = [...selectedServices];
+                             newS[index].notes = e.target.value;
+                             setSelectedServices(newS);
+                           }}
+                           className="w-full bg-muted/20 border border-border rounded-xl px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary transition-all"
+                           placeholder="e.g. Usually done same day as step 1..."
+                         />
                        </div>
-                       <button 
-                        onClick={() => handleToggleService(service)}
-                        className="p-2 text-muted-foreground/20 hover:text-red-500 transition-colors"
-                       >
-                          <Trash2 size={16} />
-                       </button>
                     </motion.div>
                   ))
                 )}

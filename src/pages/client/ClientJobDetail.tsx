@@ -42,6 +42,51 @@ const ClientJobDetail = () => {
   const [activeTab, setActiveTab] = useState<'progress' | 'documents' | 'messages' | 'payment'>('progress');
   const qc = useQueryClient();
 
+  const [clientServices, setClientServices] = useState<any[]>([]);
+  const [timelineMap, setTimelineMap] = useState<Record<string, any[]>>({});
+  const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
+
+  const loadClientServices = async () => {
+    try {
+      const { data: svcs, error: svcsError } = await supabase
+        .from('job_services')
+        .select(`
+          *,
+          service:services(name_en, name_ar, requires_pro)
+        `)
+        .eq('job_id', id!)
+        .order('display_order', { ascending: true });
+        
+      if (svcsError) throw svcsError;
+      setClientServices(svcs || []);
+
+      if (svcs && svcs.length > 0) {
+        const { data: tlines, error: tlineError } = await supabase
+          .from('job_service_timeline')
+          .select('*')
+          .in('job_service_id', svcs.map(s => s.id))
+          .order('changed_at', { ascending: true });
+
+        if (tlineError) throw tlineError;
+
+        const mapping: Record<string, any[]> = {};
+        tlines?.forEach(entry => {
+          if (!mapping[entry.job_service_id]) mapping[entry.job_service_id] = [];
+          mapping[entry.job_service_id].push(entry);
+        });
+        setTimelineMap(mapping);
+      }
+    } catch (err) {
+      console.error('Error loading client service timeline', err);
+    }
+  };
+
+  useEffect(() => {
+    if (id) {
+      loadClientServices();
+    }
+  }, [id]);
+
   useEffect(() => {
     if (id) {
       // Realtime listener for document updates
@@ -294,6 +339,89 @@ const ClientJobDetail = () => {
                     </div>
                     <PizzaTracker steps={steps} currentStatus={job.status} />
                   </div>
+
+                  {/* Applicants Progress */}
+                  {clientServices.length > 0 && (
+                    <div className="bg-card border border-border rounded-[2.5rem] p-6 sm:p-10 shadow-xl shadow-black/5">
+                      <div className="flex items-center gap-3 mb-8">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <h2 className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.3em]">
+                          {isRtl ? 'حالة المتقدمين للخدمات' : 'Applicants Status Tracker'}
+                        </h2>
+                      </div>
+
+                      <div className="space-y-4">
+                        {clientServices.map((svc) => {
+                          const isExpanded = expandedServiceId === svc.id;
+                          const tline = timelineMap[svc.id] || [];
+                          return (
+                            <div key={svc.id} className="border border-border/80 rounded-2xl overflow-hidden bg-muted/5">
+                              {/* Accordion Trigger */}
+                              <button
+                                onClick={() => setExpandedServiceId(isExpanded ? null : svc.id)}
+                                className="w-full flex items-center justify-between p-5 text-left hover:bg-muted/20 transition-all font-sans"
+                              >
+                                <div className="min-w-0 pr-4">
+                                  <p className="text-xs font-bold text-foreground truncate">
+                                    {svc.applicant_name || `Applicant #${svc.item_number}`}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate font-normal">
+                                    {svc.service?.name_en || svc.service_name}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0">
+                                  <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
+                                    svc.status === 'completed' || svc.status === 'gov_approved' ? 'bg-emerald-500/10 text-emerald-500' :
+                                    svc.status === 'on_hold' ? 'bg-yellow-500/10 text-yellow-500 animate-pulse' :
+                                    svc.status === 'gov_rejected' || svc.status === 'cancelled' ? 'bg-red-500/10 text-red-500' :
+                                    'bg-blue-500/10 text-blue-400'
+                                  }`}>
+                                    {svc.status.replace('_', ' ')}
+                                  </span>
+                                  <span className="text-muted-foreground text-xs">{isExpanded ? '▲' : '▼'}</span>
+                                </div>
+                              </button>
+
+                              {/* Accordion Timeline */}
+                              <AnimatePresence>
+                                {isExpanded && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="border-t border-border/60 bg-muted/10 p-5 space-y-4 font-sans"
+                                  >
+                                    <p className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest mb-2">History Log</p>
+                                    <div className="relative pl-4 border-l border-border/60 space-y-4">
+                                      {tline.map((step, idx) => (
+                                        <div key={idx} className="relative">
+                                          <div className="absolute -left-[21px] top-1.5 w-2 h-2 rounded-full bg-primary" />
+                                          <p className="text-xs font-bold text-foreground">
+                                            Status updated to <span className="text-primary">{step.to_status.replace('_', ' ').toUpperCase()}</span>
+                                          </p>
+                                          {step.reason && (
+                                            <p className="text-[11px] text-muted-foreground mt-0.5 bg-muted/40 p-2.5 rounded-lg border border-border/30 font-normal">
+                                              {step.reason}
+                                            </p>
+                                          )}
+                                          <p className="text-[9px] text-muted-foreground/50 mt-0.5 uppercase font-normal">
+                                            {new Date(step.changed_at).toLocaleString()}
+                                          </p>
+                                        </div>
+                                      ))}
+                                      {tline.length === 0 && (
+                                        <p className="text-xs text-muted-foreground italic font-normal">Process initiated. Awaiting stage progression updates.</p>
+                                      )}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="bg-card border border-border rounded-[2.5rem] p-6 sm:p-10 shadow-xl shadow-black/5">
                     <div className="flex items-center gap-3 mb-10">

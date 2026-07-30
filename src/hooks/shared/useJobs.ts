@@ -37,6 +37,8 @@ export interface Job {
   documents?: JobDocument[];
   client_rating?: number | null;
   client_feedback?: string | null;
+  ops_employee_id?: string;
+  sales_employee_id?: string;
 }
 
 export interface JobStep {
@@ -171,7 +173,7 @@ export const useEmployeeJobs = (employeeId: string) => {
           service:services!service_id(name_en, category),
           job_steps(id, status, actual_gov_fee, workflow_step_id, assigned_to, assigned_by)
         `)
-        .or(`employee_id.eq.${employeeId},assigned_by.eq.${employeeId}`);
+        .or(`employee_id.eq.${employeeId},assigned_by.eq.${employeeId},ops_employee_id.eq.${employeeId},sales_employee_id.eq.${employeeId}`);
 
       if (ownedError) throw ownedError;
 
@@ -259,6 +261,8 @@ export const useEmployeeJobs = (employeeId: string) => {
           advance_due_amount: Number(j.advance_amount) || 0,
           remaining_due_amount: Number(j.remaining_amount) || 0,
           notes: j.notes,
+          ops_employee_id: j.ops_employee_id,
+          sales_employee_id: j.sales_employee_id,
         };
       }).sort((a, b) => new Date(b.started_date).getTime() - new Date(a.started_date).getTime());
     },
@@ -302,7 +306,7 @@ export const useClientJobs = (clientId: string) => {
           expected_completion: j.created_at,
           days_active: Math.ceil((Date.now() - new Date(j.started_at ?? j.created_at).getTime()) / 86400000),
           total_steps: totalSteps,
-          completed_steps: 0,
+          completed_steps: j.job_steps?.filter((s: any) => s.status === 'completed').length ?? 0,
           total_fee: Number(j.total_fee) || 0,
           work_fee: Number(j.work_fee) || 0,
           ministry_fee: Number(j.ministry_fee) || 0,
@@ -709,6 +713,7 @@ export const useUpdateJobStepStatus = () => {
       qc.invalidateQueries({ queryKey: ['job'] });
       qc.invalidateQueries({ queryKey: ['employee', 'jobs'] });
       qc.invalidateQueries({ queryKey: ['admin', 'jobs'] });
+      qc.invalidateQueries({ queryKey: ['client', 'jobs'] }); // sync client progress bar
     },
   });
 };
@@ -1129,6 +1134,7 @@ export const useUpdateDocumentStatus = () => {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['job'] });
+      qc.invalidateQueries({ queryKey: ['client', 'documents'] }); // sync client documents page
     },
   });
 };

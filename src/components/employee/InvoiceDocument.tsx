@@ -63,7 +63,7 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
       <div className="flex justify-between items-start mb-6 print:mb-3 relative z-10">
         <div>
           <h3 className="font-bold text-gray-900 mb-2 print:mb-1">Bill To</h3>
-          <p className="font-bold text-gray-900 text-xs">{invoice.client?.full_name || 'Client Name'}</p>
+          <p className="font-bold text-gray-900 text-xs">{invoice.client?.full_name || invoice.lead?.contact_name || 'Client Name'}</p>
         </div>
         <div className="text-right">
           <h3 className="font-bold text-gray-900 mb-2 print:mb-1">Invoice Details</h3>

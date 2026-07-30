@@ -5,6 +5,210 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
+const AdvanceForm = ({ job, onSave }: { job: any, onSave: () => void }) => {
+  const [amount, setAmount] = useState(job.advance_amount?.toString() || '0');
+  const [method, setMethod] = useState<'cash' | 'bank_transfer' | 'pos' | 'online'>('bank_transfer');
+  const [reference, setReference] = useState('');
+  const [dateReceived, setDateReceived] = useState(new Date().toISOString().split('T')[0]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if ((method === 'bank_transfer' || method === 'online') && !reference.trim()) {
+      toast.error('Reference number is required for bank transfer or online payment');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('jobs')
+        .update({
+          advance_paid: true,
+          advance_paid_at: new Date(dateReceived).toISOString(),
+          advance_payment_method: method,
+          advance_reference: reference || null,
+          advance_amount: parseFloat(amount)
+        })
+        .eq('id', job.id);
+
+      if (error) throw error;
+      toast.success('Advance payment recorded!');
+      onSave();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 pt-2">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Amount (OMR)</label>
+          <input
+            type="number"
+            step="0.001"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Date Received</label>
+          <input
+            type="date"
+            value={dateReceived}
+            onChange={e => setDateReceived(e.target.value)}
+            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">Payment Method</label>
+        <div className="flex flex-wrap gap-4">
+          {(['bank_transfer', 'pos', 'cash', 'online'] as const).map(m => (
+            <label key={m} className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              <input
+                type="radio"
+                name="advance_method"
+                checked={method === m}
+                onChange={() => setMethod(m)}
+                className="accent-primary"
+              />
+              <span className="capitalize">{m.replace('_', ' ')}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {(method === 'bank_transfer' || method === 'online') && (
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Reference Number *</label>
+          <input
+            type="text"
+            placeholder="e.g. Transaction Ref"
+            value={reference}
+            onChange={e => setReference(e.target.value)}
+            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
+            required
+          />
+        </div>
+      )}
+
+      <button
+        onClick={handleSave}
+        disabled={isSaving}
+        className="w-full bg-primary text-[#0A0F1E] font-bold text-xs py-2.5 rounded-xl hover:bg-primary/95 transition-all disabled:opacity-50"
+      >
+        {isSaving ? 'Saving...' : 'Mark Advance as Paid'}
+      </button>
+    </div>
+  );
+};
+
+const RemainingForm = ({ job, onSave }: { job: any, onSave: () => void }) => {
+  const [amount, setAmount] = useState(job.remaining_amount?.toString() || '0');
+  const [method, setMethod] = useState<'cash' | 'bank_transfer' | 'pos' | 'online'>('bank_transfer');
+  const [reference, setReference] = useState('');
+  const [dateReceived, setDateReceived] = useState(new Date().toISOString().split('T')[0]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if ((method === 'bank_transfer' || method === 'online') && !reference.trim()) {
+      toast.error('Reference number is required for bank transfer or online payment');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('jobs')
+        .update({
+          remaining_paid: true,
+          remaining_paid_at: new Date(dateReceived).toISOString(),
+          remaining_payment_method: method,
+          remaining_reference: reference || null,
+          remaining_amount: parseFloat(amount)
+        })
+        .eq('id', job.id);
+
+      if (error) throw error;
+      toast.success('Remaining payment recorded!');
+      onSave();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 pt-2">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Amount (OMR)</label>
+          <input
+            type="number"
+            step="0.001"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Date Received</label>
+          <input
+            type="date"
+            value={dateReceived}
+            onChange={e => setDateReceived(e.target.value)}
+            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">Payment Method</label>
+        <div className="flex flex-wrap gap-4">
+          {(['bank_transfer', 'pos', 'cash', 'online'] as const).map(m => (
+            <label key={m} className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              <input
+                type="radio"
+                name="remaining_method"
+                checked={method === m}
+                onChange={() => setMethod(m)}
+                className="accent-primary"
+              />
+              <span className="capitalize">{m.replace('_', ' ')}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {(method === 'bank_transfer' || method === 'online') && (
+        <div>
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Reference Number *</label>
+          <input
+            type="text"
+            placeholder="e.g. Transaction Ref"
+            value={reference}
+            onChange={e => setReference(e.target.value)}
+            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
+            required
+          />
+        </div>
+      )}
+
+      <button
+        onClick={handleSave}
+        disabled={isSaving}
+        className="w-full bg-primary text-[#0A0F1E] font-bold text-xs py-2.5 rounded-xl hover:bg-primary/95 transition-all disabled:opacity-50"
+      >
+        {isSaving ? 'Saving...' : 'Mark Final Payment as Paid'}
+      </button>
+    </div>
+  );
+};
+
 export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentReceived: () => void }) => {
   const { profile } = useAuth();
   const [additionalCharges, setAdditionalCharges] = useState<any[]>([]);
@@ -226,6 +430,9 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
   const totalPaid = payments.reduce((sum, pay) => sum + Number(pay.amount), 0);
   const remainingBalance = totalBilled - totalPaid;
 
+  const mode = localStorage.getItem('employee_mode') || 'sales';
+  const isSalesMode = mode === 'sales';
+
   return (
     <div className="max-w-3xl mx-auto py-8">
 
@@ -353,6 +560,76 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
             </div>
           )}
         </div>
+
+        {/* ── SALES MODE PAYMENT RECORDING SECTION ── */}
+        {isSalesMode && (
+          <div className="mt-8 border-t border-border pt-8 space-y-6">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment Recording</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* ADVANCE PAYMENT BLOCK */}
+              <div className="bg-white/5 border border-border/80 rounded-2xl p-5 space-y-4 relative overflow-hidden">
+                <div className="flex items-center justify-between gap-4">
+                  <h5 className="text-sm font-bold text-foreground">1. Advance Payment</h5>
+                  {job.advance_paid ? (
+                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                      <CheckCircle2 size={10} /> Paid
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      Pending
+                    </span>
+                  )}
+                </div>
+
+                {job.advance_paid ? (
+                  <div className="text-xs text-muted-foreground space-y-1.5 pt-1">
+                    <p>Amount: <span className="font-bold text-foreground">{Number(job.advance_amount).toFixed(3)} OMR</span></p>
+                    <p>Method: <span className="font-bold text-foreground capitalize">{job.advance_payment_method}</span></p>
+                    {job.advance_reference && <p>Reference: <span className="font-mono text-foreground">{job.advance_reference}</span></p>}
+                    <p>Received: <span className="font-bold text-foreground">{job.advance_paid_at ? new Date(job.advance_paid_at).toLocaleDateString() : 'N/A'}</span></p>
+                  </div>
+                ) : (
+                  <AdvanceForm job={job} onSave={onPaymentReceived} />
+                )}
+              </div>
+
+              {/* REMAINING PAYMENT BLOCK */}
+              {job.advance_paid ? (
+                <div className="bg-white/5 border border-border/80 rounded-2xl p-5 space-y-4 relative overflow-hidden">
+                  <div className="flex items-center justify-between gap-4">
+                    <h5 className="text-sm font-bold text-foreground">2. Final Payment</h5>
+                    {job.remaining_paid ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                        <CheckCircle2 size={10} /> Paid
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+
+                  {job.remaining_paid ? (
+                    <div className="text-xs text-muted-foreground space-y-1.5 pt-1">
+                      <p>Amount: <span className="font-bold text-foreground">{Number(job.remaining_amount).toFixed(3)} OMR</span></p>
+                      <p>Method: <span className="font-bold text-foreground capitalize">{job.remaining_payment_method}</span></p>
+                      {job.remaining_reference && <p>Reference: <span className="font-mono text-foreground">{job.remaining_reference}</span></p>}
+                      <p>Received: <span className="font-bold text-foreground">{job.remaining_paid_at ? new Date(job.remaining_paid_at).toLocaleDateString() : 'N/A'}</span></p>
+                    </div>
+                  ) : (
+                    <RemainingForm job={job} onSave={onPaymentReceived} />
+                  )}
+                </div>
+              ) : (
+                <div className="border border-dashed border-border rounded-2xl p-5 flex flex-col items-center justify-center text-center">
+                  <AlertCircle size={20} className="text-muted-foreground/30 mb-2" />
+                  <p className="text-xs text-muted-foreground/60 italic">Final payment is locked until the advance payment is marked as verified.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Payment History Section */}
         <div className="mt-8 border-t border-border pt-8">

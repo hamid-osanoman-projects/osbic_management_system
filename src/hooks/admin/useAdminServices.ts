@@ -16,6 +16,17 @@ export interface WorkflowStep {
   estimated_gov_fee?: number;
 }
 
+export interface DocumentRequirement {
+  id?: string;
+  document_name: string;
+  document_name_ar: string;
+  is_required: boolean;
+  is_client_upload: boolean;
+  is_employee_upload: boolean;
+  notes: string;
+  display_order: number;
+}
+
 export interface Service {
   id: string;
   name_en: string;
@@ -32,6 +43,8 @@ export interface Service {
   active_jobs: number;
   steps_count: number;
   steps: WorkflowStep[];
+  requires_pro: boolean;
+  document_requirements: DocumentRequirement[];
 }
 
 export const useAdminServices = () => {
@@ -73,6 +86,8 @@ export const useAdminServices = () => {
         active_jobs: statsMap[s.id] || 0,
         steps_count: s.steps_count?.[0]?.count || 0,
         steps: [],
+        requires_pro: s.requires_pro || false,
+        document_requirements: []
       }));
     },
   });
@@ -99,7 +114,9 @@ export const useAdminService = (id?: string) => {
           is_active: true,
           active_jobs: 0,
           steps_count: 0,
-          steps: []
+          steps: [],
+          requires_pro: false,
+          document_requirements: []
         };
       }
 
@@ -118,6 +135,14 @@ export const useAdminService = (id?: string) => {
         .order('step_order', { ascending: true });
 
       if (stError) throw stError;
+
+      const { data: docs, error: docError } = await supabase
+        .from('service_document_requirements')
+        .select('*')
+        .eq('service_id', id)
+        .order('display_order', { ascending: true });
+
+      if (docError) throw docError;
 
       return {
         id: service.id,
@@ -147,6 +172,17 @@ export const useAdminService = (id?: string) => {
           order_index: st.step_order,
           estimated_gov_fee: st.estimated_gov_fee || 0,
         })),
+        requires_pro: service.requires_pro || false,
+        document_requirements: (docs || []).map((d: any) => ({
+          id: d.id,
+          document_name: d.document_name,
+          document_name_ar: d.document_name_ar || '',
+          is_required: d.is_required,
+          is_client_upload: d.is_client_upload,
+          is_employee_upload: d.is_employee_upload,
+          notes: d.notes || '',
+          display_order: d.display_order || 0,
+        })),
       };
     },
   });
@@ -170,6 +206,7 @@ export const useSaveService = () => {
         work_fee: serviceData.work_fee,
         ministry_fee: serviceData.ministry_fee,
         is_active: serviceData.is_active,
+        requires_pro: serviceData.requires_pro || false,
       };
 
       let currentServiceId = id;
@@ -216,6 +253,32 @@ export const useSaveService = () => {
           .insert(stepsPayload as any);
         
         if (insError) throw insError;
+      }
+
+      // Document Requirements synchronization
+      await supabase
+        .from('service_document_requirements')
+        .delete()
+        .eq('service_id', currentServiceId);
+
+      const docs = serviceData.document_requirements || [];
+      if (docs.length > 0) {
+        const docsPayload = docs.map((d, index) => ({
+          service_id: currentServiceId,
+          document_name: d.document_name,
+          document_name_ar: d.document_name_ar || '',
+          is_required: d.is_required,
+          is_client_upload: d.is_client_upload,
+          is_employee_upload: d.is_employee_upload,
+          notes: d.notes || '',
+          display_order: d.display_order ?? index,
+        }));
+
+        const { error: docInsError } = await supabase
+          .from('service_document_requirements')
+          .insert(docsPayload as any);
+
+        if (docInsError) throw docInsError;
       }
 
       return { ...serviceData, id: currentServiceId };

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search, FileText, CheckCircle2, FileClock, Eye, Edit, Trash2 } from 'lucide-react';
 import { useInvoices, useDeleteInvoice } from '../../hooks/employee/useInvoices';
 import { format } from 'date-fns';
@@ -10,10 +10,18 @@ import ConfirmModal from '../../components/shared/ConfirmModal';
 
 const EmployeeInvoices = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const { data: invoices, isLoading } = useInvoices();
   const { mutateAsync: deleteInvoice } = useDeleteInvoice();
-  const [filter, setFilter] = useState<'all' | 'quotations' | 'unpaid' | 'paid'>('all');
+  const [filter, setFilter] = useState<'all' | 'invoices' | 'quotations' | 'unpaid' | 'paid'>('all');
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['all', 'invoices', 'quotations', 'unpaid', 'paid'].includes(tab)) {
+      setFilter(tab as any);
+    }
+  }, [searchParams]);
   const [search, setSearch] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -37,9 +45,10 @@ const EmployeeInvoices = () => {
     }
 
     // Status/Type filter
+    if (filter === 'invoices' && inv.type === 'quotation') return false;
     if (filter === 'quotations' && inv.type !== 'quotation') return false;
     if (filter === 'unpaid' && (inv.type === 'quotation' || inv.status === 'paid')) return false;
-    if (filter === 'paid' && inv.status !== 'paid') return false;
+    if (filter === 'paid' && (inv.type === 'quotation' || inv.status !== 'paid')) return false;
     
     // Search filter
     if (search) {
@@ -83,24 +92,36 @@ const EmployeeInvoices = () => {
             />
           </div>
           <button 
-            onClick={() => navigate('/employee/invoices/new')}
-            className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-all uppercase tracking-widest flex items-center gap-2 text-xs shadow-lg shadow-primary/20 whitespace-nowrap"
+            onClick={() => navigate('/employee/quotations/new')}
+            className="px-4 py-2.5 rounded-xl bg-card border border-border text-muted-foreground hover:text-foreground font-bold transition-all uppercase tracking-widest flex items-center gap-1.5 text-[10px] whitespace-nowrap active:scale-95"
           >
-            <Plus size={16} /> New Document
+            <Plus size={14} /> New Quotation
+          </button>
+          <button 
+            onClick={() => navigate('/employee/invoices/new')}
+            className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-all uppercase tracking-widest flex items-center gap-1.5 text-[10px] shadow-lg shadow-primary/20 whitespace-nowrap active:scale-95"
+          >
+            <Plus size={14} /> New Invoice
           </button>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex items-center gap-6 border-b border-border/30 overflow-x-auto no-scrollbar">
-        {['all', 'quotations', 'unpaid', 'paid'].map(f => (
+        {[
+          { key: 'all', label: 'All Documents' },
+          { key: 'invoices', label: 'Invoices' },
+          { key: 'quotations', label: 'Quotations' },
+          { key: 'unpaid', label: 'Unpaid Invoices' },
+          { key: 'paid', label: 'Paid Invoices' }
+        ].map(f => (
           <button
-            key={f}
-            onClick={() => setFilter(f as any)}
-            className={`pb-3 text-xs font-bold uppercase tracking-widest transition-colors relative whitespace-nowrap ${filter === f ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+            key={f.key}
+            onClick={() => setFilter(f.key as any)}
+            className={`pb-3 text-xs font-bold uppercase tracking-widest transition-colors relative whitespace-nowrap ${filter === f.key ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
           >
-            {f.replace('_', ' ')}
-            {filter === f && (
+            {f.label}
+            {filter === f.key && (
               <motion.div layoutId="invTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full" />
             )}
           </button>
@@ -144,7 +165,10 @@ const EmployeeInvoices = () => {
                       {getStatusDisplay(inv.type, inv.status)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Client: <span className="font-medium text-foreground">{inv.client?.full_name}</span>
+                      {inv.type === 'quotation' ? 'Recipient: ' : 'Client: '}
+                      <span className="font-medium text-foreground">
+                        {inv.client?.full_name || inv.lead?.contact_name || 'N/A'}
+                      </span>
                       {inv.job && ` • Job: ${inv.job?.job_code}`}
                     </p>
                   </div>
@@ -160,14 +184,14 @@ const EmployeeInvoices = () => {
 
                   <div className="flex items-center gap-2">
                     <button 
-                      onClick={() => navigate(`/employee/invoices/${inv.id!}?view=true`)}
+                      onClick={() => navigate(`/employee/${inv.type === 'quotation' ? 'quotations' : 'invoices'}/${inv.id!}?view=true`)}
                       className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:bg-primary hover:border-primary hover:text-primary-foreground transition-all shadow-sm"
                       title="View Document"
                     >
                       <Eye size={14} />
                     </button>
                     <button 
-                      onClick={() => navigate(`/employee/invoices/${inv.id!}`)}
+                      onClick={() => navigate(`/employee/${inv.type === 'quotation' ? 'quotations' : 'invoices'}/${inv.id!}`)}
                       className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:bg-amber-500 hover:border-amber-500 hover:text-white transition-all shadow-sm"
                       title="Edit Document"
                     >

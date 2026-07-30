@@ -11,8 +11,8 @@ import { TaskListView } from '../../components/employee/TaskListView';
 import { TaskDashboard } from '../../components/employee/TaskDashboard';
 import { Filter, Search, Plus, Clock, AlertCircle, CheckCircle2, ArrowLeft, X, User, LayoutGrid, List, Zap, Briefcase } from 'lucide-react';
 import { JobBuilder } from '../../components/employee/JobBuilder';
-import { QuickTaskModal } from '../../components/employee/QuickTaskModal';
 import CreateClientSlideOver from '../../components/shared/clients/CreateClientSlideOver';
+import WalkInModal from '../../components/employee/WalkInModal';
 
 interface UnifiedWorkspaceProps {
   filterType: 'tasks' | 'clients' | 'pipeline';
@@ -38,7 +38,7 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
   const [jobTypeFilter, setJobTypeFilter] = useState<'standard' | 'quick'>('standard');
   const [clientTypeFilter, setClientTypeFilter] = useState<'standard' | 'walk-in'>('standard');
   const [isBuildingJob, setIsBuildingJob] = useState(false);
-  const [isCreatingQuickTask, setIsCreatingQuickTask] = useState(false);
+  const [isWalkInOpen, setIsWalkInOpen] = useState(false);
   const [isRegisterClientOpen, setIsRegisterClientOpen] = useState(false);
   const [clientToEdit, setClientToEdit] = useState<any>(null);
   
@@ -202,13 +202,13 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
   const renderModals = () => (
     <>
       {renderJobBuilderModal()}
-      <QuickTaskModal 
-        isOpen={isCreatingQuickTask} 
-        onClose={() => setIsCreatingQuickTask(false)} 
+      <WalkInModal
+        isOpen={isWalkInOpen}
+        onClose={() => setIsWalkInOpen(false)}
         onJobCreated={() => {
-          setIsCreatingQuickTask(false);
+          setIsWalkInOpen(false);
           refetch();
-        }} 
+        }}
       />
       {isRegisterClientOpen && (
         <CreateClientSlideOver 
@@ -273,7 +273,7 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
           jobTypeFilter={jobTypeFilter}
           onJobTypeChange={setJobTypeFilter}
           onNewTask={() => setIsBuildingJob(true)}
-          onQuickTask={() => setIsCreatingQuickTask(true)}
+          onWalkIn={() => setIsWalkInOpen(true)}
         />
       </div>
       </>
@@ -354,7 +354,7 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
                 onClick={() => setJobTypeFilter('quick')}
                 className={`flex-1 flex justify-center items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${jobTypeFilter === 'quick' ? 'bg-card shadow-sm text-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Zap size={14} /> Quick
+                <Zap size={14} /> Walk-in
               </button>
             </div>
           )}
@@ -459,7 +459,7 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
                 ))}
                 {displayJobs.length === 0 && (
                   <div className="text-center p-8 border border-dashed border-border rounded-2xl bg-muted/10 mt-4">
-                    <p className="text-muted-foreground text-sm font-medium">No {jobTypeFilter === 'quick' ? 'Quick Tasks' : 'Standard Jobs'} found.</p>
+                    <p className="text-muted-foreground text-sm font-medium">No {jobTypeFilter === 'quick' ? 'Walk-in Tasks' : 'Standard Jobs'} found.</p>
                   </div>
                 )}
               </div>

@@ -8,7 +8,7 @@ import {
   TrendingUp, TrendingDown,
   Briefcase, UserCheck, AlertCircle,
   ChevronRight, Trophy,
-  Wallet,
+  Wallet, Zap
 } from 'lucide-react';
 import {
   useAdminDashboardStats,
@@ -17,6 +17,7 @@ import {
   useTopEmployees,
   useJobDistribution
 } from '../../hooks/admin/useAdminDashboard';
+import { useAdminLeads } from '../../hooks/shared/useLeads';
 import Skeleton from '../../components/ui/Skeleton';
 import ExpiryAlerts from '../../components/admin/analytics/ExpiryAlerts';
 import ApprovalHub from '../../components/admin/ApprovalHub';
@@ -55,6 +56,9 @@ const Dashboard = () => {
   const { data: distribution } = useJobDistribution();
   const { data: recentJobs, isLoading: jobsLoading } = useRecentJobs();
   const { data: employees, isLoading: employeesLoading } = useTopEmployees();
+  
+  const { useAllLeadsList } = useAdminLeads();
+  const { data: leads } = useAllLeadsList();
 
   const container = {
     hidden: { opacity: 0 },
@@ -302,6 +306,48 @@ const Dashboard = () => {
                   </div>
                 </div>
               ))}
+          </div>
+        </motion.div>
+      </section>
+
+      {/* ── Row 3.5: CRM & Sales Funnel Summary ──────────────── */}
+      <section>
+        <motion.div variants={item} className="bg-card border border-border rounded-[2rem] p-6 lg:p-8 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-6">
+          <div className="space-y-2 max-w-md">
+            <h4 className="text-lg font-syne font-bold text-foreground">CRM Sales Pipeline Overview</h4>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              Track overall client acquisition. Open leads represent potential business currently managed by your sales team.
+            </p>
+            <div className="flex items-center gap-6 pt-2">
+              <div>
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Total Leads</span>
+                <p className="text-xl font-bold font-mono text-foreground mt-0.5">{leads?.length || 0}</p>
+              </div>
+              <div>
+                <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">Converted</span>
+                <p className="text-xl font-bold font-mono text-emerald-500 mt-0.5">
+                  {leads?.filter(l => l.status === 'converted').length || 0}
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] text-primary font-bold uppercase tracking-wider">Conversion Rate</span>
+                <p className="text-xl font-bold font-mono text-primary mt-0.5">
+                  {leads && leads.length > 0 
+                    ? Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100)
+                    : 0}%
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <Link 
+              to="/admin/leads"
+              className="px-5 py-3 rounded-xl bg-primary text-[#0A0F1E] font-bold text-xs hover:bg-primary/95 transition-all flex items-center gap-1.5 shadow-lg shadow-primary/10"
+            >
+              <Zap size={14} />
+              <span>Open Leads Manager</span>
+            </Link>
           </div>
         </motion.div>
       </section>

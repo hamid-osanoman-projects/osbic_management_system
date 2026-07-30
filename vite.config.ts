@@ -13,7 +13,7 @@ export default defineConfig({
       injectRegister: 'auto',
       workbox: {
         maximumFileSizeToCacheInBytes: 5000000,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,mp3}'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/,
@@ -48,7 +48,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
-        start_url: '/portal/login', // Forces the PWA to open here
+        start_url: '/login', // Universal starting redirect page for clients/staff
         icons: [
           {
             src: 'logo-192.png',

@@ -32,15 +32,15 @@ const MyJobs = () => {
   const acceptJobMutation = useMutation({
     mutationFn: async (jobId: string) => {
       // Set the job status to active
-      const { error } = await supabase
-        .from('jobs')
+      const { error } = await (supabase
+        .from('jobs') as any)
         .update({ status: 'active' })
         .eq('id', jobId);
       if (error) throw error;
       
       // Also set any pending steps assigned to this employee to in_progress
-      await supabase
-        .from('job_steps')
+      await (supabase
+        .from('job_steps') as any)
         .update({ status: 'in_progress' })
         .eq('job_id', jobId)
         .eq('assigned_to', profile?.id)
@@ -102,8 +102,8 @@ const MyJobs = () => {
 
     return matchStatus && matchService && matchPayment && matchSearch;
   })?.sort((a, b) => {
-    if (sortBy === 'newest') return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-    if (sortBy === 'oldest') return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+    if (sortBy === 'newest') return new Date(b.started_date || 0).getTime() - new Date(a.started_date || 0).getTime();
+    if (sortBy === 'oldest') return new Date(a.started_date || 0).getTime() - new Date(b.started_date || 0).getTime();
     if (sortBy === 'fee_desc') return (b.total_fee || 0) - (a.total_fee || 0);
     if (sortBy === 'progress_desc') return ((b.completed_steps || 0) / (b.total_steps || 1)) - ((a.completed_steps || 0) / (a.total_steps || 1));
     return 0;

@@ -33,12 +33,17 @@ const ServiceForm = () => {
     name_en: '', name_ar: '', category: 'company_formation', icon: 'Building2',
     description_en: '', description_ar: '', estimated_days: 7, expiry_months: 60,
     work_fee: 30, ministry_fee: 20,
-    is_active: true, steps: [], active_jobs: 0
+    is_active: true, steps: [], active_jobs: 0,
+    requires_pro: false, document_requirements: []
   });
 
   useEffect(() => {
     if (initialData) {
-      setFormData(JSON.parse(JSON.stringify(initialData)));
+      setFormData({
+        ...initialData,
+        requires_pro: initialData.requires_pro || false,
+        document_requirements: initialData.document_requirements || []
+      });
     }
   }, [initialData]);
 
@@ -190,35 +195,203 @@ const ServiceForm = () => {
                  </div>
                </div>
 
-               <div className="space-y-6">
-                 <div className="space-y-2">
-                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Expiry Validity (Months)</label>
-                   <input 
-                     type="number" 
-                     placeholder="Empty if never expires" 
-                     value={formData.expiry_months || ''} 
-                     onChange={(e) => setFormData({...formData, expiry_months: e.target.value ? Number(e.target.value) : null})} 
-                     className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all" 
-                   />
-                 </div>
-                 
-                 <label className="flex items-center justify-between p-4 rounded-xl border border-border bg-muted/10 cursor-pointer group hover:bg-muted/20 transition-colors">
-                   <span className="text-sm font-bold text-foreground">Active Status</span>
-                   <button 
-                     onClick={() => setFormData({...formData, is_active: !formData.is_active})} 
-                     className={cn(
-                       "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                       formData.is_active ? "bg-emerald-500" : "bg-muted-foreground/30"
-                     )}
-                   >
-                     <span className={cn(
-                       "inline-block h-4 w-4 transform rounded-full bg-white transition-transform ml-1",
-                       formData.is_active ? "translate-x-5" : "translate-x-0"
-                     )} />
-                   </button>
-                 </label>
-               </div>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Expiry Validity (Months)</label>
+                    <input 
+                      type="number" 
+                      placeholder="Empty if never expires" 
+                      value={formData.expiry_months || ''} 
+                      onChange={(e) => setFormData({...formData, expiry_months: e.target.value ? Number(e.target.value) : null})} 
+                      className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all" 
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <label className="flex items-center justify-between p-4 rounded-xl border border-border bg-muted/10 cursor-pointer group hover:bg-muted/20 transition-colors">
+                      <span className="text-sm font-bold text-foreground">Active Status</span>
+                      <button 
+                        type="button"
+                        onClick={() => setFormData({...formData, is_active: !formData.is_active})} 
+                        className={cn(
+                          "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                          formData.is_active ? "bg-emerald-500" : "bg-muted-foreground/30"
+                        )}
+                      >
+                        <span className={cn(
+                          "inline-block h-4 w-4 transform rounded-full bg-white transition-transform ml-1",
+                          formData.is_active ? "translate-x-5" : "translate-x-0"
+                        )} />
+                      </button>
+                    </label>
+
+                    <label className="flex items-center justify-between p-4 rounded-xl border border-border bg-muted/10 cursor-pointer group hover:bg-muted/20 transition-colors">
+                      <span className="text-sm font-bold text-foreground">Requires PRO</span>
+                      <button 
+                        type="button"
+                        onClick={() => setFormData({...formData, requires_pro: !formData.requires_pro})} 
+                        className={cn(
+                          "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                          formData.requires_pro ? "bg-amber-500" : "bg-muted-foreground/30"
+                        )}
+                      >
+                        <span className={cn(
+                          "inline-block h-4 w-4 transform rounded-full bg-white transition-transform ml-1",
+                          formData.requires_pro ? "translate-x-5" : "translate-x-0"
+                        )} />
+                      </button>
+                    </label>
+                  </div>
+                </div>
              </div>
+           </div>
+
+           {/* Required Documents Template */}
+           <div className="pt-6 border-t border-border/50 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <FileText size={16} className="text-primary" /> Required Documents Template
+                  </h3>
+                  <p className="text-xs text-muted-foreground/80 mt-1">Placeholders generated for new jobs to collect files.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newReq = {
+                      document_name: '',
+                      document_name_ar: '',
+                      is_required: true,
+                      is_client_upload: true,
+                      is_employee_upload: true,
+                      notes: '',
+                      display_order: formData.document_requirements.length + 1
+                    };
+                    setFormData({
+                      ...formData,
+                      document_requirements: [...formData.document_requirements, newReq]
+                    });
+                  }}
+                  className="px-4 py-2 bg-primary/10 border border-primary/20 text-primary text-xs font-bold rounded-xl hover:bg-primary/20 transition-colors"
+                >
+                  + Add Document Requirement
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {formData.document_requirements.map((doc, idx) => (
+                  <div key={idx} className="p-4 bg-muted/20 border border-border rounded-2xl relative space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Document Name (EN) *</label>
+                        <input
+                          type="text"
+                          value={doc.document_name}
+                          onChange={(e) => {
+                            const newReqs = [...formData.document_requirements];
+                            newReqs[idx].document_name = e.target.value;
+                            setFormData({ ...formData, document_requirements: newReqs });
+                          }}
+                          className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
+                          placeholder="e.g. Passport Copy"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right block">Document Name (AR)</label>
+                        <input
+                          type="text"
+                          dir="rtl"
+                          value={doc.document_name_ar}
+                          onChange={(e) => {
+                            const newReqs = [...formData.document_requirements];
+                            newReqs[idx].document_name_ar = e.target.value;
+                            setFormData({ ...formData, document_requirements: newReqs });
+                          }}
+                          className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all text-right"
+                          placeholder="نسخة من جواز السفر"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`required-${idx}`}
+                          checked={doc.is_required}
+                          onChange={(e) => {
+                            const newReqs = [...formData.document_requirements];
+                            newReqs[idx].is_required = e.target.checked;
+                            setFormData({ ...formData, document_requirements: newReqs });
+                          }}
+                          className="rounded border-border text-primary focus:ring-primary/20"
+                        />
+                        <label htmlFor={`required-${idx}`} className="text-xs font-bold text-muted-foreground uppercase tracking-wider cursor-pointer">Is Required</label>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`client-upload-${idx}`}
+                          checked={doc.is_client_upload}
+                          onChange={(e) => {
+                            const newReqs = [...formData.document_requirements];
+                            newReqs[idx].is_client_upload = e.target.checked;
+                            setFormData({ ...formData, document_requirements: newReqs });
+                          }}
+                          className="rounded border-border text-primary focus:ring-primary/20"
+                        />
+                        <label htmlFor={`client-upload-${idx}`} className="text-xs font-bold text-muted-foreground uppercase tracking-wider cursor-pointer">Client Uploadable</label>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`employee-upload-${idx}`}
+                          checked={doc.is_employee_upload}
+                          onChange={(e) => {
+                            const newReqs = [...formData.document_requirements];
+                            newReqs[idx].is_employee_upload = e.target.checked;
+                            setFormData({ ...formData, document_requirements: newReqs });
+                          }}
+                          className="rounded border-border text-primary focus:ring-primary/20"
+                        />
+                        <label htmlFor={`employee-upload-${idx}`} className="text-xs font-bold text-muted-foreground uppercase tracking-wider cursor-pointer">Employee Uploadable</label>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Notes / Instructions</label>
+                      <input
+                        type="text"
+                        value={doc.notes}
+                        onChange={(e) => {
+                          const newReqs = [...formData.document_requirements];
+                          newReqs[idx].notes = e.target.value;
+                          setFormData({ ...formData, document_requirements: newReqs });
+                        }}
+                        className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
+                        placeholder="Instructions for uploader..."
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newReqs = formData.document_requirements.filter((_, i) => i !== idx);
+                        setFormData({ ...formData, document_requirements: newReqs });
+                      }}
+                      className="absolute top-2 right-2 text-rose-500 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors text-xs font-bold"
+                      title="Remove document requirement"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+                {formData.document_requirements.length === 0 && (
+                  <p className="text-center py-6 text-xs text-muted-foreground italic border border-dashed border-border rounded-2xl">No required documents configured for this service.</p>
+                )}
+              </div>
            </div>
 
         </div>

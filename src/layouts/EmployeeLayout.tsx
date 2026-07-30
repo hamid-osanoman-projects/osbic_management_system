@@ -15,13 +15,18 @@ import {
    MessageSquare,
    PieChart,
    LayoutDashboard,
-   FileText
+   FileText,
+   Shield,
+   Zap
  } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 import { TopBarNotifications } from '../components/employee/TopBarNotifications';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { GlobalNotificationListener } from '../components/shared/GlobalNotificationListener';
+import { AssignmentBanner } from '../components/employee/AssignmentBanner';
+import { QuickUpdateWidget } from '../components/employee/QuickUpdateWidget';
+import { useRealtime } from '../hooks/useRealtime';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { supabase } from '../lib/supabase';
@@ -37,6 +42,8 @@ const EmployeeLayout: React.FC = () => {
   const { profile, signOut } = useAuth();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.dir() === 'rtl';
+
+  useRealtime(profile?.id);
 
   const [availability, setAvailability] = useState(profile?.availability_status || 'on-work');
 
@@ -60,11 +67,16 @@ const EmployeeLayout: React.FC = () => {
     { key: 'home', icon: LayoutDashboard, path: '/employee' },
     { key: 'my_clients', icon: Users, path: '/employee/clients' },
     { key: 'my_tasks', icon: ClipboardList, path: '/employee/tasks' },
+    // Ops queue — shown if employee can do ops work
+    ...(profile?.can_do_ops ? [{ key: 'ops_queue', icon: Zap, path: '/employee/my-tasks', label: 'My Work Queue' }] : []),
+    // PRO queue — shown for PRO agents
+    ...(profile?.is_pro ? [{ key: 'pro_queue', icon: Shield, path: '/employee/pro-queue', label: 'PRO Queue' }] : []),
     { key: 'reports', icon: PieChart, path: '/employee/reports' },
     { key: 'invoices', icon: FileText, path: '/employee/invoices' },
     { key: 'messages', icon: MessageSquare, path: '/employee/messages' },
     { key: 'notifications', icon: Bell, path: '/employee/notifications' },
     { key: 'profile', icon: User, path: '/employee/profile' },
+    ...(profile?.can_do_sales ? [{ key: 'leads', icon: Users, path: '/employee/leads' }] : []),
     ...(profile?.is_manager ? [{ key: 'pipeline', icon: Globe, path: '/employee/pipeline' }] : []),
   ];
 
@@ -77,6 +89,8 @@ const EmployeeLayout: React.FC = () => {
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden" dir={isRtl ? 'rtl' : 'ltr'}>
       <GlobalNotificationListener />
+      {/* Removed AssignmentBanner for immediate direct task activation workflow */}
+      <QuickUpdateWidget />
       {/* Sidebar */}
       <motion.aside
         initial={false}

@@ -225,7 +225,13 @@ const Employees = () => {
                   </div>
                   <div>
                     <Link to={`/admin/employees/${emp.id}`} className="text-base font-bold text-foreground hover:text-primary transition-colors">{emp.full_name}</Link>
-                    <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">{emp.employee_code}</p>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">{emp.employee_code}</p>
+                      {emp.is_manager && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20">Manager</span>}
+                      {emp.can_do_sales && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide bg-blue-500/10 text-blue-400 border border-blue-500/20">Sales</span>}
+                      {emp.can_do_ops && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Ops</span>}
+                      {emp.is_pro && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-400 border border-amber-500/20">PRO</span>}
+                    </div>
                   </div>
                 </div>
                 <EmployeeActionsMenu
@@ -294,7 +300,13 @@ const Employees = () => {
                       </div>
                       <div>
                         <Link to={`/admin/employees/${emp.id}`} className="text-sm font-bold text-foreground hover:text-primary transition-colors">{emp.full_name}</Link>
-                        <p className="text-[10px] text-muted-foreground font-mono">{emp.employee_code}</p>
+                        <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                          <p className="text-[10px] text-muted-foreground font-mono leading-none">{emp.employee_code}</p>
+                          {emp.is_manager && <span className="px-1 py-0.2 rounded text-[7px] font-bold uppercase bg-purple-500/10 text-purple-400 border border-purple-500/10 leading-none">Manager</span>}
+                          {emp.can_do_sales && <span className="px-1 py-0.2 rounded text-[7px] font-bold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/10 leading-none">Sales</span>}
+                          {emp.can_do_ops && <span className="px-1 py-0.2 rounded text-[7px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/10 leading-none">Ops</span>}
+                          {emp.is_pro && <span className="px-1 py-0.2 rounded text-[7px] font-bold uppercase bg-amber-500/10 text-amber-400 border border-amber-500/10 leading-none">PRO</span>}
+                        </div>
                       </div>
                     </td>
                     <td className="py-4 px-6">

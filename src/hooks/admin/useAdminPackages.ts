@@ -2,6 +2,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import type { Service } from './useAdminServices';
 
+export interface PackageServiceRelation {
+  id?: string;
+  service_id: string;
+  display_order: number;
+  default_quantity: number;
+  is_optional: boolean;
+  is_parallel: boolean;
+  estimated_days_min: number;
+  estimated_days_max: number;
+  notes: string;
+  service: Service;
+}
+
 export interface ServicePackage {
   id: string;
   name_en: string;
@@ -11,7 +24,7 @@ export interface ServicePackage {
   icon: string;
   discount_percentage: number;
   is_active: boolean;
-  services: Service[];
+  services: PackageServiceRelation[];
   created_at: string;
 }
 
@@ -26,6 +39,12 @@ export const useAdminPackages = () => {
           package_services (
             service_id,
             display_order,
+            default_quantity,
+            is_optional,
+            is_parallel,
+            estimated_days_min,
+            estimated_days_max,
+            notes,
             services (*)
           )
         `)
@@ -35,10 +54,21 @@ export const useAdminPackages = () => {
 
       return (packages || []).map((p: any) => ({
         ...p,
-        services: p.package_services
-          ?.sort((a: any, b: any) => a.display_order - b.display_order)
-          ?.map((ps: any) => ps.services)
-          ?.filter(Boolean) || []
+        services: (p.package_services || [])
+          .sort((a: any, b: any) => a.display_order - b.display_order)
+          .map((ps: any) => ({
+            id: ps.id,
+            service_id: ps.service_id,
+            display_order: ps.display_order,
+            default_quantity: ps.default_quantity || 1,
+            is_optional: ps.is_optional || false,
+            is_parallel: ps.is_parallel || false,
+            estimated_days_min: ps.estimated_days_min || 0,
+            estimated_days_max: ps.estimated_days_max || 0,
+            notes: ps.notes || '',
+            service: ps.services,
+          }))
+          .filter((ps: any) => !!ps.service)
       }));
     },
   });
@@ -71,6 +101,12 @@ export const useAdminPackage = (id?: string) => {
           package_services (
             service_id,
             display_order,
+            default_quantity,
+            is_optional,
+            is_parallel,
+            estimated_days_min,
+            estimated_days_max,
+            notes,
             services (*)
           )
         `)
@@ -81,10 +117,21 @@ export const useAdminPackage = (id?: string) => {
 
       return {
         ...pkg,
-        services: pkg.package_services
-          ?.sort((a: any, b: any) => a.display_order - b.display_order)
-          ?.map((ps: any) => ps.services)
-          ?.filter(Boolean) || []
+        services: (pkg.package_services || [])
+          .sort((a: any, b: any) => a.display_order - b.display_order)
+          .map((ps: any) => ({
+            id: ps.id,
+            service_id: ps.service_id,
+            display_order: ps.display_order,
+            default_quantity: ps.default_quantity || 1,
+            is_optional: ps.is_optional || false,
+            is_parallel: ps.is_parallel || false,
+            estimated_days_min: ps.estimated_days_min || 0,
+            estimated_days_max: ps.estimated_days_max || 0,
+            notes: ps.notes || '',
+            service: ps.services,
+          }))
+          .filter((ps: any) => !!ps.service)
       };
     },
   });
@@ -121,7 +168,7 @@ export const useSavePackage = () => {
           if (sErr) throw sErr;
           finalServiceIds.push(newS.id);
         } else {
-          finalServiceIds.push(s.id);
+          finalServiceIds.push(s.service_id || s.id);
         }
       }
 
@@ -161,11 +208,20 @@ export const useSavePackage = () => {
         .eq('package_id', currentPackageId);
 
       if (finalServiceIds.length > 0) {
-        const junctionPayload = finalServiceIds.map((sid, idx) => ({
-          package_id: currentPackageId,
-          service_id: sid,
-          display_order: idx
-        }));
+        const junctionPayload = finalServiceIds.map((sid, idx) => {
+          const s = inputServices[idx];
+          return {
+            package_id: currentPackageId,
+            service_id: sid,
+            display_order: idx,
+            default_quantity: s.default_quantity || 1,
+            is_optional: s.is_optional || false,
+            is_parallel: s.is_parallel || false,
+            estimated_days_min: s.estimated_days_min || 0,
+            estimated_days_max: s.estimated_days_max || 0,
+            notes: s.notes || ''
+          };
+        });
 
         const { error: insError } = await supabase
           .from('package_services')

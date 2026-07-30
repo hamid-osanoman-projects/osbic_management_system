@@ -6,12 +6,17 @@ import AdminTopBar from '../components/admin/AdminTopBar';
 import KBarWrapper from '../components/admin/KBarWrapper';
 import { GlobalNotificationListener } from '../components/shared/GlobalNotificationListener';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../contexts/AuthContext';
+import { useRealtime } from '../hooks/useRealtime';
 
 const AdminLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const { i18n } = useTranslation();
   const location = useLocation();
+  const { profile } = useAuth();
   const isRtl = i18n.dir() === 'rtl';
+
+  useRealtime(profile?.id);
 
   return (
     <KBarWrapper>

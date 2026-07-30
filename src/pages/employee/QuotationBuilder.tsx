@@ -1,0 +1,749 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ChevronLeft, Save, Plus, Trash2, FileText, Printer, Edit, CheckCircle2 } from 'lucide-react';
+import { useInvoice, useSaveInvoice, type Invoice, type InvoiceItem } from '../../hooks/employee/useInvoices';
+import { useAuth } from '../../contexts/AuthContext';
+import { useAdminClients, useEmployeeClients } from '../../hooks/admin/useAdminClients';
+import { useAdminPackages } from '../../hooks/admin/useAdminPackages';
+import { useAdminJobs, useEmployeeJobs } from '../../hooks/shared/useJobs';
+import { QuotationDocument } from '../../components/employee/QuotationDocument';
+import { useLeads, useAdminLeads } from '../../hooks/shared/useLeads';
+import { supabase } from '../../lib/supabase';
+import { useReactToPrint } from 'react-to-print';
+import toast from 'react-hot-toast';
+import QuotationAcceptWizard from '../../components/employee/QuotationAcceptWizard';
+import { AnimatePresence } from 'framer-motion';
+
+const DEFAULT_QUOTATION_DOCUMENTS = `SELFIE WITH PASSPORT
+PASSPORT SIZE PHOTO
+EMAIL ID
+CONTACT NUMBER
+COLOR PASSPORT COPIES OF SHAREHOLDERS
+COLOR PHOTO OF THE SHARE HOLDER
+DOCUMENTS PROVIDING PREVIOUS EXPERIENCE IN THE SAME LINE OF BUSINESS OR EDUCATION CERTIFICATE
+SUGGESTION OF 5 NAMES FOR THE NEW COMPANY (PREFERABLY ARABIC)`;
+
+const DEFAULT_QUOTATION_TIMELINE = `Share Transfer:4-6 Working Days
+CR Renewal:1 Working Day
+Activity License Renewal:1 Working Day
+KYC Verification:1-2 Working Days
+CR Certificate Issue:1-2 Working Days
+OCCI Registration:1 Working Day
+Tax Card Issue:1-2 Working Days
+Activity License Issue:1 Working Day
+Feasibility Study:1 Working Day
+Investment License:3-4 Working Days
+Customs Clearance:3-4 Working Days
+Visa Processing:2-3 Working Days (Depends on Nationality)
+Attestation Services:2-3 Working Days`;
+
+const QuotationBuilder = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const viewMode = searchParams.get('view') === 'true';
+  const isNew = id === 'new';
+  const { profile } = useAuth();
+
+  const { data: initialData, isLoading: isLoadingQuotation } = useInvoice(id);
+  const { mutateAsync: saveQuotation, isPending: isSaving } = useSaveInvoice();
+  
+  // Scope clients and jobs: regular employees only see their assigned clients & jobs
+  const adminClientsQuery = useAdminClients();
+  const employeeClientsQuery = useEmployeeClients(profile?.id);
+  const clients = profile?.is_manager ? adminClientsQuery.data : employeeClientsQuery.data;
+
+  const adminJobsQuery = useAdminJobs();
+  const employeeJobsQuery = useEmployeeJobs(profile?.id || '');
+  const jobs = profile?.is_manager ? adminJobsQuery.data : employeeJobsQuery.data;
+
+  const { useLeadsList } = useLeads(profile?.id);
+  const { useAllLeadsList } = useAdminLeads();
+  const leads = profile?.is_manager ? useAllLeadsList().data : useLeadsList().data;
+
+  const { data: packages } = useAdminPackages();
+
+  const printRef = useRef<HTMLDivElement>(null);
+  const [isAcceptWizardOpen, setIsAcceptWizardOpen] = useState(false);
+
+  const [formData, setFormData] = useState<Invoice>({
+    client_id: '',
+    lead_id: null,
+    job_id: '',
+    type: 'quotation',
+    status: 'draft',
+    subtotal: 0,
+    tax_percentage: 5,
+    tax_amount: 0,
+    discount_amount: 0,
+    total_amount: 0,
+    notes: 'BUSINESS SETUP',
+    terms: 'Payment is due within 10 days.',
+    items: [],
+    metadata: {
+      documents: DEFAULT_QUOTATION_DOCUMENTS,
+      timeline: DEFAULT_QUOTATION_TIMELINE
+    }
+  });
+
+  useEffect(() => {
+    if (initialData && !isNew) {
+      setFormData(initialData);
+    }
+  }, [initialData, isNew]);
+
+  // Handle Lead ID autofill from URL params
+  useEffect(() => {
+    if (isNew) {
+      const params = new URLSearchParams(window.location.search);
+      const autofillLeadId = params.get('lead_id');
+      if (autofillLeadId) {
+        setFormData(prev => ({
+          ...prev,
+          lead_id: autofillLeadId,
+          type: 'quotation',
+          client_id: null,
+          notes: prev.notes === 'Thank you for your business.' ? 'BUSINESS SETUP' : prev.notes,
+          metadata: {
+            ...prev.metadata,
+            documents: prev.metadata?.documents || DEFAULT_QUOTATION_DOCUMENTS,
+            timeline: prev.metadata?.timeline || DEFAULT_QUOTATION_TIMELINE
+          }
+        }));
+      }
+    }
+  }, [isNew]);
+
+  // Sync selected client and lead details into formData for the document preview
+  useEffect(() => {
+    if (formData.client_id) {
+      const selectedClient = clients?.find(c => c.id === formData.client_id);
+      if (selectedClient && formData.client?.id !== selectedClient.id) {
+        setFormData(prev => ({ ...prev, client: selectedClient, lead: null }));
+      }
+    } else if (formData.lead_id) {
+      const selectedLead = leads?.find(l => l.id === formData.lead_id);
+      if (selectedLead && formData.lead?.id !== selectedLead.id) {
+        const hasNoRealItems = !formData.items || formData.items.length === 0 || 
+          (formData.items.length === 1 && !formData.items[0].description);
+        
+        if (hasNoRealItems && selectedLead.interested_services && selectedLead.interested_services.length > 0) {
+          const loadServicesAndSet = async () => {
+            let finalItems: InvoiceItem[] = [];
+            let activityName = 'BUSINESS SETUP';
+
+            for (const item of selectedLead.interested_services) {
+              if (item.type === 'package') {
+                activityName = item.name;
+
+                try {
+                  const { data: junctionRows } = await supabase
+                    .from('package_services')
+                    .select('display_order, services(id, name_en, name_ar)')
+                    .eq('package_id', item.id) as any;
+
+                  const sorted = (junctionRows || [])
+                    .sort((a: any, b: any) => a.display_order - b.display_order)
+                    .map((row: any) => row.services)
+                    .filter(Boolean);
+
+                  if (sorted.length > 0) {
+                    const mapped = sorted.map((srv: any, idx: number) => ({
+                      description: srv.name_en,
+                      quantity: 1,
+                      unit_price: idx === 0 ? (item.price || 0) : 0,
+                      total: idx === 0 ? (item.price || 0) : 0
+                    }));
+                    finalItems = [...finalItems, ...mapped];
+                  } else {
+                    finalItems.push({
+                      description: item.name,
+                      quantity: 1,
+                      unit_price: item.price || 0,
+                      total: item.price || 0
+                    });
+                  }
+                } catch (err) {
+                  console.error('Error fetching package services:', err);
+                  finalItems.push({
+                    description: item.name,
+                    quantity: 1,
+                    unit_price: item.price || 0,
+                    total: item.price || 0
+                  });
+                }
+              } else {
+                finalItems.push({
+                  description: item.name,
+                  quantity: 1,
+                  unit_price: item.price || 0,
+                  total: item.price || 0
+                });
+              }
+            }
+
+            setFormData(prev => ({ 
+              ...prev, 
+              lead: selectedLead, 
+              client: null,
+              notes: prev.notes === 'BUSINESS SETUP' ? activityName : prev.notes,
+              items: finalItems,
+              subtotal: finalItems.reduce((acc, curr) => acc + (curr.total || 0), 0),
+              total_amount: finalItems.reduce((acc, curr) => acc + (curr.total || 0), 0)
+            }));
+          };
+          
+          loadServicesAndSet();
+        } else {
+          setFormData(prev => ({ 
+            ...prev, 
+            lead: selectedLead, 
+            client: null
+          }));
+        }
+      }
+    } else {
+      if (formData.client || formData.lead) {
+        setFormData(prev => ({ ...prev, client: null, lead: null }));
+      }
+    }
+  }, [formData.client_id, formData.lead_id, clients, leads]);
+
+  // Handle URL Params and selection changes for Auto-Drafting from a Job
+  useEffect(() => {
+    if (isNew && jobs && jobs.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const autofillJobId = params.get('job_id') || formData.job_id;
+      const autofillClientId = params.get('client_id') || formData.client_id;
+      
+      const urlBaseFee = params.get('base_fee');
+      const urlMinFee = params.get('min_fee');
+
+      if (autofillJobId) {
+        const jobDetail = jobs.find(j => j.id === autofillJobId);
+        if (jobDetail) {
+          const serviceName = jobDetail.service_name || 'Service';
+          const finalWorkFee = urlBaseFee ? parseFloat(urlBaseFee) : (jobDetail.work_fee || 0);
+          const finalMinistryFee = urlMinFee ? parseFloat(urlMinFee) : (jobDetail.ministry_fee || 0);
+          const totalFee = finalWorkFee + finalMinistryFee;
+          
+          const autoItems: InvoiceItem[] = [];
+          if (totalFee > 0) {
+            autoItems.push({ 
+              description: serviceName, 
+              quantity: 1, 
+              unit_price: totalFee, 
+              total: totalFee 
+            });
+          }
+
+          const employeeRefName = profile?.full_name ? `REF BY: ${profile.full_name}` : 'REF BY: ';
+          const autoNotes = `${jobDetail.job_code} - ${serviceName}`;
+
+          setFormData(prev => {
+            const hasExistingCustomItems = prev.items && prev.items.length > 0 && prev.items.some(item => item.description.trim() !== '');
+            if (prev.job_id === autofillJobId && hasExistingCustomItems) {
+              return prev;
+            }
+            const currentNotes = prev.notes || '';
+            const shouldAutofillNotes = currentNotes === '' || currentNotes === 'BUSINESS SETUP' || currentNotes === autoNotes;
+            return {
+              ...prev,
+              client_id: autofillClientId || jobDetail.client_id,
+              job_id: autofillJobId,
+              notes: shouldAutofillNotes ? employeeRefName : currentNotes,
+              items: autoItems.length > 0 ? autoItems : [{ description: '', quantity: 1, unit_price: 0, total: 0 }]
+            };
+          });
+        }
+      } else if (formData.items?.length === 0) {
+        setFormData(prev => ({ ...prev, items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }] }));
+      }
+    }
+  }, [isNew, jobs, formData.job_id]);
+
+  // Recalculate totals whenever items, tax, or discount changes
+  useEffect(() => {
+    if (!formData.items) return;
+    
+    const subtotal = formData.items.reduce((sum, item) => sum + (item.total || 0), 0);
+    const tax_amount = (subtotal - formData.discount_amount) * (formData.tax_percentage / 100);
+    const total_amount = subtotal - formData.discount_amount + tax_amount;
+
+    setFormData(prev => ({
+      ...prev,
+      subtotal,
+      tax_amount,
+      total_amount
+    }));
+  }, [formData.items, formData.tax_percentage, formData.discount_amount]);
+
+  const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
+    const newItems = [...(formData.items || [])];
+    newItems[index] = { ...newItems[index], [field]: value };
+    
+    if (field === 'quantity' || field === 'unit_price') {
+      newItems[index].total = (newItems[index].quantity || 0) * (newItems[index].unit_price || 0);
+    }
+    
+    setFormData({ ...formData, items: newItems });
+  };
+
+  const addItem = () => {
+    setFormData({
+      ...formData,
+      items: [...(formData.items || []), { description: '', quantity: 1, unit_price: 0, total: 0 }]
+    });
+  };
+
+  const removeItem = (index: number) => {
+    const newItems = [...(formData.items || [])];
+    newItems.splice(index, 1);
+    setFormData({ ...formData, items: newItems });
+  };
+
+  const handleSave = async () => {
+    if (!formData.client_id && !formData.lead_id) {
+      return toast.error('Please select a client or lead');
+    }
+    if (!formData.items || formData.items.length === 0 || formData.items.some(i => !i.description)) {
+      return toast.error('Please complete all item descriptions');
+    }
+
+    try {
+      if (formData.lead_id && formData.lead) {
+        const { error: leadUpdateError } = await supabase
+          .from('leads')
+          .update({
+            contact_name: formData.lead.contact_name,
+            contact_phone: formData.lead.contact_phone || null,
+            contact_email: formData.lead.contact_email || null
+          })
+          .eq('id', formData.lead_id);
+        
+        if (leadUpdateError) throw leadUpdateError;
+      }
+
+      const quotationPayload = {
+        ...formData,
+        type: 'quotation', // Force type to quotation
+        employee_id: formData.employee_id || profile?.id
+      };
+      const savedId = await saveQuotation(quotationPayload);
+      toast.success('Quotation saved successfully');
+      if (isNew) {
+        navigate(`/employee/quotations/${savedId}`, { replace: true });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to save quotation');
+    }
+  };
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: formData.invoice_number || 'Quotation',
+  });
+
+  if (isLoadingQuotation) return <div className="p-8 text-center text-muted-foreground">Loading quotation data...</div>;
+
+  const activeClients = clients || [];
+  const clientJobs = jobs?.filter(j => j.client_id === formData.client_id) || [];
+
+  return (
+    <div className="max-w-7xl mx-auto pb-24 print:p-0 print:m-0">
+      
+      {/* HEADER (Hidden in Print) */}
+      <div className="flex items-center justify-between mb-8 print:hidden">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => navigate('/employee/invoices?tab=quotations')} 
+            className="p-2.5 rounded-xl bg-card border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground shadow-sm"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
+              {formData.invoice_number || 'DRAFT QUOTATION'}
+            </p>
+            <h1 className="text-2xl font-syne font-bold text-foreground tracking-tight flex items-center gap-3">
+              {isNew ? 'Create Quotation' : viewMode ? 'View Quotation' : 'Edit Quotation'}
+            </h1>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+           <button 
+             onClick={handlePrint}
+             className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-xl text-xs font-bold hover:bg-muted transition-colors text-foreground"
+           >
+             <Printer size={16} /> Print / PDF
+           </button>
+           
+           {viewMode ? (
+             <div className="flex items-center gap-2">
+               {formData.status !== 'accepted' && (
+                 <button 
+                   onClick={() => setIsAcceptWizardOpen(true)}
+                   className="flex items-center gap-2 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shadow-emerald-500/20 active:scale-95"
+                 >
+                   <CheckCircle2 size={16} /> Accept & Launch Job
+                 </button>
+               )}
+               <button 
+                 onClick={() => navigate(`/employee/quotations/${id}`)}
+                 className="flex items-center gap-2 px-6 py-2 bg-card border border-border text-foreground hover:bg-muted rounded-xl text-xs font-bold transition-colors"
+               >
+                 <Edit size={16} /> Edit Quotation
+               </button>
+             </div>
+           ) : (
+             <button 
+               onClick={handleSave}
+               disabled={isSaving}
+               className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 disabled:opacity-50"
+             >
+               <Save size={16} /> {isSaving ? 'Saving...' : 'Save Draft'}
+             </button>
+           )}
+        </div>
+      </div>
+
+      <div className={`flex flex-col ${viewMode ? 'items-center' : 'lg:flex-row'} gap-8 print:block`}>
+        
+        {/* LEFT: FORM BUILDER (Hidden in Print and View Mode) */}
+        {!viewMode && (
+          <div className="w-full lg:w-[45%] space-y-6 print:hidden">
+          
+          <div className="bg-card border border-border p-6 rounded-2xl shadow-xl space-y-6">
+             <div className="grid grid-cols-2 gap-4 border-b border-border pb-6">
+                <div className="space-y-2 col-span-2">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Select Recipient *</label>
+                  <select 
+                    value={formData.client_id ? `client:${formData.client_id}` : (formData.lead_id ? `lead:${formData.lead_id}` : '')}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val.startsWith('client:')) {
+                        setFormData({...formData, client_id: val.replace('client:', ''), lead_id: null, job_id: ''});
+                      } else if (val.startsWith('lead:')) {
+                        setFormData({...formData, lead_id: val.replace('lead:', ''), client_id: null, job_id: ''});
+                      } else {
+                        setFormData({...formData, client_id: null, lead_id: null, job_id: ''});
+                      }
+                    }}
+                    className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
+                  >
+                    <option value="">-- Choose Client or Lead --</option>
+                    <optgroup label="Active Clients">
+                      {activeClients.map(c => (
+                        <option key={c.id} value={`client:${c.id}`}>{c.full_name} ({c.company_name || 'Individual'})</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Active Leads">
+                      {leads?.filter(l => l.status !== 'converted' && l.status !== 'lost').map(l => (
+                        <option key={l.id} value={`lead:${l.id}`}>{l.contact_name} ({l.company_name || 'Individual Lead'})</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+                
+                {formData.client_id && (
+                  <div className="space-y-2 col-span-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Link to Client File / Job (Optional)</label>
+                    <select 
+                      value={formData.job_id || ''}
+                      onChange={e => setFormData({...formData, job_id: e.target.value})}
+                      className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
+                    >
+                      <option value="">-- Select Parent File --</option>
+                      {clientJobs.map(j => (
+                        <option key={j.id} value={j.id}>{j.job_code} - {j.service_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                 <div className="space-y-2 col-span-2">
+                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Apply Package Template (Optional)</label>
+                   <select 
+                     value=""
+                     onChange={async e => {
+                       const pkgId = e.target.value;
+                       if (!pkgId) return;
+                       const selectedPkg = packages?.find((p: any) => p.id === pkgId);
+                       if (!selectedPkg) return;
+
+                       const loadToast = toast.loading('Applying package template...');
+
+                       try {
+                         const { data: junctionRows, error } = await supabase
+                           .from('package_services')
+                           .select('display_order, services(id, name_en, name_ar)')
+                           .eq('package_id', pkgId) as any;
+
+                         if (error) throw error;
+
+                         const sorted = (junctionRows || [])
+                           .sort((a: any, b: any) => a.display_order - b.display_order)
+                           .map((row: any) => row.services)
+                           .filter(Boolean);
+
+                         if (sorted.length > 0) {
+                           const mapped = sorted.map((srv: any, idx: number) => ({
+                             description: srv.name_en,
+                             quantity: 1,
+                             unit_price: idx === 0 ? 500 : 0,
+                             total: idx === 0 ? 500 : 0
+                           }));
+                           
+                           setFormData(prev => ({
+                             ...prev,
+                             notes: selectedPkg.name_en,
+                             items: mapped,
+                             subtotal: mapped.reduce((acc, curr) => acc + curr.total, 0),
+                             total_amount: mapped.reduce((acc, curr) => acc + curr.total, 0)
+                           }));
+                           toast.success(`Applied template: ${selectedPkg.name_en}`, { id: loadToast });
+                         } else {
+                           toast.error('No services found in this package', { id: loadToast });
+                         }
+                       } catch (err: any) {
+                         toast.error('Failed to load package services: ' + err.message, { id: loadToast });
+                       }
+                     }}
+                     className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
+                   >
+                     <option value="">-- Choose Package Template --</option>
+                     {packages?.map((p: any) => (
+                       <option key={p.id} value={p.id}>{p.name_en}</option>
+                     ))}
+                   </select>
+                 </div>
+              </div>
+
+             {/* Recipient Details Sync Preview */}
+             {(formData.client || formData.lead) && (
+               <div className="bg-muted/10 border border-border/60 rounded-xl p-4 space-y-3">
+                 <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">Recipient Details</h3>
+                 {formData.client ? (
+                   <div className="text-xs text-muted-foreground space-y-1">
+                     <p>Name: <span className="text-foreground font-semibold">{formData.client.full_name}</span></p>
+                     <p>Phone: <span className="text-foreground">{formData.client.phone || 'N/A'}</span></p>
+                     <p>Email: <span className="text-foreground">{formData.client.email || 'N/A'}</span></p>
+                   </div>
+                 ) : formData.lead ? (
+                   <div className="space-y-3">
+                     <div className="text-xs text-muted-foreground space-y-1">
+                       <p>Lead Name: <span className="text-foreground font-semibold">{formData.lead.contact_name}</span></p>
+                       <p>Company: <span className="text-foreground">{formData.lead.company_name || 'Individual'}</span></p>
+                     </div>
+                     <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border/40">
+                       <div className="space-y-1">
+                         <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Contact Phone</label>
+                         <input 
+                           type="text"
+                           value={formData.lead.contact_phone || ''}
+                           onChange={e => setFormData({
+                             ...formData,
+                             lead: { ...formData.lead!, contact_phone: e.target.value }
+                           })}
+                           className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:border-primary outline-none transition-all"
+                         />
+                       </div>
+                       <div className="space-y-1">
+                         <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Contact Email</label>
+                         <input 
+                           type="text"
+                           value={formData.lead.contact_email || ''}
+                           onChange={e => setFormData({
+                             ...formData,
+                             lead: { ...formData.lead!, contact_email: e.target.value }
+                           })}
+                           className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:border-primary outline-none transition-all"
+                         />
+                       </div>
+                     </div>
+                   </div>
+                 ) : null}
+               </div>
+             )}
+
+             {/* Line Items */}
+             <div className="space-y-4 border-t border-border pt-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-bold text-foreground uppercase tracking-widest">Service Fee Items</h3>
+                  <button 
+                    onClick={addItem}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary/20 text-primary text-xs font-bold hover:bg-primary/5 transition-all"
+                  >
+                    <Plus size={14} /> Add Line Item
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {(formData.items || []).map((item, idx) => (
+                    <div key={idx} className="flex gap-3 items-end bg-muted/10 p-3.5 rounded-xl border border-border/40">
+                      <div className="flex-1 space-y-1.5">
+                        <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Service Description</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. Visa Issuance Fee"
+                          value={item.description}
+                          onChange={e => handleItemChange(idx, 'description', e.target.value)}
+                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                      <div className="w-16 space-y-1.5 shrink-0">
+                        <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block text-center">Qty</label>
+                        <input 
+                          type="number" 
+                          min="1"
+                          value={item.quantity}
+                          onChange={e => handleItemChange(idx, 'quantity', parseInt(e.target.value) || 0)}
+                          className="w-full bg-background border border-border rounded-lg px-2 py-2 text-xs text-foreground focus:border-primary outline-none transition-all text-center"
+                        />
+                      </div>
+                      <div className="w-24 space-y-1.5 shrink-0">
+                        <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Unit (OMR)</label>
+                        <input 
+                          type="number" 
+                          min="0"
+                          step="0.001"
+                          value={item.unit_price}
+                          onChange={e => handleItemChange(idx, 'unit_price', parseFloat(e.target.value) || 0)}
+                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                      
+                      {formData.items!.length > 1 && (
+                        <button 
+                          onClick={() => removeItem(idx)}
+                          className="p-2 border border-border rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-all shrink-0 mb-0.5"
+                          title="Remove item"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+             </div>
+
+             {/* Discount, Tax & Notes */}
+             <div className="space-y-4 border-t border-border pt-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Discount (OMR)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      step="0.001"
+                      value={formData.discount_amount}
+                      onChange={e => setFormData({...formData, discount_amount: parseFloat(e.target.value) || 0})}
+                      className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tax Percentage (%)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="100"
+                      value={formData.tax_percentage}
+                      onChange={e => setFormData({...formData, tax_percentage: parseFloat(e.target.value) || 0})}
+                      className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4 border-t border-border pt-6">
+                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2"><FileText size={16}/> Quotation Details</h3>
+                   
+                   <div className="space-y-2">
+                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Documents Required (One per line)</label>
+                     <textarea 
+                       rows={6}
+                       value={typeof formData.metadata?.documents === 'string' ? formData.metadata.documents : (formData.metadata?.documents?.join('\n') || '')}
+                       onChange={e => setFormData({...formData, metadata: { ...formData.metadata, documents: e.target.value }})}
+                       className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all font-mono"
+                     />
+                   </div>
+
+                   <div className="space-y-2">
+                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Timeline (Format: Task:Days - One per line)</label>
+                     <textarea 
+                       rows={6}
+                       value={typeof formData.metadata?.timeline === 'string' ? formData.metadata.timeline : (formData.metadata?.timeline?.map((t: any) => `${t.task}:${t.days}`).join('\n') || '')}
+                       onChange={e => setFormData({...formData, metadata: { ...formData.metadata, timeline: e.target.value }})}
+                       className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all font-mono"
+                     />
+                   </div>
+                </div>
+
+                <div className="space-y-2 border-t border-border pt-6">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Remarks / Notes</label>
+                  <input 
+                    type="text" 
+                    value={formData.notes}
+                    onChange={e => setFormData({...formData, notes: e.target.value})}
+                    className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
+                  />
+                </div>
+             </div>
+
+          </div>
+        </div>
+        )}
+
+        {/* RIGHT: DOCUMENT PREVIEW (Visible in Print) */}
+        <div className={viewMode ? "w-full max-w-[210mm] mx-auto print:w-full print:block print:static" : "w-full lg:w-[55%] print:w-full print:block print:static"}>
+           <div className="sticky top-8 rounded-2xl overflow-hidden border border-border shadow-2xl print:shadow-none print:border-none print:overflow-visible print:static">
+              <style>{`
+                @media print {
+                  @page { margin: 10mm; size: A4 portrait; }
+                  html, body {
+                    width: auto;
+                    height: auto;
+                    margin: 0;
+                    padding: 0;
+                    background: white;
+                  }
+                  .print-section {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                  }
+                }
+              `}</style>
+              <div className="print-section" ref={printRef}>
+                <QuotationDocument 
+                  invoice={{
+                    ...formData,
+                    client: clients?.find(c => c.id === formData.client_id),
+                    job: jobs?.find(j => j.id === formData.job_id)
+                  }} 
+                />
+              </div>
+           </div>
+        </div>
+
+      </div>
+
+      <AnimatePresence>
+        {isAcceptWizardOpen && (
+          <QuotationAcceptWizard 
+            isOpen={isAcceptWizardOpen}
+            onClose={() => setIsAcceptWizardOpen(false)}
+            quotation={{
+              ...formData,
+              client: clients?.find(c => c.id === formData.client_id),
+              lead: leads?.find(l => l.id === formData.lead_id)
+            }}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default QuotationBuilder;

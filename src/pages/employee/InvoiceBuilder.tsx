@@ -8,6 +8,8 @@ import { useAdminClients, useEmployeeClients } from '../../hooks/admin/useAdminC
 import { useAdminJobs, useEmployeeJobs } from '../../hooks/shared/useJobs';
 import { InvoiceDocument } from '../../components/employee/InvoiceDocument';
 import { QuotationDocument } from '../../components/employee/QuotationDocument';
+import { useLeads, useAdminLeads } from '../../hooks/shared/useLeads';
+import { supabase } from '../../lib/supabase';
 import { useReactToPrint } from 'react-to-print';
 import toast from 'react-hot-toast';
 
@@ -32,6 +34,10 @@ const InvoiceBuilder = () => {
   const employeeJobsQuery = useEmployeeJobs(profile?.id || '');
   const jobs = profile?.is_manager ? adminJobsQuery.data : employeeJobsQuery.data;
 
+  const { useLeadsList } = useLeads(profile?.id);
+  const { useAllLeadsList } = useAdminLeads();
+  const leads = profile?.is_manager ? useAllLeadsList().data : useLeadsList().data;
+
   const { data: nextInvoiceNumber } = useNextInvoiceNumber();
 
   const printRef = useRef<HTMLDivElement>(null);
@@ -40,6 +46,7 @@ const InvoiceBuilder = () => {
 
   const [formData, setFormData] = useState<Invoice>({
     client_id: '',
+    lead_id: null,
     job_id: '',
     type: 'invoice',
     status: 'draft',
@@ -58,6 +65,43 @@ const InvoiceBuilder = () => {
       setFormData(initialData);
     }
   }, [initialData, isNew]);
+
+  // Sync selected client and lead details into formData for the document preview
+  useEffect(() => {
+    if (formData.client_id) {
+      const selectedClient = clients?.find(c => c.id === formData.client_id);
+      if (selectedClient && formData.client?.id !== selectedClient.id) {
+        setFormData(prev => ({ ...prev, client: selectedClient, lead: null }));
+      }
+    } else if (formData.lead_id) {
+      const selectedLead = leads?.find(l => l.id === formData.lead_id);
+      if (selectedLead && formData.lead?.id !== selectedLead.id) {
+        const hasNoRealItems = !formData.items || formData.items.length === 0 || 
+          (formData.items.length === 1 && !formData.items[0].description);
+        
+        let autoItems = formData.items;
+        if (hasNoRealItems && selectedLead.interested_services && selectedLead.interested_services.length > 0) {
+          autoItems = selectedLead.interested_services.map((item: any) => ({
+            description: item.name,
+            quantity: 1,
+            unit_price: item.price,
+            total: item.price
+          }));
+        }
+
+        setFormData(prev => ({ 
+          ...prev, 
+          lead: selectedLead, 
+          client: null,
+          items: autoItems 
+        }));
+      }
+    } else {
+      if (formData.client || formData.lead) {
+        setFormData(prev => ({ ...prev, client: null, lead: null }));
+      }
+    }
+  }, [formData.client_id, formData.lead_id, clients, leads]);
 
   // Handle URL Params and selection changes for Auto-Drafting from a Job
   useEffect(() => {
@@ -160,20 +204,33 @@ const InvoiceBuilder = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.client_id) {
-      return toast.error('Please select a client');
+    if (!formData.client_id && !formData.lead_id) {
+      return toast.error('Please select a client or lead');
     }
     if (!formData.items || formData.items.length === 0 || formData.items.some(i => !i.description)) {
       return toast.error('Please complete all item descriptions');
     }
 
     try {
+      if (formData.lead_id && formData.lead) {
+        const { error: leadUpdateError } = await supabase
+          .from('leads')
+          .update({
+            contact_name: formData.lead.contact_name,
+            contact_phone: formData.lead.contact_phone || null,
+            contact_email: formData.lead.contact_email || null
+          })
+          .eq('id', formData.lead_id);
+        
+        if (leadUpdateError) throw leadUpdateError;
+      }
+
       const invoicePayload = {
         ...formData,
         employee_id: formData.employee_id || profile?.id
       };
       const savedId = await saveInvoice(invoicePayload);
-      toast.success('Invoice saved successfully');
+      toast.success(formData.type === 'quotation' ? 'Quotation saved successfully' : 'Invoice saved successfully');
       if (isNew) {
         navigate(`/employee/invoices/${savedId}`, { replace: true });
       }
@@ -240,10 +297,15 @@ const InvoiceBuilder = () => {
           </button>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
-              {formData.invoice_number || 'DRAFT'}
+              {formData.invoice_number || (formData.type === 'quotation' ? 'DRAFT QUOTATION' : 'DRAFT INVOICE')}
             </p>
             <h1 className="text-2xl font-syne font-bold text-foreground tracking-tight flex items-center gap-3">
-              {isNew ? 'Create Document' : viewMode ? 'View Document' : 'Edit Document'}
+              {isNew 
+                ? (formData.type === 'quotation' ? 'Create Quotation' : 'Create Invoice') 
+                : viewMode 
+                  ? (formData.type === 'quotation' ? 'View Quotation' : 'View Invoice') 
+                  : (formData.type === 'quotation' ? 'Edit Quotation' : 'Edit Invoice')
+              }
               {!isNew && formData.status === 'paid' && (
                 <span className="bg-emerald-500/10 text-emerald-500 text-xs px-2 py-1 rounded-md uppercase tracking-widest flex items-center gap-1">
                   <CheckCircle2 size={12} /> Paid
@@ -266,7 +328,7 @@ const InvoiceBuilder = () => {
                onClick={() => navigate(`/employee/invoices/${id}`)}
                className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
              >
-               <Edit size={16} /> Edit Document
+               <Edit size={16} /> {formData.type === 'quotation' ? 'Edit Quotation' : 'Edit Invoice'}
              </button>
            ) : (
              <>
@@ -303,31 +365,35 @@ const InvoiceBuilder = () => {
           
           <div className="bg-card border border-border p-6 rounded-2xl shadow-xl space-y-6">
              <div className="grid grid-cols-2 gap-4 border-b border-border pb-6">
-               <div className="space-y-2">
-                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Document Type</label>
-                 <select 
-                   value={formData.type}
-                   onChange={e => setFormData({...formData, type: e.target.value as any})}
-                   className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
-                 >
-                   <option value="invoice">Tax Invoice</option>
-                   <option value="quotation">Quotation</option>
-                 </select>
-               </div>
-               
-               <div className="space-y-2">
-                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Select Client *</label>
-                 <select 
-                   value={formData.client_id}
-                   onChange={e => setFormData({...formData, client_id: e.target.value, job_id: ''})}
-                   className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
-                 >
-                   <option value="">Select a client...</option>
-                   {activeClients.map(c => (
-                     <option key={c.id} value={c.id}>{c.full_name}</option>
-                   ))}
-                 </select>
-               </div>
+                <div className="space-y-2 col-span-2">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Document Type</label>
+                  <div className="w-full bg-muted/10 border border-border/80 rounded-xl px-4 py-3 text-sm text-foreground font-bold uppercase tracking-widest">
+                    Invoice
+                  </div>
+                </div>
+                
+                <div className="space-y-2 col-span-2">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Select Recipient *</label>
+                  <select 
+                    value={formData.client_id ? `client:${formData.client_id}` : ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val.startsWith('client:')) {
+                        setFormData({...formData, client_id: val.replace('client:', ''), lead_id: null, job_id: ''});
+                      } else {
+                        setFormData({...formData, client_id: null, lead_id: null, job_id: ''});
+                      }
+                    }}
+                    className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
+                  >
+                    <option value="">Select recipient...</option>
+                    <optgroup label="Registered Clients" className="bg-[#1e293b]">
+                      {activeClients.map(c => (
+                        <option key={c.id} value={`client:${c.id}`} className="bg-[#1e293b]">{c.full_name}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
 
                <div className="space-y-2 col-span-2">
                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Link to Job (Optional)</label>
@@ -366,10 +432,12 @@ const InvoiceBuilder = () => {
                </div>
 
                <div className="space-y-2 col-span-2 md:col-span-1">
-                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Reference Name (Description)</label>
+                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                   {formData.type === 'quotation' ? 'Activity' : 'Reference Name (Description)'}
+                 </label>
                  <input 
                    type="text" 
-                   placeholder="e.g. REF BY MAATHIR"
+                   placeholder={formData.type === 'quotation' ? 'e.g. BUSINESS SETUP' : 'e.g. REF BY MAATHIR'}
                    value={formData.notes || ''}
                    onChange={e => setFormData({...formData, notes: e.target.value})}
                    className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
@@ -473,7 +541,7 @@ const InvoiceBuilder = () => {
                </div>
              </div>
 
-             {formData.type === 'quotation' && (
+              {false && (
                 <div className="space-y-4 border-t border-border pt-6">
                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2"><FileText size={16}/> Quotation Details</h3>
                    
@@ -525,23 +593,13 @@ const InvoiceBuilder = () => {
                 }
               `}</style>
               <div className="print-section" ref={printRef}>
-                {formData.type === 'quotation' ? (
-                  <QuotationDocument 
-                    invoice={{
-                      ...formData,
-                      client: clients?.find(c => c.id === formData.client_id),
-                      job: jobs?.find(j => j.id === formData.job_id)
-                    }} 
-                  />
-                ) : (
-                  <InvoiceDocument 
-                    invoice={{
-                      ...formData,
-                      client: clients?.find(c => c.id === formData.client_id),
-                      job: jobs?.find(j => j.id === formData.job_id)
-                    }} 
-                  />
-                )}
+                <InvoiceDocument 
+                  invoice={{
+                    ...formData,
+                    client: clients?.find(c => c.id === formData.client_id),
+                    job: jobs?.find(j => j.id === formData.job_id)
+                  }} 
+                />
               </div>
            </div>
         </div>

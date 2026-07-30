@@ -44,7 +44,10 @@
     "pipeline": "Pipeline",
     "messages": "Messages",
     "reports": "Reports",
-    "invoices": "Invoices & Quotes"
+    "invoices": "Invoices & Quotes",
+    "leads": "My Leads",
+    "ops_queue": "My Work Queue",
+    "pro_queue": "PRO Queue"
   },
   "admin": {
 

@@ -14,7 +14,8 @@ export interface InvoiceItem {
 export interface Invoice {
   id?: string;
   invoice_number?: string;
-  client_id: string;
+  client_id?: string | null;
+  lead_id?: string | null;
   job_id?: string | null;
   employee_id?: string;
   type: 'quotation' | 'invoice';
@@ -32,6 +33,7 @@ export interface Invoice {
   metadata?: any;
   items?: InvoiceItem[];
   client?: any;
+  lead?: any;
   job?: any;
 }
 
@@ -69,6 +71,7 @@ export const useInvoices = (clientId?: string) => {
         .select(`
           *,
           client:profiles!client_id(*),
+          lead:leads!lead_id(*),
           job:jobs!job_id(job_code, employee_id, assigned_by, service:services(name_en)),
           items:invoice_items(*)
         `)
@@ -134,6 +137,7 @@ export const useInvoice = (id?: string) => {
         .select(`
           *,
           client:profiles!client_id(*),
+          lead:leads!lead_id(*),
           job:jobs!job_id(job_code, service:services(name_en)),
           items:invoice_items(*)
         `)
@@ -151,11 +155,13 @@ export const useSaveInvoice = () => {
 
   return useMutation({
     mutationFn: async (invoice: Invoice) => {
-      const { items, client, job, ...invoiceData } = invoice;
+      const { items, client, lead, job, ...invoiceData } = invoice;
 
       invoiceData.employee_id = profile?.id;
 
       if (!invoiceData.job_id) invoiceData.job_id = null;
+      if (!invoiceData.client_id) invoiceData.client_id = null;
+      if (!invoiceData.lead_id) invoiceData.lead_id = null;
       if (!invoiceData.invoice_number) delete invoiceData.invoice_number;
       if (!invoiceData.issue_date) delete invoiceData.issue_date;
 
