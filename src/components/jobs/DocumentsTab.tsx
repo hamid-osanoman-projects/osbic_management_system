@@ -305,8 +305,16 @@ const DocumentsTab = ({ jobId, documents, isEmployee, isAdmin }: Props) => {
       )}
 
       {(() => {
-        const clientDocs = documents.filter(d => d.uploaded_by_role === 'client');
-        const staffDocs = documents.filter(d => d.uploaded_by_role === 'employee' || d.uploaded_by_role === 'admin');
+        const clientDocs = documents.filter(d => 
+          d.is_checklist_doc 
+            ? (d.document_category !== 'output')
+            : (d.uploaded_by_role === 'client')
+        );
+        const staffDocs = documents.filter(d => 
+          d.is_checklist_doc 
+            ? (d.document_category === 'output')
+            : (d.uploaded_by_role === 'employee' || d.uploaded_by_role === 'admin')
+        );
 
         return (
           <div className="space-y-6">
@@ -355,8 +363,20 @@ const DocumentsTab = ({ jobId, documents, isEmployee, isAdmin }: Props) => {
                                 <FileText size={20} />
                              </div>
                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold text-foreground truncate mb-1" title={doc.file_name}>{doc.file_name}</p>
-                                <p className="text-[10px] text-muted-foreground/60 truncate">Uploaded by {doc.uploaded_by_name}</p>
+                                 <p className="text-sm font-bold text-foreground truncate mb-1" title={doc.file_name}>{doc.file_name}</p>
+                                 <p className="text-[10px] text-muted-foreground/60 truncate">Uploaded by {doc.uploaded_by_name}</p>
+                                 {doc.is_checklist_doc && (
+                                   <div className="flex flex-wrap gap-1 mt-1.5">
+                                     <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-primary/15 text-primary border border-primary/10">
+                                       {doc.document_type || 'Checklist file'}
+                                     </span>
+                                     {doc.applicant_name && (
+                                       <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/10">
+                                         👤 {doc.applicant_name}
+                                       </span>
+                                     )}
+                                   </div>
+                                 )}
                                 <p className="text-[10px] text-muted-foreground/60">{new Date(doc.uploaded_at).toLocaleString()}</p>
                              </div>
                            </div>

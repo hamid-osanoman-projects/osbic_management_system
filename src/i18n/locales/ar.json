@@ -29,12 +29,13 @@
     "finance": "المالية",
     "audit": "سجل التدقيق",
     "dashboard": "لوحة القيادة",
-    "my_tasks": "مهامي",
+    "my_tasks": "الوظائف النشطة",
     "notifications": "الإشعارات",
     "profile": "الحساب والأمان",
     "support": "الدعم الفني",
     "reports": "التقارير",
     "pipeline": "المسار",
-    "messages": "الرسائل"
+    "messages": "الرسائل",
+    "ops_queue": "مهامي"
   }
 }

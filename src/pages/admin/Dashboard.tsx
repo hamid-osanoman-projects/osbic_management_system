@@ -15,7 +15,8 @@ import {
   useRevenueChart,
   useRecentJobs,
   useTopEmployees,
-  useJobDistribution
+  useJobDistribution,
+  useSalesLeaderboard
 } from '../../hooks/admin/useAdminDashboard';
 import { useAdminLeads } from '../../hooks/shared/useLeads';
 import Skeleton from '../../components/ui/Skeleton';
@@ -56,6 +57,7 @@ const Dashboard = () => {
   const { data: distribution } = useJobDistribution();
   const { data: recentJobs, isLoading: jobsLoading } = useRecentJobs();
   const { data: employees, isLoading: employeesLoading } = useTopEmployees();
+  const { data: salesLeaderboard } = useSalesLeaderboard();
   
   const { useAllLeadsList } = useAdminLeads();
   const { data: leads } = useAllLeadsList();
@@ -311,43 +313,190 @@ const Dashboard = () => {
       </section>
 
       {/* ── Row 3.5: CRM & Sales Funnel Summary ──────────────── */}
-      <section>
-        <motion.div variants={item} className="bg-card border border-border rounded-[2rem] p-6 lg:p-8 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-6">
-          <div className="space-y-2 max-w-md">
-            <h4 className="text-lg font-syne font-bold text-foreground">CRM Sales Pipeline Overview</h4>
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              Track overall client acquisition. Open leads represent potential business currently managed by your sales team.
-            </p>
-            <div className="flex items-center gap-6 pt-2">
-              <div>
-                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Total Leads</span>
-                <p className="text-xl font-bold font-mono text-foreground mt-0.5">{leads?.length || 0}</p>
-              </div>
-              <div>
-                <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">Converted</span>
-                <p className="text-xl font-bold font-mono text-emerald-500 mt-0.5">
-                  {leads?.filter(l => l.status === 'converted').length || 0}
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] text-primary font-bold uppercase tracking-wider">Conversion Rate</span>
-                <p className="text-xl font-bold font-mono text-primary mt-0.5">
-                  {leads && leads.length > 0 
-                    ? Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100)
-                    : 0}%
-                </p>
-              </div>
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Funnel & Conversion Stats */}
+        <motion.div variants={item} className="bg-card border border-border rounded-[2rem] p-6 lg:p-8 shadow-sm flex flex-col justify-between gap-6 xl:col-span-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border/40 pb-4">
+            <div className="space-y-1">
+              <h4 className="text-lg font-syne font-bold text-foreground">CRM Sales Pipeline & Funnel</h4>
+              <p className="text-muted-foreground text-xs">
+                Track client acquisition. Open leads represent potential business managed by sales.
+              </p>
             </div>
-          </div>
-
-          <div className="flex gap-4">
             <Link 
               to="/admin/leads"
-              className="px-5 py-3 rounded-xl bg-primary text-[#0A0F1E] font-bold text-xs hover:bg-primary/95 transition-all flex items-center gap-1.5 shadow-lg shadow-primary/10"
+              className="px-4 py-2 rounded-xl bg-primary text-[#0A0F1E] font-bold text-[10px] uppercase tracking-wider hover:bg-primary/95 transition-all flex items-center gap-1.5 shadow-lg shadow-primary/10"
             >
-              <Zap size={14} />
+              <Zap size={12} />
               <span>Open Leads Manager</span>
             </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 md:grid-cols-1 gap-4">
+                <div className="p-4 rounded-2xl bg-muted/20 border border-border/40">
+                  <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider block">Total Leads</span>
+                  <p className="text-2xl font-bold font-mono text-foreground mt-0.5">{leads?.length || 0}</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-muted/20 border border-border/40">
+                  <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-wider block">Converted</span>
+                  <p className="text-2xl font-bold font-mono text-emerald-500 mt-0.5">
+                    {leads?.filter(l => l.status === 'converted').length || 0}
+                  </p>
+                </div>
+                <div className="p-4 rounded-2xl bg-primary/5 border border-gold/20">
+                  <span className="text-[9px] text-primary font-bold uppercase tracking-wider block">Conv. Rate</span>
+                  <p className="text-2xl font-bold font-mono text-primary mt-0.5">
+                    {leads && leads.length > 0 
+                      ? Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100)
+                      : 0}%
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Recharts Conversion Funnel */}
+            <div className="md:col-span-2 h-[200px] flex items-center justify-center">
+              {(() => {
+                const funnelData = [
+                  { name: '1. New', value: leads?.filter(l => l.status === 'new').length || 0, fill: '#818CF8' },
+                  { name: '2. Contacted', value: leads?.filter(l => l.status === 'contacted').length || 0, fill: '#60A5FA' },
+                  { name: '3. Quoted', value: leads?.filter(l => ['quoted', 'negotiating'].includes(l.status)).length || 0, fill: '#34D399' },
+                  { name: '4. Converted', value: leads?.filter(l => l.status === 'converted').length || 0, fill: '#059669' },
+                ];
+                
+                return (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart layout="vertical" data={funnelData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" stroke="#94A3B8" fontSize={9} width={80} axisLine={false} tickLine={false} />
+                      <Tooltip 
+                        cursor={{ fill: 'transparent' }}
+                        contentStyle={{ backgroundColor: '#131824', borderColor: '#1E293B', borderRadius: '12px' }}
+                        labelStyle={{ color: '#F8FAFC', fontWeight: 'bold' }}
+                      />
+                      <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={16}>
+                        {funnelData.map((entry, idx) => (
+                          <Cell key={`cell-${idx}`} fill={entry.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                );
+              })()}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Lead Source Insights */}
+        <motion.div variants={item} className="bg-card border border-border rounded-[2rem] p-6 lg:p-8 shadow-sm flex flex-col justify-between gap-6">
+          <div className="border-b border-border/40 pb-4">
+            <h4 className="text-base font-syne font-bold text-foreground">Lead Source ROI</h4>
+            <p className="text-muted-foreground text-[10px]">Attribution & conversion rates by channel</p>
+          </div>
+
+          <div className="flex-1 flex flex-col justify-center">
+            {(() => {
+              const counts: Record<string, { total: number; converted: number }> = {};
+              (leads || []).forEach((l: any) => {
+                const source = l.lead_sources?.name || 'Other';
+                if (!counts[source]) counts[source] = { total: 0, converted: 0 };
+                counts[source].total += 1;
+                if (l.status === 'converted') counts[source].converted += 1;
+              });
+
+              const colors = ['#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280'];
+              const sourceData = Object.entries(counts).map(([name, data], idx) => ({
+                name,
+                value: data.total,
+                rate: data.total > 0 ? Math.round((data.converted / data.total) * 100) : 0,
+                fill: colors[idx % colors.length]
+              })).sort((a, b) => b.value - a.value).slice(0, 4);
+
+              if (sourceData.length === 0) {
+                return <p className="text-xs text-muted-foreground italic text-center">No source data available</p>;
+              }
+
+              return (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="w-[120px] h-[120px] shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={sourceData} innerRadius={35} outerRadius={50} paddingAngle={3} dataKey="value">
+                          {sourceData.map((entry, idx) => (
+                            <Cell key={`cell-${idx}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-[#131824] border border-border p-2.5 rounded-xl text-[9px] space-y-0.5">
+                                  <p className="font-bold text-foreground">{data.name}</p>
+                                  <p className="text-muted-foreground">Leads: {data.value}</p>
+                                  <p className="text-primary font-bold">Conv: {data.rate}%</p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex-1 space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                    {sourceData.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-[10px] gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
+                          <span className="text-muted-foreground truncate">{item.name}</span>
+                        </div>
+                        <span className="font-bold font-mono text-foreground shrink-0">{item.rate}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </motion.div>
+      </section>
+
+      {/* ── Sales Revenue Leaderboard Panel ── */}
+      <section className="grid grid-cols-1 gap-6">
+        <motion.div variants={item} className="bg-card border border-border rounded-[2rem] p-6 lg:p-8 shadow-sm flex flex-col gap-6">
+          <div className="border-b border-border/40 pb-4">
+            <h4 className="text-base font-syne font-bold text-foreground flex items-center gap-2">
+              <Trophy className="text-amber-400" size={20} />
+              Sales Leaderboard
+            </h4>
+            <p className="text-muted-foreground text-xs">Fulfillment rankings based on closed revenue values</p>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {salesLeaderboard && salesLeaderboard.length > 0 ? (
+              salesLeaderboard.map((emp, idx) => (
+                <div key={emp.id} className="p-4 rounded-2xl bg-muted/20 border border-border/40 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary text-xs shrink-0">
+                      #{idx + 1}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">{emp.full_name}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase font-mono">{emp.employee_code || 'SALES'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-mono font-bold text-emerald-500">{Number(emp.total_revenue).toFixed(3)} OMR</p>
+                    <p className="text-[8px] text-muted-foreground uppercase">Revenue</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground italic text-center py-6 col-span-4">No sales performance data recorded yet.</p>
+            )}
           </div>
         </motion.div>
       </section>

@@ -81,11 +81,11 @@ export const useAdminEmployee = (id?: string) => {
 
       if (profileError) throw profileError;
 
-      // 2. Fetch Associated Jobs (Simplified join to reduce payload)
+      // 2. Fetch Associated Jobs (match executor or creator)
       const { data: jobs, error: jobsError } = await supabase
         .from('jobs')
         .select('*, client:profiles!jobs_client_id_fkey(full_name), service:services(name_en, name_ar)')
-        .eq('employee_id', id!)
+        .or(`employee_id.eq."${id}",sales_employee_id.eq."${id}"`)
         .order('created_at', { ascending: false });
 
       if (jobsError) throw jobsError;
@@ -120,6 +120,12 @@ export const useAdminEmployee = (id?: string) => {
       }, 0);
       const avgCompletionDays = completedJobs.length > 0 ? Math.round(totalDays / completedJobs.length) : 0;
 
+      // Calculate Average Client Rating (CSAT Score)
+      const ratedJobs = jobs?.filter((j: any) => j.client_rating !== null && j.client_rating !== undefined) || [];
+      const avgRating = ratedJobs.length > 0 
+        ? Number((ratedJobs.reduce((acc: number, j: any) => acc + Number(j.client_rating), 0) / ratedJobs.length).toFixed(1)) 
+        : 0;
+
       return {
         ...profile,
         full_name: profile.full_name ?? 'Unknown',
@@ -129,6 +135,7 @@ export const useAdminEmployee = (id?: string) => {
         active_jobs: activeJobs,
         completed_month: completedMonth,
         avg_completion_days: avgCompletionDays,
+        avg_rating: avgRating,
         jobs: jobs || [],
         leads: leads || []
       };

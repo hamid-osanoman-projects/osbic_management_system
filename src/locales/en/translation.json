@@ -37,7 +37,7 @@
     "approvals": "Approval Hub",
     "finance": "Finance",
     "audit": "System Audit",
-    "my_tasks": "Assigned Tasks",
+    "my_tasks": "Active Jobs",
     "notifications": "Notifications",
     "profile": "Profile & Security",
     "support": "Support Center",
@@ -46,7 +46,7 @@
     "reports": "Reports",
     "invoices": "Invoices & Quotes",
     "leads": "My Leads",
-    "ops_queue": "My Work Queue",
+    "ops_queue": "My Tasks",
     "pro_queue": "PRO Queue"
   },
   "admin": {

@@ -17,7 +17,9 @@ import {
    LayoutDashboard,
    FileText,
    Shield,
-   Zap
+   Zap,
+   Menu,
+   X
  } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 import { TopBarNotifications } from '../components/employee/TopBarNotifications';
@@ -38,12 +40,18 @@ function cn(...inputs: ClassValue[]) {
 
 const EmployeeLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const { profile, signOut } = useAuth();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.dir() === 'rtl';
 
   useRealtime(profile?.id);
+
+  // Close mobile menu on route change
+  React.useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const [availability, setAvailability] = useState(profile?.availability_status || 'on-work');
 
@@ -91,11 +99,27 @@ const EmployeeLayout: React.FC = () => {
       <GlobalNotificationListener />
       {/* Removed AssignmentBanner for immediate direct task activation workflow */}
       <QuickUpdateWidget />
+      {/* Mobile Menu Overlay */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <motion.aside
         initial={false}
         animate={{ width: collapsed ? 80 : 280 }}
-        className="relative z-30 flex flex-col bg-sidebar border-r border-border h-full transition-all duration-300"
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar border-r border-border h-full transition-transform duration-300 lg:relative lg:translate-x-0",
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        )}
       >
         <div className="flex h-20 items-center justify-between px-6">
           {!collapsed && (
@@ -108,10 +132,16 @@ const EmployeeLayout: React.FC = () => {
             </motion.h1>
           )}
           <button
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={() => {
+              if (window.innerWidth < 1024) {
+                setMobileMenuOpen(false);
+              } else {
+                setCollapsed(!collapsed);
+              }
+            }}
             className="p-2 rounded-lg hover:bg-foreground/5 text-muted-foreground transition-colors"
           >
-            {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+            {window.innerWidth < 1024 ? <X size={20} /> : (collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />)}
           </button>
         </div>
 
@@ -161,47 +191,55 @@ const EmployeeLayout: React.FC = () => {
       </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
-        <header className="relative z-50 h-20 flex items-center justify-between px-8 bg-background/50 backdrop-blur-xl border-b border-border">
-          <div className="flex items-center gap-4 bg-muted/20 border border-border px-4 py-2 rounded-xl w-80 group focus-within:border-primary/50 transition-all">
-            <Search size={18} className="text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <input 
-              type="text" 
-              placeholder={t('common.search')} 
-              className="bg-transparent border-none outline-none text-sm text-foreground w-full placeholder:text-muted-foreground"
-            />
+      <main className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
+        <header className="relative z-30 h-20 flex items-center justify-between px-4 lg:px-8 bg-background/50 backdrop-blur-xl border-b border-border">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-foreground/5 text-foreground transition-colors"
+            >
+              <Menu size={24} />
+            </button>
+            <div className="hidden md:flex items-center gap-4 bg-muted/20 border border-border px-4 py-2 rounded-xl w-64 lg:w-80 group focus-within:border-primary/50 transition-all">
+              <Search size={18} className="text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <input 
+                type="text" 
+                placeholder={t('common.search')} 
+                className="bg-transparent border-none outline-none text-sm text-foreground w-full placeholder:text-muted-foreground"
+              />
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 lg:gap-4">
             <TopBarNotifications />
-            <div className="w-[1px] h-6 bg-border mx-2" />
+            <div className="w-[1px] h-6 bg-border mx-1 lg:mx-2" />
             <ThemeToggle />
             
             <button
               onClick={toggleAvailability}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold uppercase tracking-widest transition-all ml-2 ${
+              className={`flex items-center gap-2 px-2 lg:px-3 py-1.5 rounded-full border text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all ml-1 lg:ml-2 ${
                 availability === 'available' 
                   ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20' 
                   : 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20'
               }`}
             >
-              <div className={`w-2 h-2 rounded-full ${availability === 'available' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              {availability === 'available' ? 'Available' : 'On-Work'}
+              <div className={`w-2 h-2 rounded-full shrink-0 ${availability === 'available' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              <span className="hidden sm:inline">{availability === 'available' ? 'Available' : 'On-Work'}</span>
             </button>
 
-            <NavLink to="/employee/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity ml-2">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-foreground leading-tight">{profile?.full_name}</p>
+            <NavLink to="/employee/profile" className="flex items-center gap-2 lg:gap-3 hover:opacity-80 transition-opacity ml-1 lg:ml-2">
+              <div className="text-right hidden md:block">
+                <p className="text-sm font-bold text-foreground leading-tight truncate max-w-[120px]">{profile?.full_name}</p>
                 <p className="text-xs text-muted-foreground uppercase">{profile?.employee_code || 'Employee'}</p>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-lg">
+              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-sm lg:text-lg shrink-0">
                 {profile?.full_name?.[0].toUpperCase()}
               </div>
             </NavLink>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 relative">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8 relative">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

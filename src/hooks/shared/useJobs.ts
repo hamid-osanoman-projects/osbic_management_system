@@ -74,9 +74,16 @@ export interface JobDocument {
   file_type: string;
   uploaded_by_name: string;
   uploaded_by_role?: string;
+  uploaded_by?: string;
   uploaded_at: string;
   status: 'approved' | 'pending' | 'rejected';
   rejection_reason?: string;
+  is_client_visible?: boolean;
+  applicant_name?: string;
+  service_name?: string;
+  document_type?: string;
+  is_checklist_doc?: boolean;
+  document_category?: string;
 }
 
 export interface JobMessage {
@@ -364,6 +371,16 @@ export const useJobDetail = (jobId: string) => {
         .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name, role)')
         .eq('job_id', jobId);
 
+      const { data: serviceDocsData } = await supabase
+        .from('job_service_documents')
+        .select(`
+          *,
+          uploader:profiles!uploaded_by(full_name, role),
+          job_service:job_services!job_service_id(applicant_name, service_name)
+        `)
+        .eq('job_id', jobId)
+        .not('file_path', 'is', null);
+
       const { data: msgData } = await supabase
         .from('messages')
         .select('*, sender:profiles!messages_sender_id_fkey(full_name, role)')
@@ -419,7 +436,7 @@ export const useJobDetail = (jobId: string) => {
         actual_gov_fee: Number(s.actual_gov_fee) || 0,
       }));
 
-      const documents: JobDocument[] = (docsData || []).map((d: any) => ({
+      const generalDocs = (docsData || []).map((d: any) => ({
         id: d.id,
         job_id: jobId,
         file_name: d.file_name,
@@ -427,9 +444,33 @@ export const useJobDetail = (jobId: string) => {
         file_type: d.file_type || 'document',
         uploaded_by_name: d.uploader?.full_name ?? 'Unknown',
         uploaded_by_role: d.uploader?.role ?? 'client',
+        uploaded_by: d.uploaded_by,
         uploaded_at: d.created_at,
         status: d.status,
+        is_client_visible: d.is_client_visible ?? true,
+        is_checklist_doc: false,
       }));
+
+      const serviceDocs = (serviceDocsData || []).map((d: any) => ({
+        id: d.id,
+        job_id: jobId,
+        file_name: d.file_name ?? d.document_name,
+        file_path: d.file_path,
+        file_type: d.file_type || 'document',
+        uploaded_by_name: d.uploader?.full_name ?? 'Unknown',
+        uploaded_by_role: d.uploader?.role ?? 'client',
+        uploaded_by: d.uploaded_by,
+        uploaded_at: d.created_at,
+        status: d.status,
+        is_client_visible: d.is_client_visible ?? false,
+        applicant_name: d.job_service?.applicant_name,
+        service_name: d.job_service?.service_name,
+        document_type: d.document_name,
+        is_checklist_doc: true,
+        document_category: d.document_category
+      }));
+
+      const documents: JobDocument[] = [...generalDocs, ...serviceDocs];
 
       const messages: JobMessage[] = (msgData || []).map((m: any) => ({
         id: m.id,

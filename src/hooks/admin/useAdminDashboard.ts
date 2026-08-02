@@ -228,3 +228,42 @@ export const useActivityFeed = () => {
     },
   });
 };
+
+// Sales Leaderboard Hook (sums total_fee of completed jobs per salesperson)
+export const useSalesLeaderboard = () => {
+  return useQuery({
+    queryKey: ['admin', 'sales-leaderboard'],
+    queryFn: async () => {
+      // 1. Get all employees with sales permissions
+      const { data: salesStaff, error: salesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, employee_code')
+        .eq('can_do_sales', true);
+      
+      if (salesError) throw salesError;
+
+      // 2. Get completed jobs' total fees
+      const { data: jobsData, error: jobsError } = await supabase
+        .from('jobs')
+        .select('sales_employee_id, total_fee')
+        .eq('status', 'completed');
+
+      if (jobsError) throw jobsError;
+
+      const revenueMap = (jobsData || []).reduce((acc: Record<string, number>, j: any) => {
+        if (j.sales_employee_id) {
+          acc[j.sales_employee_id] = (acc[j.sales_employee_id] || 0) + Number(j.total_fee || 0);
+        }
+        return acc;
+      }, {});
+
+      return (salesStaff || []).map(emp => ({
+        id: emp.id,
+        full_name: emp.full_name ?? 'Unknown',
+        avatar_url: emp.avatar_url,
+        employee_code: emp.employee_code,
+        total_revenue: revenueMap[emp.id] || 0,
+      })).sort((a, b) => b.total_revenue - a.total_revenue);
+    }
+  });
+};

@@ -678,6 +678,50 @@ const ServiceStatusSheet = ({
     }
   }, [service.id]);
 
+  const PRESET_DOCUMENTS = [
+    'SELFIE WITH PASSPORT',
+    'PASSPORT SIZE PHOTO',
+    'EMAIL ID',
+    'CONTACT NUMBER',
+    'COLOR PASSPORT COPIES OF SHAREHOLDERS',
+    'COLOR PHOTO OF THE SHARE HOLDER',
+    'DOCUMENTS PROVIDING PREVIOUS EXPERIENCE IN THE SAME LINE OF BUSINESS OR EDUCATION CERTIFICATE',
+    'SUGGESTION OF 5 NAMES FOR THE NEW COMPANY (PREFERABLY ARABIC)'
+  ];
+
+  const handleAddPresetDoc = async (docName: string) => {
+    if (docs.some(d => d.document_name.toLowerCase() === docName.toLowerCase())) {
+      toast.error('This document requirement is already added.');
+      return;
+    }
+    
+    setIsAddingDoc(true);
+    try {
+      const { data: newDoc, error } = await supabase
+        .from('job_service_documents')
+        .insert({
+          job_service_id: service.id,
+          job_id: jobId,
+          document_name: docName,
+          status: 'pending',
+          is_client_visible: true,
+          created_at: new Date().toISOString()
+        } as any)
+        .select()
+        .single() as any;
+
+      if (error) throw error;
+      
+      toast.success(`"${docName}" requirement added`);
+      setDocs(prev => [...prev, newDoc]);
+      onUpdated();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add document requirement');
+    } finally {
+      setIsAddingDoc(false);
+    }
+  };
+
   const [newDocName, setNewDocName] = useState('');
   const [isAddingDoc, setIsAddingDoc] = useState(false);
 
@@ -1228,8 +1272,35 @@ const ServiceStatusSheet = ({
                 );
               })}
               {docs.length === 0 && (
-                <p className="text-xs text-muted-foreground italic">No document requirements for this service.</p>
+                <p className="text-xs text-muted-foreground italic mb-2">No document requirements for this service.</p>
               )}
+              {/* Quick Add Preset Recommendation Chips */}
+              <div className="mt-4 pt-3 border-t border-border/40 space-y-2">
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Quick Add Common Documents
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESET_DOCUMENTS.map((docName) => {
+                    const isAdded = docs.some(d => d.document_name.toLowerCase() === docName.toLowerCase());
+                    return (
+                      <button
+                        key={docName}
+                        type="button"
+                        onClick={() => handleAddPresetDoc(docName)}
+                        className={`text-[9px] px-2.5 py-1 rounded-lg border transition-all duration-200 flex items-center gap-1 font-medium select-none ${
+                          isAdded 
+                            ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/20 opacity-55 cursor-not-allowed"
+                            : "bg-[#131824] hover:bg-primary/10 text-muted-foreground hover:text-primary border-border/40 cursor-pointer"
+                        }`}
+                        disabled={isAdded || isAddingDoc}
+                      >
+                        {isAdded && <span className="text-emerald-400 font-bold">✓</span>}
+                        {docName}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               {/* Add Custom Requirement Input */}
               <div className="flex gap-2 items-center mt-3 pt-3 border-t border-border/40">
@@ -1497,11 +1568,51 @@ export const JobDetailsView = ({ job }: { job: any }) => {
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [selectedPayMode, setSelectedPayMode] = useState('Bank Transfer');
 
+  const fetchCombinedDocuments = async (jobId: string) => {
+    const { data: docsData } = await supabase
+      .from('documents')
+      .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name, role)')
+      .eq('job_id', jobId);
+
+    const { data: serviceDocsData } = await supabase
+      .from('job_service_documents')
+      .select(`
+        *,
+        uploader:profiles!uploaded_by(full_name, role),
+        job_service:job_services!job_service_id(applicant_name, service_name)
+      `)
+      .eq('job_id', jobId)
+      .not('file_path', 'is', null);
+
+    const generalDocs = (docsData || []).map((d: any) => ({
+      ...d,
+      uploaded_by_role: d.uploader?.role ?? 'client',
+      uploaded_by_name: d.uploader?.full_name ?? 'Unknown',
+      is_checklist_doc: false,
+      is_client_visible: d.is_client_visible ?? true,
+    }));
+
+    const serviceDocs = (serviceDocsData || []).map((d: any) => ({
+      ...d,
+      file_name: d.file_name ?? d.document_name,
+      uploaded_by_role: d.uploader?.role ?? 'client',
+      uploaded_by_name: d.uploader?.full_name ?? 'Unknown',
+      is_checklist_doc: true,
+      is_client_visible: d.is_client_visible ?? false,
+      applicant_name: d.job_service?.applicant_name,
+      service_name: d.job_service?.service_name,
+      document_type: d.document_name,
+      document_category: d.document_category
+    }));
+
+    return [...generalDocs, ...serviceDocs];
+  };
+
   useEffect(() => {
     if (job?.id) {
       loadData();
 
-      // Realtime listener for document updates
+      // Realtime listener for general document updates
       const docChannel = supabase
         .channel(`job-docs-${job.id}`)
         .on(
@@ -1513,27 +1624,31 @@ export const JobDetailsView = ({ job }: { job: any }) => {
             filter: `job_id=eq.${job.id}`
           },
           () => {
-            // Refetch document list manually to synchronize view
-            supabase
-              .from('documents')
-              .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name, role)')
-              .eq('job_id', job.id)
-              .then(({ data }) => {
-                if (data) {
-                  const mapped = data.map((d: any) => ({
-                    ...d,
-                    uploaded_by_role: d.uploader?.role ?? 'client',
-                    uploaded_by_name: d.uploader?.full_name ?? 'Unknown'
-                  }));
-                  setJobDocuments(mapped);
-                }
-              });
+            fetchCombinedDocuments(job.id).then(setJobDocuments);
+          }
+        )
+        .subscribe();
+
+      // Realtime listener for checklist service documents updates
+      const serviceDocChannel = supabase
+        .channel(`job-service-docs-${job.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'job_service_documents',
+            filter: `job_id=eq.${job.id}`
+          },
+          () => {
+            fetchCombinedDocuments(job.id).then(setJobDocuments);
           }
         )
         .subscribe();
 
       return () => {
         supabase.removeChannel(docChannel);
+        supabase.removeChannel(serviceDocChannel);
       };
     }
   }, [job?.id]);
@@ -1601,18 +1716,8 @@ export const JobDetailsView = ({ job }: { job: any }) => {
     setExistingInvoice(invoiceData || null);
 
     // Fetch documents
-    const { data: docsData } = await supabase
-      .from('documents')
-      .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name, role)')
-      .eq('job_id', job.id);
-    if (docsData) {
-      const mapped = docsData.map((d: any) => ({
-        ...d,
-        uploaded_by_role: d.uploader?.role ?? 'client',
-        uploaded_by_name: d.uploader?.full_name ?? 'Unknown'
-      }));
-      setJobDocuments(mapped);
-    }
+    const mergedDocs = await fetchCombinedDocuments(job.id);
+    setJobDocuments(mergedDocs);
 
     // Fetch employees for assignment
     const { data: empData } = await supabase.from('profiles').select('id, full_name, availability_status, role, is_pro, can_do_ops, can_do_sales').eq('role', 'employee');
@@ -1711,8 +1816,8 @@ export const JobDetailsView = ({ job }: { job: any }) => {
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header Tabs */}
-      <div className="px-8 pt-6 border-b border-border bg-card">
-        <div className="flex gap-6">
+      <div className="px-4 sm:px-8 pt-4 sm:pt-6 border-b border-border bg-card">
+        <div className="flex gap-4 sm:gap-6 overflow-x-auto hide-scrollbar whitespace-nowrap">
           <button 
             onClick={() => setActiveTab('operations')}
             className={`pb-4 text-sm font-bold uppercase tracking-widest border-b-2 transition-colors ${
@@ -1767,7 +1872,7 @@ export const JobDetailsView = ({ job }: { job: any }) => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-8 no-scrollbar">
         {activeTab === 'timeline' ? (
           <div className="max-w-3xl mx-auto pb-12">
             <div className="mb-6 flex items-center justify-between">
@@ -1816,7 +1921,7 @@ export const JobDetailsView = ({ job }: { job: any }) => {
                </div>
 
                {/* Invoice actions */}
-               <div className="flex items-center gap-3 w-full sm:w-auto shrink-0 self-end sm:self-center">
+               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto shrink-0 self-end sm:self-center">
                  {canViewFinancials && (
                    existingInvoice ? (
                      <>

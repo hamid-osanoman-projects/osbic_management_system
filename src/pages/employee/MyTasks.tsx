@@ -64,6 +64,7 @@ const StatusUpdateSheet = ({
   onSuccess: () => void;
 }) => {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [newStatus, setNewStatus] = useState(task.status);
   const [reason, setReason] = useState('');
   const [govRef, setGovRef] = useState('');
@@ -110,7 +111,6 @@ const StatusUpdateSheet = ({
         await uploadMutation.mutateAsync({
           jobServiceId: task.id,
           jobId: task.job_id,
-          uploadedBy: profile.id,
           files: filesArray
         });
       }
@@ -161,8 +161,18 @@ const StatusUpdateSheet = ({
               {task.service?.name_en || task.service_name}
               {task.quantity > 1 ? ` · #${task.item_number}` : ''}
             </p>
-            <h3 className="font-syne font-bold text-foreground mt-0.5">
+            <h3 className="font-syne font-bold text-foreground mt-0.5 flex items-center gap-2">
               {task.applicant_name || `Applicant ${task.item_number}`}
+              <button 
+                onClick={() => {
+                  navigate(`/employee/tasks?jobId=${task.job_id}`);
+                  onClose();
+                }}
+                className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-lg hover:bg-primary/20 transition-all leading-none"
+                title="Jump to Job Workspace"
+              >
+                <ExternalLink size={9} /> Workspace
+              </button>
             </h3>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl text-muted-foreground transition-colors">
@@ -505,10 +515,10 @@ const TaskRow = ({ task, onUpdate }: { task: any; onUpdate: () => void }) => {
     <div className="bg-[#111726]/40 border border-border/40 rounded-xl overflow-hidden hover:border-primary/20 transition-all">
       {/* Top compact row */}
       <div
-        className="px-4 py-3 flex items-center justify-between gap-3 cursor-pointer hover:bg-[#111726]/80 transition-all"
+        className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-[#111726]/80 transition-all"
         onClick={() => setShowDocs(!showDocs)}
       >
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 w-full">
           <div className="flex items-center gap-1.5 flex-wrap mb-1">
             <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${cfg.bg} ${cfg.color}`}>
               {cfg.label}
@@ -549,7 +559,7 @@ const TaskRow = ({ task, onUpdate }: { task: any; onUpdate: () => void }) => {
           )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
           {task.status !== 'completed' && task.status !== 'cancelled' && (
             <button
               onClick={(e) => {
@@ -718,8 +728,8 @@ const GroupedJobCard = ({ group, onUpdate }: { group: any; onUpdate: () => void 
       className="bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/20 transition-all p-4 space-y-4 shadow-sm"
     >
       {/* Group Header: Client Context */}
-      <div className="flex items-start justify-between gap-3 pb-3 border-b border-border/50">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-border/50">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-center text-primary text-xs font-bold shrink-0">
             {group.clientName.charAt(0)}
           </div>
@@ -738,7 +748,7 @@ const GroupedJobCard = ({ group, onUpdate }: { group: any; onUpdate: () => void 
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 self-end sm:self-auto">
           {group.clientPhone && (
             <button
               onClick={handleWhatsApp}
@@ -878,12 +888,12 @@ const MyTasks: React.FC = () => {
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex gap-1 bg-muted/30 p-1 rounded-2xl">
+      <div className="flex gap-1 bg-muted/30 p-1 rounded-2xl overflow-x-auto hide-scrollbar whitespace-nowrap">
         {FILTER_TABS.map(tab => (
           <button
             key={tab.key}
             onClick={() => setFilter(tab.key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all ${filter === tab.key
+            className={`flex-none sm:flex-1 flex items-center justify-center gap-1.5 py-2 px-3 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${filter === tab.key
               ? 'bg-card border border-border text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
               }`}

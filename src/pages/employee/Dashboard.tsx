@@ -99,24 +99,25 @@ const EmployeeDashboard = () => {
     <div className="space-y-12 pb-20 p-4 sm:p-8 max-w-6xl mx-auto">
       
       {/* ── Welcome Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 border-b border-border pb-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border pb-6">
         <div>
-           <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mb-2 flex items-center gap-2 flex-wrap">
+           <p className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-widest mb-2 flex items-center gap-2 flex-wrap">
              <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
              <span className="text-muted-foreground/30">•</span>
              <span className="text-primary font-bold">{mode === 'sales' ? 'Sales Workspace' : 'Operations Workspace'}</span>
            </p>
-           <h1 className="text-3xl font-syne font-bold text-foreground tracking-tight">
-             {greeting}, <span className="text-primary">{profile?.full_name?.split(' ')[0] || 'Member'}</span>.
+           <h1 className="text-2xl sm:text-3xl font-syne font-bold text-foreground tracking-tight">
+             {greeting}, <br className="sm:hidden" />
+             <span className="text-primary">{profile?.full_name?.split(' ')[0] || 'Member'}</span>.
            </h1>
         </div>
 
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-wrap w-full md:w-auto">
           {showModeSwitcher && (
-            <div className="flex bg-muted/50 p-1 rounded-xl border border-border">
+            <div className="flex bg-muted/50 p-1 rounded-xl border border-border w-full sm:w-auto">
               <button
                 onClick={() => handleModeChange('sales')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex-1 sm:flex-none px-4 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all text-center ${
                   mode === 'sales' ? 'bg-primary text-[#0A0F1E]' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -124,7 +125,7 @@ const EmployeeDashboard = () => {
               </button>
               <button
                 onClick={() => handleModeChange('ops')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex-1 sm:flex-none px-4 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all text-center ${
                   mode === 'ops' ? 'bg-primary text-[#0A0F1E]' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -135,9 +136,9 @@ const EmployeeDashboard = () => {
 
           <button 
             onClick={() => navigate('/employee/my-jobs')}
-            className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-widest hover:text-primary transition-colors pb-1"
+            className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-widest hover:text-primary transition-colors pb-1 mt-2 sm:mt-0 w-full justify-between sm:w-auto sm:justify-start"
           >
-            Open Workflow <ChevronRight size={14} />
+            <span>Open Workflow</span> <ChevronRight size={14} />
           </button>
         </div>
       </div>
@@ -192,7 +193,7 @@ const EmployeeDashboard = () => {
                      </h2>
                      <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Last 7 Days</span>
                   </div>
-                  <div className="h-[140px] w-full -ml-4">
+                  <div className="h-[200px] sm:h-[140px] w-full -ml-2 sm:-ml-4 mt-6 sm:mt-0">
                      <ResponsiveContainer width="100%" height="100%">
                        <AreaChart data={weeklyData}>
                          <defs>
@@ -283,8 +284,8 @@ const EmployeeDashboard = () => {
           </div>
 
           {jobs?.filter(j => j.ops_employee_id === profile?.id).length > 0 ? (
-            <div className="overflow-x-auto bg-card border border-border rounded-2xl">
-              <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto bg-card border border-border rounded-2xl w-full">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-border/60 bg-muted/20">
                     <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Job Code</th>

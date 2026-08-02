@@ -7,6 +7,9 @@ import {
   FileText, Activity, UserCheck, AlertCircle, Trash2, ChevronRight
 } from 'lucide-react';
 import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from 'recharts';
+import {
   useAdminEmployee,
   useUpdateEmployee,
   useToggleEmployeeStatus,
@@ -176,11 +179,21 @@ const EmployeeDetail = () => {
                     <select
                       value={emp.department || 'operations'}
                       onChange={(e) => {
+                        const newDept = e.target.value as 'sales' | 'operations' | 'pro';
+                        const extraUpdates = newDept === 'sales'
+                          ? { can_do_sales: true, can_do_ops: false, is_pro: false }
+                          : newDept === 'pro'
+                            ? { is_pro: true, can_do_sales: false, can_do_ops: false }
+                            : { can_do_ops: true, can_do_sales: false, is_pro: false };
+                        
                         updateEmployee({
                           id: emp.id,
-                          updates: { department: e.target.value as 'sales' | 'operations' }
+                          updates: { 
+                            department: newDept,
+                            ...extraUpdates
+                          }
                         }, {
-                          onSuccess: () => toast.success('Department updated')
+                          onSuccess: () => toast.success('Department & permissions updated')
                         });
                       }}
                       disabled={isUpdating}
@@ -188,12 +201,15 @@ const EmployeeDetail = () => {
                         "appearance-none text-xs font-bold uppercase tracking-widest px-3 py-1 rounded border outline-none cursor-pointer transition-all pr-8",
                         emp.department === 'sales'
                           ? "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20"
-                          : "bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20",
+                          : emp.department === 'pro'
+                            ? "bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20"
+                            : "bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20",
                         isUpdating && "opacity-50 cursor-not-allowed"
                       )}
                     >
                       <option value="operations" className="bg-[#131824] text-foreground">Operations Team</option>
                       <option value="sales" className="bg-[#131824] text-foreground">Sales Executive</option>
+                      <option value="pro" className="bg-[#131824] text-foreground">PRO Agent</option>
                     </select>
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
                       <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -409,18 +425,186 @@ const EmployeeDetail = () => {
                 <p className="text-[10px] text-emerald-500 font-bold">Standard target: 5 Days</p>
               </div>
               <div className="p-6 rounded-3xl bg-muted/30 border border-border">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Volume (Month)</p>
-                <p className="text-4xl font-mono font-bold text-foreground mb-1">{emp.completed_month}</p>
-                <p className="text-[10px] text-primary font-bold">In-Month Fulfillment</p>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">CSAT Rating</p>
+                <p className="text-4xl font-mono font-bold text-amber-400 mb-1 flex items-baseline gap-1">
+                  ★ {emp.avg_rating || '—'}
+                  <span className="text-xs font-normal text-muted-foreground/60">/ 5.0</span>
+                </p>
+                <p className="text-[10px] text-muted-foreground/60 font-bold">Based on client feedback</p>
               </div>
               <div className="p-6 rounded-3xl bg-primary/5 border border-gold/20">
                 <p className="text-xs font-bold text-primary uppercase tracking-widest mb-4">Trust Level</p>
-                <p className="text-4xl font-syne font-bold text-foreground mb-1">Excellent</p>
-                <p className="text-[10px] text-primary/60 font-bold">System Reliability Rating</p>
+                {(() => {
+                  const speedDays = emp.avg_completion_days;
+                  const speedScore = speedDays === 0 ? 100 :
+                                     speedDays <= 5 ? 100 :
+                                     speedDays === 6 ? 90 :
+                                     speedDays === 7 ? 80 :
+                                     speedDays === 8 ? 70 :
+                                     speedDays === 9 ? 60 : 50;
+                  
+                  const csatScore = emp.avg_rating ? (emp.avg_rating * 20) : speedScore;
+                  const trustPct = Math.round((speedScore * 0.6) + (csatScore * 0.4));
+                  
+                  const level = trustPct >= 95 ? 'Excellent' :
+                                trustPct >= 85 ? 'Good' :
+                                trustPct >= 75 ? 'Satisfactory' : 'Needs Action';
+                  
+                  return (
+                    <>
+                      <p className="text-4xl font-syne font-bold text-foreground mb-1">{level}</p>
+                      <p className="text-[10px] text-primary/60 font-bold">{trustPct}% On-Time & Quality Rating</p>
+                    </>
+                  );
+                })()}
               </div>
             </div>
-            <div className="py-12 bg-black/20 border border-border rounded-3xl text-center text-muted-foreground/40 text-xs font-bold uppercase tracking-widest">
-              Advanced Trend Charts will appear as more jobs are completed
+
+            {(() => {
+              const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+              
+              if (emp.can_do_sales) {
+                // Aggregate monthly leads vs converted
+                const monthlyLeads: Record<string, { assigned: number; converted: number }> = {};
+                
+                // Initialize last 6 months
+                const now = new Date();
+                for (let i = 5; i >= 0; i--) {
+                  const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                  monthlyLeads[monthNames[d.getMonth()]] = { assigned: 0, converted: 0 };
+                }
+
+                (emp.leads || []).forEach((lead: any) => {
+                  const date = new Date(lead.created_at);
+                  const monthKey = monthNames[date.getMonth()];
+                  if (monthlyLeads[monthKey] !== undefined) {
+                    monthlyLeads[monthKey].assigned += 1;
+                    if (lead.status === 'converted') {
+                      monthlyLeads[monthKey].converted += 1;
+                    }
+                  }
+                });
+
+                const chartData = Object.entries(monthlyLeads).map(([name, values]) => ({
+                  name,
+                  ...values
+                }));
+
+                return (
+                  <div className="bg-card border border-border p-6 rounded-3xl space-y-4">
+                    <div>
+                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Leads Allocation vs. Conversion Trend</h4>
+                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">Assigned monthly pipeline volume compared against converted client files</p>
+                    </div>
+                    <div className="h-[250px] w-full pt-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                          <XAxis dataKey="name" stroke="#94A3B8" fontSize={10} />
+                          <YAxis stroke="#94A3B8" fontSize={10} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#131824', borderColor: '#1E293B', borderRadius: '12px' }}
+                            labelStyle={{ color: '#F8FAFC', fontWeight: 'bold' }}
+                          />
+                          <Legend verticalAlign="top" wrapperStyle={{ fontSize: 10, textTransform: 'uppercase', paddingBottom: 15 }} />
+                          <Bar dataKey="assigned" name="Assigned Leads" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="converted" name="Converted Leads" fill="#10B981" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                );
+              } else {
+                // Aggregate monthly jobs completed
+                const monthlyJobs: Record<string, { completed: number }> = {};
+                
+                // Initialize last 6 months
+                const now = new Date();
+                for (let i = 5; i >= 0; i--) {
+                  const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                  monthlyJobs[monthNames[d.getMonth()]] = { completed: 0 };
+                }
+
+                (emp.jobs || []).forEach((job: any) => {
+                  if (job.status === 'completed' && job.completed_at) {
+                    const date = new Date(job.completed_at);
+                    const monthKey = monthNames[date.getMonth()];
+                    if (monthlyJobs[monthKey] !== undefined) {
+                      monthlyJobs[monthKey].completed += 1;
+                    }
+                  }
+                });
+
+                const chartData = Object.entries(monthlyJobs).map(([name, values]) => ({
+                  name,
+                  ...values
+                }));
+
+                return (
+                  <div className="bg-card border border-border p-6 rounded-3xl space-y-4">
+                    <div>
+                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Jobs Fulfillment Trend</h4>
+                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">Fulfillment volume tracks total operations finalized by month</p>
+                    </div>
+                    <div className="h-[250px] w-full pt-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                          <XAxis dataKey="name" stroke="#94A3B8" fontSize={10} />
+                          <YAxis stroke="#94A3B8" fontSize={10} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#131824', borderColor: '#1E293B', borderRadius: '12px' }}
+                            labelStyle={{ color: '#F8FAFC', fontWeight: 'bold' }}
+                          />
+                          <Legend verticalAlign="top" wrapperStyle={{ fontSize: 10, textTransform: 'uppercase', paddingBottom: 15 }} />
+                          <Bar dataKey="completed" name="Completed Jobs" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                );
+              }
+            })()}
+
+            {/* Customer Reviews Feed */}
+            <div className="bg-card border border-border p-6 rounded-3xl space-y-4">
+              <div>
+                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Client Reviews & CSAT Feed</h4>
+                <p className="text-[10px] text-muted-foreground/60 mt-0.5">Real-time ratings and feedback collected from completed client jobs</p>
+              </div>
+
+              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                {(() => {
+                  const reviewedJobs = (emp.jobs || []).filter((j: any) => j.client_rating || j.client_feedback);
+                  
+                  if (reviewedJobs.length === 0) {
+                    return <p className="text-xs text-muted-foreground italic text-center py-6">No client reviews submitted for this employee yet.</p>;
+                  }
+
+                  return reviewedJobs.map((job: any) => (
+                    <div key={job.id} className="p-4 rounded-2xl bg-muted/20 border border-border/40 space-y-2">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <span className="text-[9px] text-primary font-mono font-bold uppercase">{job.job_code}</span>
+                          <h5 className="text-xs font-bold text-foreground mt-0.5">{job.client?.full_name || 'Client'}</h5>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          {[...Array(5)].map((_, i) => (
+                            <span key={i} className={i < (job.client_rating || 0) ? 'text-amber-400 text-xs' : 'text-muted-foreground/20 text-xs'}>
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {job.client_feedback && (
+                        <p className="text-xs text-muted-foreground italic bg-muted/30 p-2.5 rounded-xl border border-border/20">
+                          "{job.client_feedback}"
+                        </p>
+                      )}
+                    </div>
+                  ));
+                })()}
+              </div>
             </div>
 
             {/* Sales & CRM Analytics */}

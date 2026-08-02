@@ -51,8 +51,18 @@ const ClientDocumentsTab = ({ jobId, steps, documents }: Props) => {
 
   // 2. Filter Client-Visible Vault (Approved ones or ones they uploaded)
   const vaultDocs = documents.filter(d => d.is_client_visible || d.status === 'approved' || d.uploaded_by === profile?.id);
-  const deliverables = vaultDocs.filter(d => d.uploaded_by !== profile?.id);
-  const clientUploads = vaultDocs.filter(d => d.uploaded_by === profile?.id);
+  
+  const deliverables = vaultDocs.filter(d => 
+    d.is_checklist_doc 
+      ? (d.document_category === 'output')
+      : (d.uploaded_by_role === 'employee' || d.uploaded_by_role === 'admin')
+  );
+  
+  const clientUploads = vaultDocs.filter(d => 
+    d.is_checklist_doc 
+      ? (d.document_category !== 'output')
+      : (d.uploaded_by_role === 'client')
+  );
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>, stepId?: string, docType?: string) => {
     const file = event.target.files?.[0];
@@ -259,8 +269,15 @@ const ClientDocumentsTab = ({ jobId, steps, documents }: Props) => {
                      </div>
 
                      <div className="flex-1 mb-8">
-                        <p className="text-[13px] font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors mb-1">{doc.file_name}</p>
-                        <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest truncate">{doc.document_type}</p>
+                       <p className="text-[13px] font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors mb-1">{doc.file_name}</p>
+                       <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest truncate">{doc.document_type || doc.file_type}</p>
+                       {doc.is_checklist_doc && doc.applicant_name && (
+                         <div className="flex flex-wrap gap-1 mt-1.5">
+                           <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 leading-none">
+                             👤 {doc.applicant_name}
+                           </span>
+                         </div>
+                       )}
                      </div>
 
                       <div className="pt-4 border-t border-border flex items-center gap-2">

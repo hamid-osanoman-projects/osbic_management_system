@@ -29,12 +29,13 @@
     "finance": "Finance",
     "audit": "Audit Log",
     "dashboard": "Dashboard",
-    "my_tasks": "My Tasks",
+    "my_tasks": "Active Jobs",
     "notifications": "Notifications",
     "profile": "Profile & Security",
     "support": "Support Center",
     "reports": "Reports",
     "pipeline": "Pipeline",
-    "messages": "Messages"
+    "messages": "Messages",
+    "ops_queue": "My Tasks"
   }
 }

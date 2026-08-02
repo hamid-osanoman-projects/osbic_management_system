@@ -478,17 +478,17 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
             className="flex-1 flex flex-col bg-card relative z-10 border-l border-border shadow-[-20px_0_40px_-15px_rgba(0,0,0,0.1)] lg:shadow-none"
           >
              {/* We will build the StepDetailsDrawer / JobBuilder / Ledger components inside here */}
-             <div className="h-20 border-b border-border bg-background/50 backdrop-blur-md px-8 flex items-center justify-between">
-                <div>
-                   <h2 className="text-xl font-syne font-bold text-foreground">Job Details</h2>
-                   <p className="text-[10px] font-bold text-primary tracking-widest uppercase">{selectedJob.job_code}</p>
-                </div>
+             <div className="h-20 border-b border-border bg-background/50 backdrop-blur-md px-4 lg:px-8 flex items-center gap-4">
                 <button 
                   onClick={() => setSelectedJobId(null)}
-                  className="lg:hidden p-2 bg-muted rounded-xl text-muted-foreground"
+                  className="lg:hidden p-2 bg-muted/50 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 >
-                  Close
+                  <ArrowLeft size={20} />
                 </button>
+                <div>
+                   <h2 className="text-lg lg:text-xl font-syne font-bold text-foreground">Job Details</h2>
+                   <p className="text-[10px] font-bold text-primary tracking-widest uppercase">{selectedJob.job_code}</p>
+                </div>
              </div>
              
              <JobDetailsView job={selectedJob} />
@@ -501,16 +501,16 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
             exit={{ opacity: 0, x: 20 }}
             className="flex-1 flex flex-col bg-card relative z-10 border-l border-border shadow-[-20px_0_40px_-15px_rgba(0,0,0,0.1)] lg:shadow-none"
           >
-             <div className="h-20 border-b border-border bg-background/50 backdrop-blur-md px-8 flex items-center justify-between">
-                <div>
-                   <h2 className="text-xl font-syne font-bold text-foreground">Client Details</h2>
-                </div>
+             <div className="h-20 border-b border-border bg-background/50 backdrop-blur-md px-4 lg:px-8 flex items-center gap-4">
                 <button 
                   onClick={() => setSelectedClientId(null)}
-                  className="lg:hidden p-2 bg-muted rounded-xl text-muted-foreground"
+                  className="lg:hidden p-2 bg-muted/50 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 >
-                  Close
+                  <ArrowLeft size={20} />
                 </button>
+                <div>
+                   <h2 className="text-lg lg:text-xl font-syne font-bold text-foreground">Client Details</h2>
+                </div>
              </div>
              
              <ClientDetailsView 
