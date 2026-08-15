@@ -48,25 +48,75 @@ export const useRealtime = (userId: string | undefined) => {
             );
           }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
           queryClient.invalidateQueries({ queryKey: ['job'] });
           queryClient.invalidateQueries({ queryKey: ['employee_jobs_latest_messages'] });
           queryClient.invalidateQueries({ queryKey: ['client_jobs_latest_messages'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
           playChime();
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'job_steps' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_steps' }, () => {
           queryClient.invalidateQueries({ queryKey: ['job'] });
           queryClient.invalidateQueries({ queryKey: ['employee', 'jobs'] });
           queryClient.invalidateQueries({ queryKey: ['client', 'jobs'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'jobs' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, () => {
           queryClient.invalidateQueries({ queryKey: ['admin', 'jobs'] });
           queryClient.invalidateQueries({ queryKey: ['employee', 'jobs'] });
           queryClient.invalidateQueries({ queryKey: ['client', 'jobs'] });
+          queryClient.invalidateQueries({ queryKey: ['accounts_overview'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_services' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['pro_queue'] });
+          queryClient.invalidateQueries({ queryKey: ['job'] });
+          queryClient.invalidateQueries({ queryKey: ['employee', 'jobs'] });
+          queryClient.invalidateQueries({ queryKey: ['client', 'jobs'] });
+          queryClient.invalidateQueries({ queryKey: ['accounts_overview'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => {
           queryClient.invalidateQueries({ queryKey: ['job'] });
           queryClient.invalidateQueries({ queryKey: ['client', 'documents'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+          queryClient.invalidateQueries({ queryKey: ['admin', 'leads'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lead_interactions' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['lead_interactions'] });
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quotations' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['quotations'] });
+          queryClient.invalidateQueries({ queryKey: ['quotation'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['invoices'] });
+          queryClient.invalidateQueries({ queryKey: ['invoice'] });
+          queryClient.invalidateQueries({ queryKey: ['accounts_overview'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_payments' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['pending_payments'] });
+          queryClient.invalidateQueries({ queryKey: ['history_payments'] });
+          queryClient.invalidateQueries({ queryKey: ['accounts_overview'] });
+          queryClient.invalidateQueries({ queryKey: ['job'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_expenses' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['accounts_overview'] });
+          queryClient.invalidateQueries({ queryKey: ['job'] });
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+          queryClient.invalidateQueries({ queryKey: ['admin'] });
+          queryClient.invalidateQueries({ queryKey: ['employee', 'clients'] });
       })
       .subscribe();
 

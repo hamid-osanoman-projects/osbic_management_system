@@ -93,7 +93,13 @@ const EmployeeLayout: React.FC = () => {
     ...(profile?.can_do_sales ? [{ key: 'leads', icon: Users, path: '/employee/leads' }] : []),
     ...(profile?.is_manager ? [{ key: 'pipeline', icon: Globe, path: '/employee/pipeline' }] : []),
     ...(profile?.can_do_accounts ? [{ key: 'accounts', icon: FileText, path: '/employee/accounts' }] : []),
-  ];
+  ].filter(item => {
+    if (profile?.is_pro) {
+      return ['home', 'pro_queue', 'profile'].includes(item.key);
+    }
+    if (item.key === 'pro_queue') return false;
+    return true;
+  });
 
   const handleLanguageToggle = () => {
     const nextLang = i18n.language === 'en' ? 'ar' : 'en';

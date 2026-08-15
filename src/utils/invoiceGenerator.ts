@@ -631,6 +631,17 @@ export const downloadReceipt = (job: any, payment: any, action: 'download' | 'vi
   const totalBilled = Number(job.total_fee || 0);
   const amountReceived = Number(payment.amount || 0);
 
+  // Find all services in the job that were paid directly by client card
+  const clientCardPaidServices = (job.services || []).filter((s: any) => 
+    (s.notes && s.notes.includes('[PAID BY CLIENT CARD]')) || 
+    (s.notes && s.notes.includes('PAID BY CLIENT CARD'))
+  );
+
+  const clientCardGovFeeSum = clientCardPaidServices.reduce((sum: number, s: any) => {
+    const govFee = Number(s.ministry_fee || s.actual_gov_fee || s.estimated_gov_fee || 0);
+    return sum + govFee;
+  }, 0);
+
   // Calculate total verified payments to determine the true remaining balance
   const verifiedPayments = (job.payments || []).filter((p: any) => p.status === 'verified');
   let totalPaidOverall = verifiedPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
@@ -807,6 +818,18 @@ export const downloadReceipt = (job: any, payment: any, action: 'download' | 'vi
              </table>
           </div>
         </div>
+
+        ${clientCardGovFeeSum > 0 ? `
+        <!-- Client Card Payment Notice -->
+        <div class="relative z-10 p-3 bg-gray-50 border border-gray-200 rounded-xl mb-4 font-sans text-[10px] flex justify-between items-center">
+          <div class="text-left text-gray-700">
+            <span class="font-bold text-gray-900">Notice:</span> Government Fee of <span class="font-bold">OMR ${clientCardGovFeeSum.toFixed(3)}</span> was paid directly by client card.
+          </div>
+          <div class="text-right text-gray-700 font-bold" dir="rtl">
+            ملاحظة: تم دفع الرسوم الحكومية البالغة <span class="font-bold">OMR ${clientCardGovFeeSum.toFixed(3)}</span> مباشرة عبر بطاقة العميل.
+          </div>
+        </div>
+        ` : ''}
 
         <!-- Terms and Conditions -->
         <div class="relative z-10 space-y-1 mb-6">

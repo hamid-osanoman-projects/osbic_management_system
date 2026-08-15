@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useEmployeeJobs } from '../../hooks/shared/useJobs';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProQueue } from '../../hooks/employee/useTimeline';
 import Skeleton from '../../components/ui/Skeleton';
 import { useNotifications } from '../../hooks/shared/useNotifications';
 import { Clock } from 'lucide-react';
@@ -27,29 +28,26 @@ const weeklyData = [
 const EmployeeDashboard = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { data: jobs, isLoading } = useEmployeeJobs(profile?.id || '');
+  const { data: jobs, isLoading: isJobsLoading } = useEmployeeJobs(profile?.id || '');
+  const { data: proTasks, isLoading: isProLoading } = useProQueue(profile?.id || null);
   const [greeting, setGreeting] = useState('Good evening');
   const { t, i18n } = useTranslation();
   const isRtl = i18n.dir() === 'rtl';
+
+  const isLoading = isJobsLoading || isProLoading;
 
   // Mode switcher logic
   const canDoSales = profile?.can_do_sales ?? false;
   const canDoOps = profile?.can_do_ops ?? false;
   const isPro = profile?.is_pro ?? false;
-  const showModeSwitcher = canDoSales && canDoOps;
-  const [mode, setMode] = useState<'sales' | 'ops'>('sales');
+  const showModeSwitcher = canDoSales && canDoOps && !isPro;
+  const [mode, setMode] = useState<'sales' | 'ops' | 'pro'>('sales');
 
   useEffect(() => {
     if (profile) {
       if (isPro) {
-        navigate('/employee/pro-queue', { replace: true });
-      }
-    }
-  }, [profile, isPro, navigate]);
-
-  useEffect(() => {
-    if (profile) {
-      if (canDoSales && canDoOps) {
+        setMode('pro');
+      } else if (canDoSales && canDoOps) {
         const saved = localStorage.getItem('employee_mode');
         setMode(saved === 'ops' ? 'ops' : 'sales');
       } else if (canDoOps) {
@@ -58,9 +56,9 @@ const EmployeeDashboard = () => {
         setMode('sales');
       }
     }
-  }, [profile, canDoSales, canDoOps]);
+  }, [profile, canDoSales, canDoOps, isPro]);
 
-  const handleModeChange = (newMode: 'sales' | 'ops') => {
+  const handleModeChange = (newMode: 'sales' | 'ops' | 'pro') => {
     setMode(newMode);
     localStorage.setItem('employee_mode', newMode);
   };
@@ -96,6 +94,31 @@ const EmployeeDashboard = () => {
     return new Date(j.deadline).getTime() < new Date().getTime();
   }).length;
 
+  // PRO Mode Stats
+  const activeProTasks = (proTasks || []).filter(t => 
+    t.acceptance_status === 'accepted' && 
+    t.status !== 'completed' && 
+    t.status !== 'cancelled'
+  );
+  const completedProTasks = (proTasks || []).filter(t => 
+    t.status === 'completed' || t.status === 'gov_approved'
+  );
+  const completedTodayPro = completedProTasks.filter(t => {
+    const dateStr = t.completed_at || t.government_approved_at;
+    if (!dateStr) return false;
+    return new Date(dateStr).toDateString() === new Date().toDateString();
+  }).length;
+
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const proChartData = days.map((day, idx) => {
+    const count = completedProTasks.filter(t => {
+      const dateStr = t.completed_at || t.government_approved_at;
+      if (!dateStr) return false;
+      return new Date(dateStr).getDay() === idx;
+    }).length;
+    return { day, tasks: count };
+  });
+
   if (isLoading) {
     return (
       <div className="space-y-8 p-8 max-w-6xl mx-auto">
@@ -119,7 +142,7 @@ const EmployeeDashboard = () => {
              <span>{new Date().toLocaleDateString(isRtl ? 'ar-OM' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
              <span className="text-muted-foreground/30">•</span>
              <span className="text-primary font-bold">
-               {mode === 'sales' ? (isRtl ? 'مساحة عمل المبيعات' : 'Sales Workspace') : (isRtl ? 'مساحة عمل العمليات' : 'Operations Workspace')}
+               {mode === 'pro' ? (isRtl ? 'مساحة عمل المندوب (PRO)' : 'PRO Workspace') : mode === 'sales' ? (isRtl ? 'مساحة عمل المبيعات' : 'Sales Workspace') : (isRtl ? 'مساحة عمل العمليات' : 'Operations Workspace')}
              </span>
            </p>
            <h1 className="text-2xl sm:text-3xl font-syne font-bold text-foreground tracking-tight">
@@ -152,18 +175,52 @@ const EmployeeDashboard = () => {
             </div>
           )}
 
-          <button 
-            onClick={() => navigate('/employee/my-jobs')}
-            className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-widest hover:text-primary transition-colors pb-1 mt-2 sm:mt-0 w-full justify-between sm:w-auto sm:justify-start"
-          >
-            <span>{isRtl ? 'فتح سير العمل' : 'Open Workflow'}</span> 
-            <ChevronRight size={14} className={isRtl ? 'rotate-180' : ''} />
-          </button>
+          {!isPro && (
+            <button 
+              onClick={() => navigate('/employee/my-jobs')}
+              className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-widest hover:text-primary transition-colors pb-1 mt-2 sm:mt-0 w-full justify-between sm:w-auto sm:justify-start"
+            >
+              <span>{isRtl ? 'فتح سير العمل' : 'Open Workflow'}</span> 
+              <ChevronRight size={14} className={isRtl ? 'rotate-180' : ''} />
+            </button>
+          )}
         </div>
       </div>
 
       {/* ── Top Stats (Minimal Row) ── */}
-      {mode === 'sales' ? (
+      {mode === 'pro' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+           <div className="bg-transparent border border-border/60 rounded-xl p-5 flex flex-col justify-between group hover:border-primary/30 transition-colors">
+              <div className="flex items-center gap-3 mb-4">
+                 <Briefcase size={16} className="text-muted-foreground" />
+                 <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{isRtl ? 'مهام المندوب النشطة' : 'Active PRO Tasks'}</p>
+              </div>
+              <div className="flex items-baseline gap-2">
+                 <p className="text-4xl font-bold text-foreground tracking-tighter">{activeProTasks.length}</p>
+              </div>
+           </div>
+
+           <div className="bg-transparent border border-border/60 rounded-xl p-5 flex flex-col justify-between group hover:border-primary/30 transition-colors">
+              <div className="flex items-center gap-3 mb-4">
+                 <CheckCircle2 size={16} className="text-muted-foreground" />
+                 <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{isRtl ? 'المنجزة الإجمالية' : 'Lifetime Completed'}</p>
+              </div>
+              <div className="flex items-baseline gap-2">
+                 <p className="text-4xl font-bold text-foreground tracking-tighter">{completedProTasks.length}</p>
+              </div>
+           </div>
+
+           <div className="bg-transparent border border-border/60 rounded-xl p-5 flex flex-col justify-between group hover:border-primary/30 transition-colors">
+              <div className="flex items-center gap-3 mb-4">
+                 <CheckCircle2 size={16} className="text-muted-foreground" />
+                 <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{isRtl ? 'المكتملة اليوم' : 'Completed Today'}</p>
+              </div>
+              <div className="flex items-baseline gap-2">
+                 <p className="text-4xl font-bold text-foreground tracking-tighter">{completedTodayPro}</p>
+              </div>
+           </div>
+        </div>
+      ) : mode === 'sales' ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
            <div className="bg-transparent border border-border/60 rounded-xl p-5 flex flex-col justify-between group hover:border-primary/30 transition-colors">
               <div className="flex items-center gap-3 mb-4">
@@ -243,7 +300,7 @@ const EmployeeDashboard = () => {
               </div>
               <div className="h-[200px] sm:h-[140px] w-full -ml-2 sm:-ml-4 mt-6 sm:mt-0">
                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                   <AreaChart data={weeklyData}>
+                   <AreaChart data={mode === 'pro' ? proChartData : weeklyData}>
                      <defs>
                        <linearGradient id="colorTasks" x1="0" y1="0" x2="0" y2="1">
                          <stop offset="5%" stopColor="#d4af37" stopOpacity={0.3}/>
@@ -319,6 +376,54 @@ const EmployeeDashboard = () => {
            </div>
         </div>
       </div>
+
+      {mode === 'pro' && (
+        <div className="space-y-6 pt-8 border-t border-border/40 font-sans">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold text-foreground uppercase tracking-widest flex items-center gap-2">
+              <Briefcase size={14} className="text-primary" /> {isRtl ? 'مهام المندوب النشطة' : 'Active PRO Tasks'}
+            </h2>
+          </div>
+
+          {activeProTasks.length > 0 ? (
+            <div className="overflow-x-auto bg-card border border-border rounded-2xl w-full">
+              <table className="w-full text-left border-collapse whitespace-nowrap" dir={isRtl ? 'rtl' : 'ltr'}>
+                <thead>
+                  <tr className="border-b border-border/60 bg-muted/20 text-right">
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 text-start">{isRtl ? 'رمز الوظيفة' : 'Job Code'}</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 text-start">{isRtl ? 'اسم العميل' : 'Client Name'}</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 text-start">{isRtl ? 'اسم الخدمة' : 'Service Name'}</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 text-start">{isRtl ? 'الحالة' : 'Status'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeProTasks.map((task) => (
+                    <tr 
+                      key={task.id} 
+                      onClick={() => navigate(`/employee/pro-queue`)}
+                      className="border-b border-border/40 hover:bg-muted/10 transition-colors cursor-pointer text-start"
+                    >
+                      <td className="p-4 text-sm font-mono font-bold text-primary">{task.job?.job_code || 'N/A'}</td>
+                      <td className="p-4 text-sm text-foreground font-medium">{task.job?.client?.full_name || 'N/A'}</td>
+                      <td className="p-4 text-sm text-muted-foreground">{task.service_name}</td>
+                      <td className="p-4 text-sm">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20`}>
+                          {isRtl ? 'نشط' : 'Active'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-3xl bg-muted/5 text-center px-6">
+              <Briefcase size={36} className="text-muted-foreground/30 mb-4" />
+              <p className="text-sm text-muted-foreground font-medium">{isRtl ? 'لا توجد مهام مندوب نشطة' : 'No active PRO tasks assigned yet'}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {mode === 'ops' && (
         <div className="space-y-6 pt-8 border-t border-border/40 font-sans">

@@ -514,8 +514,12 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
              {/* We will build the StepDetailsDrawer / JobBuilder / Ledger components inside here */}
              <div className="h-20 border-b border-border bg-background/50 backdrop-blur-md px-4 lg:px-8 flex items-center gap-4">
                 <button 
-                  onClick={() => setSelectedJobId(null)}
-                  className="lg:hidden p-2 bg-muted/50 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  onClick={() => {
+                    setSelectedJobId(null);
+                    setTaskViewMode('list');
+                    setSearchParams({});
+                  }}
+                  className="p-2 bg-muted/50 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 >
                   <ArrowLeft size={20} />
                 </button>
@@ -537,8 +541,11 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
           >
              <div className="h-20 border-b border-border bg-background/50 backdrop-blur-md px-4 lg:px-8 flex items-center gap-4">
                 <button 
-                  onClick={() => setSelectedClientId(null)}
-                  className="lg:hidden p-2 bg-muted/50 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  onClick={() => {
+                    setSelectedClientId(null);
+                    setClientViewMode('list');
+                  }}
+                  className="p-2 bg-muted/50 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 >
                   <ArrowLeft size={20} />
                 </button>
