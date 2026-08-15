@@ -8,7 +8,13 @@ import { useConvertQuotation } from '../../hooks/employee/useConvertQuotation';
 import { useAdminServices } from '../../hooks/admin/useAdminServices';
 import CreateClientSlideOver from '../shared/clients/CreateClientSlideOver';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -82,11 +88,16 @@ export default function QuotationAcceptWizard({ isOpen, onClose, quotation }: Pr
                    s.name_ar === item.description
             );
 
+            const minFee = item.ministry_fee !== undefined ? item.ministry_fee : (matchedService?.ministry_fee || 0);
+            const workFee = item.service_fee !== undefined ? item.service_fee : (item.unit_price - minFee);
+
             return {
               itemId: item.id,
               serviceName: item.description || 'Custom Service',
               serviceId: matchedService?.id || '',
-              opsEmployeeId: ''
+              opsEmployeeId: '',
+              workFee,
+              ministryFee: minFee
             };
           });
           setTaskAssignments(initial);
@@ -113,21 +124,12 @@ export default function QuotationAcceptWizard({ isOpen, onClose, quotation }: Pr
   };
 
   const handleLaunch = async () => {
-    // Validate assignments: make sure each item is mapped to a service and has an assignee
-    const missingService = taskAssignments.some(a => !a.serviceId);
-    if (missingService) {
-      return toast.error('Please map every item description to a template service!');
-    }
-
-    const missingAssignee = taskAssignments.some(a => !a.opsEmployeeId);
-    if (missingAssignee) {
-      return toast.error('Please assign an Operations employee for all tasks!');
-    }
-
     const assignmentsPayload = taskAssignments.map(a => ({
-      serviceId: a.serviceId,
+      serviceId: a.serviceId || null,
       serviceName: a.serviceName,
-      opsEmployeeId: a.opsEmployeeId
+      opsEmployeeId: a.opsEmployeeId || null,
+      workFee: a.workFee || 0,
+      ministryFee: a.ministryFee || 0
     }));
 
     try {
@@ -158,43 +160,50 @@ export default function QuotationAcceptWizard({ isOpen, onClose, quotation }: Pr
         animate={{ opacity: 1 }} 
         exit={{ opacity: 0 }} 
         onClick={onClose} 
-        className="absolute inset-0 bg-black/60 backdrop-blur-md" 
+        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
       />
       
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 15 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className="relative w-full max-w-2xl bg-[#0d121f] border border-border/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-foreground"
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden bg-card border border-border rounded-[2.5rem] shadow-2xl flex flex-col z-10"
       >
-        {/* Header */}
-        <div className="flex justify-between items-center px-6 py-5 border-b border-border/40 bg-white/5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-              <Sparkles size={18} />
+        <div className="p-6 lg:p-8 border-b border-border/60 flex justify-between items-start">
+          <div className="flex gap-4 items-center">
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+              <Sparkles size={24} />
             </div>
             <div>
-              <h2 className="text-sm font-bold font-syne uppercase tracking-wider">Launch Client Job File</h2>
-              <p className="text-[10px] text-muted-foreground">Approve Quote & Delegate Operational Workload</p>
+              <h2 className="text-xl font-syne font-bold text-foreground leading-tight">LAUNCH CLIENT JOB FILE</h2>
+              <p className="text-xs text-muted-foreground">Approve Quote & Delegate Operational Workload</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5 text-muted-foreground hover:text-foreground transition-all">
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-muted rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+          >
             <X size={18} />
           </button>
         </div>
 
-        {/* Steps Tracker */}
-        <div className="flex border-b border-border/20 bg-[#0d121f] text-xs">
-          <div className={`flex-1 py-3 px-6 font-bold border-r border-border/20 text-center transition-all ${activeStep === 1 ? 'text-primary bg-primary/5' : 'text-muted-foreground'}`}>
+        {/* Wizard Steps indicator */}
+        <div className="grid grid-cols-2 border-b border-border text-center text-xs font-bold font-syne">
+          <div className={cn(
+            "py-4 transition-all border-b-2",
+            activeStep === 1 ? "text-primary border-primary bg-primary/5" : "text-muted-foreground border-transparent"
+          )}>
             1. Client Conversion
           </div>
-          <div className={`flex-1 py-3 px-6 font-bold text-center transition-all ${activeStep === 2 ? 'text-primary bg-primary/5' : 'text-muted-foreground'}`}>
+          <div className={cn(
+            "py-4 transition-all border-b-2",
+            activeStep === 2 ? "text-primary border-primary bg-primary/5" : "text-muted-foreground border-transparent"
+          )}>
             2. Operational Assignment
           </div>
         </div>
 
-        {/* Content Panel */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-6 lg:p-8 scrollbar-thin scrollbar-thumb-border">
           {activeStep === 1 && (
             <div className="space-y-6">
               <div className="p-5 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex gap-4 text-xs">
@@ -235,9 +244,29 @@ export default function QuotationAcceptWizard({ isOpen, onClose, quotation }: Pr
 
               {/* Service Assignments */}
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-foreground uppercase tracking-widest flex items-center gap-1.5"><Users size={14}/> Delegate Tasks</h3>
-                  <span className="text-[10px] text-muted-foreground font-semibold">{taskAssignments.length} Operational Services</span>
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-[#131824]/40 p-4 border border-border/60 rounded-2xl">
+                  <div>
+                    <h3 className="text-xs font-bold text-foreground uppercase tracking-widest flex items-center gap-1.5"><Users size={14}/> Delegate Tasks</h3>
+                    <p className="text-[9px] text-muted-foreground mt-0.5">{taskAssignments.length} Operational Services</p>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-primary uppercase tracking-wider shrink-0">Quick Assign All:</span>
+                    <select
+                      onChange={e => {
+                        const employeeId = e.target.value;
+                        if (!employeeId) return;
+                        setTaskAssignments(prev => prev.map(t => ({ ...t, opsEmployeeId: employeeId })));
+                        e.target.value = "";
+                      }}
+                      className="bg-[#0d121f] border border-border rounded-xl px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary transition-all font-semibold"
+                    >
+                      <option value="">-- Select Worker --</option>
+                      {employees?.map(emp => (
+                        <option key={emp.id} value={emp.id}>{emp.full_name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -257,7 +286,7 @@ export default function QuotationAcceptWizard({ isOpen, onClose, quotation }: Pr
                             onChange={e => handleAssignmentChange(idx, 'serviceId', e.target.value)}
                             className="w-full bg-[#0d121f] border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:border-gold transition-all"
                           >
-                            <option value="">-- Map to Service Template --</option>
+                            <option value="">-- Custom / Unmapped Service --</option>
                             {allServices?.filter(s => s.is_active).map(s => (
                               <option key={s.id} value={s.id}>{s.name_en}</option>
                             ))}

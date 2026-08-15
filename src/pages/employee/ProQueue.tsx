@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProQueue, useUpdateServiceStatus, type StatusUpdatePayload } from '../../hooks/employee/useTimeline';
@@ -21,6 +22,8 @@ const ProActionSheet = ({
   const [delayReason, setDelayReason] = useState('');
   const [newExpectedDate, setNewExpectedDate] = useState('');
   const { mutateAsync: updateStatus, isPending } = useUpdateServiceStatus();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
 
   const canSave = action !== null && (
     (action === 'approved') ||
@@ -76,7 +79,7 @@ const ProActionSheet = ({
               <Shield size={10} /> PRO Update
             </p>
             <h3 className="font-syne font-bold text-foreground mt-0.5">
-              {task.service_name} · {task.applicant_name || `#${task.item_number}`}
+              {isRtl ? (task.service?.name_ar || task.service_name) : task.service_name} · {task.applicant_name || `#${task.item_number}`}
             </h3>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl text-muted-foreground">
@@ -218,6 +221,8 @@ const ProActionSheet = ({
 
 const ProCard = ({ task }: { task: any }) => {
   const [showSheet, setShowSheet] = useState(false);
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
   const clientName = task.job?.client?.full_name || 'Unknown';
   const clientPhone = task.job?.client?.phone;
 
@@ -242,7 +247,7 @@ const ProCard = ({ task }: { task: any }) => {
                 <Shield size={9} /> PRO Assignment
               </p>
               <p className="font-syne font-bold text-foreground mt-0.5">
-                {task.service_name}
+                {isRtl ? (task.service?.name_ar || task.service_name) : task.service_name}
               </p>
               <p className="text-sm text-foreground/80">
                 {task.applicant_name || `Applicant #${task.item_number}`}
@@ -311,6 +316,8 @@ const ProQueue: React.FC = () => {
   const { profile } = useAuth();
   const { data: tasks = [], isLoading } = useProQueue(profile?.id || null);
   const [filter, setFilter] = useState<'active' | 'history'>('active');
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
 
   if (isLoading) {
     return (
@@ -329,15 +336,14 @@ const ProQueue: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-syne text-2xl font-bold text-foreground flex items-center gap-2">
-            <Shield size={22} className="text-amber-400" /> PRO Queue
+            <Shield size={22} className="text-amber-400" /> {isRtl ? 'طابور تخليص المعاملات' : 'PRO Queue'}
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {activeTasks.length} active task{activeTasks.length !== 1 ? 's' : ''} assigned to you
+            {isRtl ? `لديك ${activeTasks.length} معاملة نشطة` : `${activeTasks.length} active task${activeTasks.length !== 1 ? 's' : ''} assigned to you`}
           </p>
         </div>
       </div>
 
-      {/* Filter Tabs */}
       <div className="flex gap-1 bg-muted/30 p-1 rounded-2xl">
         <button
           onClick={() => setFilter('active')}
@@ -347,7 +353,7 @@ const ProQueue: React.FC = () => {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          Active Queue
+          {isRtl ? 'طابور المعاملات' : 'Active Queue'}
           {activeTasks.length > 0 && (
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500">
               {activeTasks.length}
@@ -362,7 +368,7 @@ const ProQueue: React.FC = () => {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          History
+          {isRtl ? 'سجل العمليات' : 'History'}
           {doneTasks.length > 0 && (
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground">
               {doneTasks.length}
@@ -375,12 +381,12 @@ const ProQueue: React.FC = () => {
         <div className="text-center border-2 border-dashed border-border rounded-3xl py-16">
           <Shield size={32} className="text-muted-foreground/35 mx-auto mb-3" />
           <p className="font-bold text-foreground mb-1">
-            {filter === 'active' ? 'No active PRO assignments' : 'No history found'}
+            {filter === 'active' ? (isRtl ? 'لا توجد معاملات نشطة لطابور التخليص' : 'No active PRO assignments') : (isRtl ? 'لم يتم العثور على سجلات' : 'No history found')}
           </p>
           <p className="text-xs text-muted-foreground">
             {filter === 'active' 
-              ? 'Items assigned to you by ops will appear here.' 
-              : 'Completed tasks will be archived in this view.'}
+              ? (isRtl ? 'المعاملات التي يتم إسنادها إليك من فريق العمليات ستظهر هنا.' : 'Items assigned to you by ops will appear here.') 
+              : (isRtl ? 'المعاملات المكتملة ستتم أرشفتها في هذا العرض.' : 'Completed tasks will be archived in this view.')}
           </p>
         </div>
       ) : (

@@ -238,7 +238,7 @@ export const useAdminLeads = () => {
       queryFn: async (): Promise<Lead[]> => {
         const { data, error } = await supabase
           .from('leads')
-          .select('*, lead_sources:source_id(name), assigned_to_profile:profiles!assigned_to(full_name, avatar_url), assigned_by_profile:profiles!assigned_by(full_name)')
+          .select('*, lead_sources:source_id(name), assigned_to_profile:profiles!assigned_to(full_name, avatar_url, branch_id), assigned_by_profile:profiles!assigned_by(full_name)')
           .order('created_at', { ascending: false });
 
         if (error) throw error;

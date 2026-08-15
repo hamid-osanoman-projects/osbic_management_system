@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { BranchProvider } from './contexts/BranchContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -63,6 +64,7 @@ import ClientPayments from './pages/client/Payments';
 import ClientNotifications from './pages/client/Notifications';
 import MyTasks from './pages/employee/MyTasks';
 import ProQueue from './pages/employee/ProQueue';
+import AccountsDashboard from './pages/employee/AccountsDashboard';
 
 
 
@@ -402,6 +404,7 @@ function App() {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <BranchProvider>
         <BrowserRouter>
           <Toaster 
             position="top-right" 
@@ -462,6 +465,7 @@ function App() {
               <Route path="packages/groups/:id" element={<PackageGroupDetail />} />
               <Route path="my-tasks" element={<MyTasks />} />
               <Route path="pro-queue" element={<ProQueue />} />
+              <Route path="accounts" element={<AccountsDashboard />} />
             </Route>
 
             {/* Client Portal */}
@@ -487,6 +491,7 @@ function App() {
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </BrowserRouter>
+        </BranchProvider>
       </AuthProvider>
     </QueryClientProvider>
   </ThemeProvider>

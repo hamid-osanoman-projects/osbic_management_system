@@ -19,7 +19,9 @@ import {
    Shield,
    Zap,
    Menu,
-   X
+   X,
+   MapPin,
+   ChevronDown
  } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 import { TopBarNotifications } from '../components/employee/TopBarNotifications';
@@ -33,6 +35,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import { useBranch } from '../contexts/BranchContext';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -41,10 +44,13 @@ function cn(...inputs: ClassValue[]) {
 const EmployeeLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const location = useLocation();
   const { profile, signOut } = useAuth();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.dir() === 'rtl';
+  const { branches, selectedBranchId, setSelectedBranchId, selectedBranch } = useBranch();
+  const isManagerOrAdmin = profile?.is_manager || profile?.role === 'admin';
 
   useRealtime(profile?.id);
 
@@ -64,9 +70,9 @@ const EmployeeLayout: React.FC = () => {
     setAvailability(newStatus);
     try {
       await supabase.from('profiles').update({ availability_status: newStatus }).eq('id', profile?.id);
-      toast.success(newStatus === 'available' ? 'You are now marked as Available for tasks' : 'You are now marked as On-Work');
+      toast.success(newStatus === 'available' ? (isRtl ? 'تم تحديد حالتك كمتاح لتلقي المهام' : 'You are now marked as Available for tasks') : (isRtl ? 'تم تحديد حالتك كقيد العمل' : 'You are now marked as On-Work'));
     } catch (err) {
-      toast.error('Failed to update status');
+      toast.error(isRtl ? 'فشل تحديث الحالة' : 'Failed to update status');
       setAvailability(availability);
     }
   };
@@ -76,9 +82,9 @@ const EmployeeLayout: React.FC = () => {
     { key: 'my_clients', icon: Users, path: '/employee/clients' },
     { key: 'my_tasks', icon: ClipboardList, path: '/employee/tasks' },
     // Ops queue — shown if employee can do ops work
-    ...(profile?.can_do_ops ? [{ key: 'ops_queue', icon: Zap, path: '/employee/my-tasks', label: 'My Work Queue' }] : []),
+    ...(profile?.can_do_ops ? [{ key: 'ops_queue', icon: Zap, path: '/employee/my-tasks' }] : []),
     // PRO queue — shown for PRO agents
-    ...(profile?.is_pro ? [{ key: 'pro_queue', icon: Shield, path: '/employee/pro-queue', label: 'PRO Queue' }] : []),
+    ...(profile?.is_pro ? [{ key: 'pro_queue', icon: Shield, path: '/employee/pro-queue' }] : []),
     { key: 'reports', icon: PieChart, path: '/employee/reports' },
     { key: 'invoices', icon: FileText, path: '/employee/invoices' },
     { key: 'messages', icon: MessageSquare, path: '/employee/messages' },
@@ -86,6 +92,7 @@ const EmployeeLayout: React.FC = () => {
     { key: 'profile', icon: User, path: '/employee/profile' },
     ...(profile?.can_do_sales ? [{ key: 'leads', icon: Users, path: '/employee/leads' }] : []),
     ...(profile?.is_manager ? [{ key: 'pipeline', icon: Globe, path: '/employee/pipeline' }] : []),
+    ...(profile?.can_do_accounts ? [{ key: 'accounts', icon: FileText, path: '/employee/accounts' }] : []),
   ];
 
   const handleLanguageToggle = () => {
@@ -165,7 +172,7 @@ const EmployeeLayout: React.FC = () => {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                 >
-                  {t(`sidebar.${item.key}`)}
+                  {item.label || t(`sidebar.${item.key}`)}
                 </motion.span>
               )}
             </NavLink>
@@ -214,26 +221,91 @@ const EmployeeLayout: React.FC = () => {
             <TopBarNotifications />
             <div className="w-[1px] h-6 bg-border mx-1 lg:mx-2" />
             <ThemeToggle />
+
+            {/* Branch Switcher — managers & admin only */}
+            {isManagerOrAdmin && (
+              <div className="relative">
+                <button
+                  onClick={() => setBranchDropdownOpen(o => !o)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                    selectedBranchId
+                      ? 'bg-primary/10 border-primary/40 text-primary'
+                      : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground hover:border-border/60'
+                  }`}
+                >
+                  <MapPin size={12} />
+                  <span className="hidden sm:inline max-w-[100px] truncate">
+                    {selectedBranch ? selectedBranch.name : (isRtl ? 'جميع الفروع' : 'All Branches')}
+                  </span>
+                  <ChevronDown size={12} className={`transition-transform ${branchDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {branchDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setBranchDropdownOpen(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                        transition={{ duration: 0.15 }}
+                        className={`absolute ${isRtl ? 'left-0' : 'right-0'} top-full mt-2 w-56 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden`}
+                      >
+                        <div className="p-1">
+                          <button
+                            onClick={() => { setSelectedBranchId(null); setBranchDropdownOpen(false); }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                              !selectedBranchId ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                            }`}
+                          >
+                            <Globe size={13} />
+                            {isRtl ? 'جميع الفروع' : 'All Branches'}
+                            {!selectedBranchId && <span className={`${isRtl ? 'mr-auto ml-0' : 'ml-auto mr-0'} text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold`}>{isRtl ? 'نشط' : 'ACTIVE'}</span>}
+                          </button>
+                          {branches.filter(b => b.is_active).map(b => (
+                            <button
+                              key={b.id}
+                              onClick={() => { setSelectedBranchId(b.id); setBranchDropdownOpen(false); }}
+                              className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                                selectedBranchId === b.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                              }`}
+                            >
+                              <span className="w-5 h-5 rounded-md bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary font-mono">{b.code.slice(0,2)}</span>
+                              <span className="truncate">{b.name}</span>
+                              {selectedBranchId === b.id && <span className={`${isRtl ? 'mr-auto ml-0' : 'ml-auto mr-0'} text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold`}>{isRtl ? 'نشط' : 'ACTIVE'}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
             
             <button
               onClick={toggleAvailability}
-              className={`flex items-center gap-2 px-2 lg:px-3 py-1.5 rounded-full border text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all ml-1 lg:ml-2 ${
+              className={`flex items-center gap-2 px-2 lg:px-3 py-1.5 rounded-full border text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all ml-1 lg:ml-2 whitespace-nowrap shrink-0 ${
                 availability === 'available' 
                   ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20' 
                   : 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20'
               }`}
             >
               <div className={`w-2 h-2 rounded-full shrink-0 ${availability === 'available' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              <span className="hidden sm:inline">{availability === 'available' ? 'Available' : 'On-Work'}</span>
+              <span className="hidden sm:inline whitespace-nowrap">{availability === 'available' ? (isRtl ? 'متاح' : 'Available') : (isRtl ? 'قيد العمل' : 'On-Work')}</span>
             </button>
 
             <NavLink to="/employee/profile" className="flex items-center gap-2 lg:gap-3 hover:opacity-80 transition-opacity ml-1 lg:ml-2">
-              <div className="text-right hidden md:block">
+              <div className={`${isRtl ? 'text-left' : 'text-right'} hidden md:block`}>
                 <p className="text-sm font-bold text-foreground leading-tight truncate max-w-[120px]">{profile?.full_name}</p>
-                <p className="text-xs text-muted-foreground uppercase">{profile?.employee_code || 'Employee'}</p>
+                <p className="text-xs text-muted-foreground uppercase">{profile?.employee_code || (isRtl ? 'موظف' : 'Employee')}</p>
               </div>
-              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-sm lg:text-lg shrink-0">
-                {profile?.full_name?.[0].toUpperCase()}
+              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-sm lg:text-lg shrink-0 overflow-hidden">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} className="w-full h-full object-cover" alt="Profile" />
+                ) : (
+                  profile?.full_name?.[0].toUpperCase()
+                )}
               </div>
             </NavLink>
           </div>

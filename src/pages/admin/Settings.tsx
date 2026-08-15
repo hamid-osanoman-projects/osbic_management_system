@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
 import { 
   Building2, Bell, Mail, Link as LinkIcon, Shield, 
-  Save, Upload, Check, AlertCircle, RefreshCw, Smartphone, Globe
+  Save, Upload, Check, AlertCircle, RefreshCw, Smartphone, Globe,
+  MapPin, Plus, Pencil, ToggleLeft, ToggleRight, Phone, X, Loader2
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -11,6 +12,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 import { useAdminSettings } from '../../hooks/admin/useAdminSettings';
+import { useBranch } from '../../contexts/BranchContext';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -48,6 +50,14 @@ const Settings = () => {
   const [activeTab, setActiveTab] = useState('company');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Branch management state
+  const { branches, loadingBranches, createBranch, updateBranch } = useBranch();
+  const [showAddBranch, setShowAddBranch] = useState(false);
+  const [branchForm, setBranchForm] = useState({ name: '', code: '', address: '', phone: '' });
+  const [savingBranch, setSavingBranch] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<string | null>(null);
+  const [editBranchForm, setEditBranchForm] = useState({ name: '', code: '', address: '', phone: '' });
   const { settings, logo: logoPreview, updateSettings, uploadLogo, isLoading } = useAdminSettings();
   const [localSettings, setLocalSettings] = useState<any>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +115,7 @@ const Settings = () => {
 
   const tabs = [
     { id: 'company', label: 'Company', icon: Building2 },
+    { id: 'branches', label: 'Branches', icon: MapPin },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'templates', label: 'Email Templates', icon: Mail },
     { id: 'integrations', label: 'Integrations', icon: LinkIcon },
@@ -372,6 +383,186 @@ const Settings = () => {
                      </button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {activeTab === 'branches' && (
+              <div className="space-y-6">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                      <MapPin size={18} className="text-primary" /> Branch Management
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Manage company branches. Employees and jobs are assigned to branches.</p>
+                  </div>
+                  <button
+                    onClick={() => { setShowAddBranch(true); setBranchForm({ name: '', code: '', address: '', phone: '' }); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-[#0A0F1E] font-bold text-xs rounded-xl hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] transition-all"
+                  >
+                    <Plus size={14} /> Add Branch
+                  </button>
+                </div>
+
+                {/* Add Branch Form */}
+                {showAddBranch && (
+                  <div className="p-5 bg-card border border-primary/30 rounded-2xl space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-foreground">New Branch</h4>
+                      <button onClick={() => setShowAddBranch(false)} className="p-1 hover:bg-muted rounded-lg text-muted-foreground"><X size={16} /></button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Branch Name *</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Sohar Branch"
+                          value={branchForm.name}
+                          onChange={e => setBranchForm(p => ({ ...p, name: e.target.value }))}
+                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Branch Code * (2-4 letters)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. SHR"
+                          maxLength={4}
+                          value={branchForm.code}
+                          onChange={e => setBranchForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
+                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground font-mono uppercase"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Address</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Sohar Industrial Area, Oman"
+                          value={branchForm.address}
+                          onChange={e => setBranchForm(p => ({ ...p, address: e.target.value }))}
+                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Phone</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. +968 2345 6789"
+                          value={branchForm.phone}
+                          onChange={e => setBranchForm(p => ({ ...p, phone: e.target.value }))}
+                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      disabled={savingBranch || !branchForm.name || !branchForm.code}
+                      onClick={async () => {
+                        if (!branchForm.name || !branchForm.code) return;
+                        setSavingBranch(true);
+                        try {
+                          await createBranch({ name: branchForm.name, code: branchForm.code, address: branchForm.address || null, phone: branchForm.phone || null, is_active: true } as any);
+                          setShowAddBranch(false);
+                          setBranchForm({ name: '', code: '', address: '', phone: '' });
+                        } catch (err: any) { alert(err.message); }
+                        finally { setSavingBranch(false); }
+                      }}
+                      className="px-6 py-2 bg-primary text-[#0A0F1E] font-bold text-xs rounded-xl disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {savingBranch ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      {savingBranch ? 'Saving...' : 'Create Branch'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Branches List */}
+                {loadingBranches ? (
+                  <div className="flex justify-center py-10"><Loader2 className="animate-spin text-primary" size={24} /></div>
+                ) : branches.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground text-sm">No branches created yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {branches.map(branch => (
+                      <div key={branch.id} className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                        branch.is_active ? 'bg-card border-border' : 'bg-muted/20 border-border/40 opacity-60'
+                      }`}>
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <span className="text-xs font-bold text-primary font-mono">{branch.code}</span>
+                          </div>
+                          <div>
+                            {editingBranch === branch.id ? (
+                              <div className="space-y-2">
+                                <div className="flex gap-2">
+                                  <input
+                                    value={editBranchForm.name}
+                                    onChange={e => setEditBranchForm(p => ({ ...p, name: e.target.value }))}
+                                    className="bg-background border border-border rounded-lg px-2 py-1 text-sm text-foreground outline-none focus:border-primary"
+                                    placeholder="Branch name"
+                                  />
+                                  <input
+                                    value={editBranchForm.code}
+                                    onChange={e => setEditBranchForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
+                                    maxLength={4}
+                                    className="bg-background border border-border rounded-lg px-2 py-1 text-sm text-foreground outline-none focus:border-primary font-mono w-16"
+                                    placeholder="Code"
+                                  />
+                                </div>
+                                <input
+                                  value={editBranchForm.address}
+                                  onChange={e => setEditBranchForm(p => ({ ...p, address: e.target.value }))}
+                                  className="w-full bg-background border border-border rounded-lg px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                                  placeholder="Address"
+                                />
+                              </div>
+                            ) : (
+                              <>
+                                <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                                  {branch.name}
+                                  {branch.code === 'GHL' && <span className="text-[9px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Main</span>}
+                                  {!branch.is_active && <span className="text-[9px] bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Inactive</span>}
+                                </p>
+                                {branch.address && <p className="text-xs text-muted-foreground">{branch.address}</p>}
+                                {branch.phone && <p className="text-xs text-muted-foreground flex items-center gap-1"><Phone size={10} /> {branch.phone}</p>}
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {editingBranch === branch.id ? (
+                            <>
+                              <button
+                                onClick={async () => {
+                                  await updateBranch(branch.id, { name: editBranchForm.name, code: editBranchForm.code, address: editBranchForm.address, phone: editBranchForm.phone });
+                                  setEditingBranch(null);
+                                }}
+                                className="px-3 py-1.5 bg-primary text-[#0A0F1E] font-bold text-xs rounded-lg"
+                              >Save</button>
+                              <button onClick={() => setEditingBranch(null)} className="px-3 py-1.5 bg-muted text-foreground text-xs rounded-lg">Cancel</button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => { setEditingBranch(branch.id); setEditBranchForm({ name: branch.name, code: branch.code, address: branch.address || '', phone: branch.phone || '' }); }}
+                                className="p-2 bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+                                title="Edit branch"
+                              ><Pencil size={14} /></button>
+                              <button
+                                onClick={() => updateBranch(branch.id, { is_active: !branch.is_active })}
+                                className={`p-2 rounded-lg transition-colors ${
+                                  branch.is_active ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                }`}
+                                title={branch.is_active ? 'Deactivate branch' : 'Activate branch'}
+                              >
+                                {branch.is_active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

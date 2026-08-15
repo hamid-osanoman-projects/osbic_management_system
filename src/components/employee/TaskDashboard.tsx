@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { Briefcase, User, Users, ShieldAlert } from 'lucide-react';
 
@@ -10,16 +11,19 @@ interface TaskDashboardProps {
 }
 
 export const TaskDashboard: React.FC<TaskDashboardProps> = ({ jobs, activeFilter, onFilterChange, profileId }) => {
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
+
   // Calculate counts based on assigned_by
   const selfAssigned = jobs.filter(j => j.assigned_by === profileId).length;
   const managerAssigned = jobs.filter(j => j.assigned_by_role === 'admin' || j.assigned_by_role === 'manager').length;
   const coworkerAssigned = jobs.filter(j => j.assigned_by !== profileId && j.assigned_by_role === 'employee').length;
 
   const filters = [
-    { id: 'all', label: 'All Tasks', count: jobs.length, icon: Briefcase, color: 'text-primary', bg: 'bg-primary/10' },
-    { id: 'self', label: 'Self Assigned', count: selfAssigned, icon: User, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    { id: 'manager', label: 'Manager Assigned', count: managerAssigned, icon: ShieldAlert, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-    { id: 'coworker', label: 'Coworker Delegated', count: coworkerAssigned, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { id: 'all', label: isRtl ? 'جميع المهام' : 'All Tasks', count: jobs.length, icon: Briefcase, color: 'text-primary', bg: 'bg-primary/10' },
+    { id: 'self', label: isRtl ? 'المسندة إلي' : 'Self Assigned', count: selfAssigned, icon: User, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+    { id: 'manager', label: isRtl ? 'مسندة من الإدارة' : 'Manager Assigned', count: managerAssigned, icon: ShieldAlert, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+    { id: 'coworker', label: isRtl ? 'مفوضة من الزملاء' : 'Coworker Delegated', count: coworkerAssigned, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
   ];
 
   return (

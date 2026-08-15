@@ -39,6 +39,9 @@ export interface Job {
   client_feedback?: string | null;
   ops_employee_id?: string;
   sales_employee_id?: string;
+  sales_employee_name?: string;
+  is_operator?: boolean;
+  entry_type?: 'lead' | 'walkin' | 'direct' | 'renewal' | null;
 }
 
 export interface JobStep {
@@ -118,6 +121,7 @@ export const useAdminJobs = () => {
           *,
           client:profiles!client_id(full_name, avatar_url),
           employee:profiles!employee_id(full_name, avatar_url),
+          sales_employee:profiles!sales_employee_id(full_name),
           service:services!service_id(name_en, category),
           job_steps(status, actual_gov_fee, workflow_step_id, step_def:workflow_steps!workflow_step_id(estimated_gov_fee))
         `)
@@ -135,10 +139,11 @@ export const useAdminJobs = () => {
           client_id: j.client_id,
           client_name: j.client?.full_name || 'Anonymous Client',
           client_avatar: j.client?.avatar_url,
-          service_name: j.service?.name_en || 'Standard Service',
+          service_name: j.custom_name || j.service?.name_en || 'Standard Service',
           service_category: j.service?.category || 'other',
           employee_id: j.employee_id,
           employee_name: j.employee?.full_name || 'Unassigned',
+          sales_employee_name: j.sales_employee?.full_name || 'N/A',
           employee_avatar: j.employee?.avatar_url,
           status: j.status || 'pending',
           started_date: j.started_at || j.created_at,
@@ -158,13 +163,14 @@ export const useAdminJobs = () => {
           notes: j.notes,
           client_rating: j.client_rating,
           client_feedback: j.client_feedback,
+          entry_type: j.entry_type,
+          branch_id: j.branch_id,
+          service_id: j.service_id,
         };
       });
     },
   });
-};
-
-// ─── Employee: My Jobs ────────────────────────────────────────────────────────
+};// ─── Employee: My Jobs ────────────────────────────────────────────────────────
 export const useEmployeeJobs = (employeeId: string) => {
   return useQuery({
     queryKey: ['employee', 'jobs', employeeId],
@@ -178,13 +184,14 @@ export const useEmployeeJobs = (employeeId: string) => {
           assigner:profiles!assigned_by(role),
           client:profiles!client_id(full_name, avatar_url),
           service:services!service_id(name_en, category),
-          job_steps(id, status, actual_gov_fee, workflow_step_id, assigned_to, assigned_by)
+          job_steps(id, status, actual_gov_fee, workflow_step_id, assigned_to, assigned_by),
+          job_services(id, ops_employee_id)
         `)
         .or(`employee_id.eq.${employeeId},assigned_by.eq.${employeeId},ops_employee_id.eq.${employeeId},sales_employee_id.eq.${employeeId}`);
 
       if (ownedError) throw ownedError;
 
-      // 2. Fetch steps assigned to the employee
+      // 2. Fetch steps & services assigned to the employee
       const { data: stepsData, error: stepsError } = await supabase
         .from('job_steps')
         .select('job_id')
@@ -192,11 +199,19 @@ export const useEmployeeJobs = (employeeId: string) => {
         
       if (stepsError) throw stepsError;
 
-      // Find jobs they are assigned a step in, but DO NOT own
+      const { data: servicesData, error: servicesError } = await supabase
+        .from('job_services')
+        .select('job_id')
+        .eq('ops_employee_id', employeeId);
+
+      if (servicesError) throw servicesError;
+
+      // Find jobs they are assigned a step or service in, but DO NOT own
       let delegatedData: any[] = [];
-      const delegatedJobIds = Array.from(new Set((stepsData || []).map((s: any) => s.job_id))).filter(
-        id => !(ownedData || []).some((oj: any) => oj.id === id)
-      );
+      const delegatedJobIds = Array.from(new Set([
+        ...(stepsData || []).map((s: any) => s.job_id),
+        ...(servicesData || []).map((s: any) => s.job_id)
+      ])).filter(id => !(ownedData || []).some((oj: any) => oj.id === id));
 
       if (delegatedJobIds.length > 0) {
         const { data: dJobs, error: dError } = await supabase
@@ -206,7 +221,8 @@ export const useEmployeeJobs = (employeeId: string) => {
             assigner:profiles!assigned_by(role),
             client:profiles!client_id(full_name, avatar_url),
             service:services!service_id(name_en, category),
-            job_steps(id, status, actual_gov_fee, workflow_step_id, assigned_to, assigned_by)
+            job_steps(id, status, actual_gov_fee, workflow_step_id, assigned_to, assigned_by),
+            job_services(id, ops_employee_id)
           `)
           .in('id', delegatedJobIds);
           
@@ -243,12 +259,18 @@ export const useEmployeeJobs = (employeeId: string) => {
            }
         }
 
+        const isOperator = 
+          j.employee_id === employeeId || 
+          j.ops_employee_id === employeeId || 
+          (j.job_steps && j.job_steps.some((s: any) => s.assigned_to === employeeId)) ||
+          (j.job_services && j.job_services.some((s: any) => s.ops_employee_id === employeeId));
+
         return {
           id: j.id,
           job_code: j.job_code,
           client_id: j.client_id,
           client_name: j.client?.full_name ?? 'Unknown',
-          service_name: j.service?.name_en ?? 'Unknown',
+          service_name: j.custom_name || j.service?.name_en || 'Unknown',
           service_category: j.service?.category ?? 'other',
           employee_id: j.employee_id,
           employee_name: 'Me',
@@ -270,6 +292,9 @@ export const useEmployeeJobs = (employeeId: string) => {
           notes: j.notes,
           ops_employee_id: j.ops_employee_id,
           sales_employee_id: j.sales_employee_id,
+          is_operator: isOperator,
+          entry_type: j.entry_type,
+          service_id: j.service_id,
         };
       }).sort((a, b) => new Date(b.started_date).getTime() - new Date(a.started_date).getTime());
     },
@@ -304,7 +329,7 @@ export const useClientJobs = (clientId: string) => {
           job_code: j.job_code,
           client_id: j.client_id,
           client_name: 'Me',
-          service_name: j.service?.name_en ?? 'Unknown',
+          service_name: j.custom_name || j.service?.name_en || 'Unknown',
           service_category: j.service?.category ?? 'other',
           employee_id: j.employee_id,
           employee_name: j.employee?.full_name ?? 'Unassigned',
@@ -325,6 +350,7 @@ export const useClientJobs = (clientId: string) => {
           remaining_receipt_url: j.remaining_receipt_url,
           client_rating: j.client_rating,
           client_feedback: j.client_feedback,
+          entry_type: j.entry_type,
         };
       });
     },
@@ -392,7 +418,7 @@ export const useJobDetail = (jobId: string) => {
         job_code: j.job_code,
         client_id: j.client_id,
         client_name: j.client?.full_name ?? 'Unknown',
-        service_name: j.service?.name_en ?? 'Unknown',
+        service_name: j.custom_name || j.service?.name_en || 'Unknown',
         service_category: j.service?.category ?? 'other',
         employee_id: j.employee_id,
         employee_name: j.employee?.full_name ?? 'Unassigned',
@@ -889,6 +915,21 @@ export const useUpdateJobPayment = () => {
 
         if (updateError) throw updateError;
 
+        // 2. Insert verified payment record into job_payments
+        const { error: pError } = await supabase
+          .from('job_payments')
+          .insert({
+            job_id: jobId,
+            amount: amount !== undefined ? amount : (type === 'advance' ? (Number(jobInfo.advance_due_amount) || 0) : (Number(jobInfo.remaining_due_amount) || 0)),
+            payment_method: 'bank_transfer',
+            reference_number: `REC-${Date.now().toString().slice(-6)}`,
+            notes: `Confirmed via Financials Ledger. Receipt Auto-Generated.`,
+            status: 'verified',
+            verified_by: profile?.id,
+            verified_at: now
+          } as any);
+        if (pError) console.error("Could not insert payment log:", pError);
+
         // 2. If Advance Payment confirmed, start the first step automatically
         if (type === 'advance' && paid) {
            // Find first pending step
@@ -1071,17 +1112,18 @@ export const useUploadJobDocument = () => {
       if (file) {
         const fileExt = file.name.split('.').pop();
         const filePath = `${jobId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const storagePath = `documents/${filePath}`;
         
         const { error: uploadError } = await supabase.storage
-          .from('job-documents')
-          .upload(filePath, file);
+          .from('documents')
+          .upload(storagePath, file);
 
         if (uploadError) throw uploadError;
 
         // Get public URL
         const { data: { publicUrl } } = supabase.storage
-          .from('job-documents')
-          .getPublicUrl(filePath);
+          .from('documents')
+          .getPublicUrl(storagePath);
         
         finalUrl = publicUrl;
       }
@@ -1102,9 +1144,10 @@ export const useUploadJobDocument = () => {
         } as any);
 
       if (error) throw error;
-      return { success: true };
+      return { success: true, jobId };
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      qc.invalidateQueries({ queryKey: ['job', variables.jobId] });
       qc.invalidateQueries({ queryKey: ['job'] });
     },
   });
@@ -1171,9 +1214,12 @@ export const useUpdateDocumentStatus = () => {
         action_url: `/portal/jobs/${jobId}`
       } as any);
 
-      return docId;
+      return { docId, jobId };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data?.jobId) {
+        qc.invalidateQueries({ queryKey: ['job', data.jobId] });
+      }
       qc.invalidateQueries({ queryKey: ['job'] });
       qc.invalidateQueries({ queryKey: ['client', 'documents'] }); // sync client documents page
     },
@@ -1184,11 +1230,21 @@ export const useDeleteDocument = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (docId: string) => {
+      const { data: docData } = await (supabase as any)
+        .from('documents')
+        .select('job_id')
+        .eq('id', docId)
+        .single();
+      const jobId = docData?.job_id;
+
       const { error } = await (supabase.from('documents') as any).delete().eq('id', docId);
       if (error) throw error;
-      return docId;
+      return { docId, jobId };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data?.jobId) {
+        qc.invalidateQueries({ queryKey: ['job', data.jobId] });
+      }
       qc.invalidateQueries({ queryKey: ['job'] });
     },
   });

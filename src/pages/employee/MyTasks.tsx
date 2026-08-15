@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { useMyOpsTasks, useUpdateServiceStatus, type StatusUpdatePayload } from '../../hooks/employee/useTimeline';
 import { useUploadMultipleServiceDocuments, useDeleteJobServiceDocument } from '../../hooks/employee/useJobServices';
@@ -8,7 +9,7 @@ import {
   Clock, CheckCircle2, AlertCircle, Shield, ExternalLink,
   ChevronRight, ChevronDown, X, FileText, Phone, Building2, Calendar,
   Layers, Users, Info, Upload, Download, Eye, Trash2, Paperclip, Loader2,
-  Check
+  Check, Wallet
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { differenceInDays, format, parseISO } from 'date-fns';
@@ -36,17 +37,17 @@ const DeadlineBadge = ({ dateStr }: { dateStr: string | null }) => {
   if (!dateStr) return null;
   const days = differenceInDays(parseISO(dateStr), new Date());
   if (days < 0) return (
-    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full border border-red-400/20">
+    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full border border-red-400/20 whitespace-nowrap shrink-0">
       <AlertCircle size={9} /> {Math.abs(days)}d overdue
     </span>
   );
   if (days <= 2) return (
-    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">
+    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20 whitespace-nowrap shrink-0">
       <Clock size={9} /> {days}d left
     </span>
   );
   return (
-    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-emerald-400/70 bg-emerald-400/5 px-2 py-0.5 rounded-full border border-emerald-400/10">
+    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-emerald-400/70 bg-emerald-400/5 px-2 py-0.5 rounded-full border border-emerald-400/10 whitespace-nowrap shrink-0">
       <Calendar size={9} /> {format(parseISO(dateStr), 'MMM d')}
     </span>
   );
@@ -74,9 +75,19 @@ const StatusUpdateSheet = ({
   const [proNotes, setProNotes] = useState(task.pro_notes || '');
   const [pros, setPros] = useState<any[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [actualFee, setActualFee] = useState('');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [paidByClient, setPaidByClient] = useState(task.notes?.includes('[PAID BY CLIENT CARD]') || false);
 
   const { mutateAsync: updateStatus, isPending } = useUpdateServiceStatus();
   const uploadMutation = useUploadMultipleServiceDocuments();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
+
+  const [issueDate, setIssueDate] = useState(task.issue_date || '');
+  const [expiryDate, setExpiryDate] = useState(task.expiry_date || '');
+
+  const uploadMutationPayload = uploadMutation;
 
   useEffect(() => {
     supabase
@@ -102,26 +113,72 @@ const StatusUpdateSheet = ({
 
   const handleSave = async () => {
     try {
-      // 1. Upload files first if selected
-      if (selectedFiles.length > 0 && profile) {
-        const filesArray = selectedFiles.map(file => ({
-          file,
-          category: 'output' as const
-        }));
-        await uploadMutation.mutateAsync({
+      const feeAmount = parseFloat(actualFee) || 0;
+      if (feeAmount > 0 && !receiptFile) {
+        toast.error('You must upload a payment receipt when recording government fees.');
+        return;
+      }
+
+      // 1. Upload files first if selected (and receipt if paid by client card)
+      const filesToUpload: { file: File, category: 'output' }[] = [];
+      if (selectedFiles.length > 0) {
+        selectedFiles.forEach(file => {
+          filesToUpload.push({ file, category: 'output' as const });
+        });
+      }
+      if (paidByClient && receiptFile) {
+        filesToUpload.push({ file: receiptFile, category: 'output' as const });
+      }
+
+      if (filesToUpload.length > 0 && profile) {
+        await uploadMutationPayload.mutateAsync({
           jobServiceId: task.id,
           jobId: task.job_id,
-          files: filesArray
+          files: filesToUpload
         });
       }
 
+      // 1.5. Upload receipt file if government fee is recorded (only if NOT paid by client card)
+      let receiptUrl = '';
+      if (receiptFile && !paidByClient) {
+        const fileExt = receiptFile.name.split('.').pop();
+        const fileName = `${task.job_id}/${task.id}/${Date.now()}_receipt.${fileExt}`;
+        const filePath = `documents/${fileName}`;
+        
+        const { error: storageError } = await supabase.storage.from('documents').upload(filePath, receiptFile);
+        if (storageError) throw storageError;
+        receiptUrl = filePath;
+      }
+
+      // 1.6. Log expense in job_expenses table (only if NOT paid by client card)
+      if (feeAmount > 0 && !paidByClient) {
+        const { error: expenseError } = await supabase.from('job_expenses').insert({
+          job_id: task.job_id,
+          job_service_id: task.id,
+          amount: feeAmount,
+          expense_type: 'ministry_fee',
+          receipt_url: receiptUrl || null,
+          notes: `Recorded during status update to ${newStatus}`,
+          status: 'pending_approval',
+          created_by: profile?.id
+        });
+        if (expenseError) throw expenseError;
+      }
+
       // 2. Perform status update
+      const clientPaidNote = paidByClient
+        ? (isRtl 
+           ? `[دفع بواسطة بطاقة العميل] الرسوم الحكومية: ${feeAmount.toFixed(3)} ريال عماني`
+           : `[Paid by Client Card] Government fee: ${feeAmount.toFixed(3)} OMR`)
+        : undefined;
+
       const payload: StatusUpdatePayload = {
         jobServiceId: task.id,
         jobId: task.job_id,
         fromStatus: task.status,
         toStatus: newStatus,
-        reason: reason || undefined,
+        serviceName: task.service_name || task.service?.name_en || undefined,
+        reason: clientPaidNote || reason || undefined,
         governmentRef: govRef || undefined,
         isDelayEvent: isDelay,
         isClientCaused,
@@ -130,6 +187,8 @@ const StatusUpdateSheet = ({
         rejectionReason: newStatus === 'gov_rejected' ? reason : undefined,
         proId: newStatus === 'assigned_to_pro' ? proId : undefined,
         proNotes: newStatus === 'assigned_to_pro' ? proNotes : undefined,
+        issueDate: (newStatus === 'gov_approved' || newStatus === 'completed') ? (issueDate || null) : undefined,
+        expiryDate: (newStatus === 'gov_approved' || newStatus === 'completed') ? (expiryDate || null) : undefined,
       };
       await updateStatus(payload);
       toast.success('Status updated');
@@ -201,7 +260,7 @@ const StatusUpdateSheet = ({
             <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">
               Update Status
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {STATUS_OPTIONS.map(opt => (
                 <button
                   key={opt.value}
@@ -221,7 +280,7 @@ const StatusUpdateSheet = ({
           <AnimatePresence>
             {newStatus === 'on_hold' && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-2">
-                <label className="text-[9px] font-bold text-yellow-400 uppercase tracking-widest flex items-center gap-1 block">
+                <label className="text-[9px] font-bold text-yellow-400 uppercase tracking-widest flex items-center gap-1 block whitespace-nowrap">
                   <AlertCircle size={10} /> Delay Reason *
                 </label>
                 <textarea
@@ -248,7 +307,7 @@ const StatusUpdateSheet = ({
           <AnimatePresence>
             {newStatus === 'cancelled' && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-2">
-                <label className="text-[9px] font-bold text-red-400 uppercase tracking-widest flex items-center gap-1 block">
+                <label className="text-[9px] font-bold text-red-400 uppercase tracking-widest flex items-center gap-1 block whitespace-nowrap">
                   <AlertCircle size={10} /> Cancellation Reason *
                 </label>
                 <textarea
@@ -372,6 +431,95 @@ const StatusUpdateSheet = ({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Expiry and Issue Dates */}
+          <AnimatePresence>
+            {(newStatus === 'gov_approved' || newStatus === 'completed') && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-3 pt-3 border-t border-border/40">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">{isRtl ? 'تاريخ الإصدار' : 'Issue Date'}</label>
+                    <input
+                      type="date"
+                      value={issueDate ? issueDate.split('T')[0] : ''}
+                      onChange={(e) => setIssueDate(e.target.value)}
+                      className="w-full bg-muted/30 border border-border focus:border-primary rounded-xl px-4 py-2.5 text-sm text-foreground outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">{isRtl ? 'تاريخ الانتهاء' : 'Expiry Date'}</label>
+                    <input
+                      type="date"
+                      value={expiryDate ? expiryDate.split('T')[0] : ''}
+                      onChange={(e) => setExpiryDate(e.target.value)}
+                      className="w-full bg-muted/30 border border-border focus:border-primary rounded-xl px-4 py-2.5 text-sm text-foreground outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Government Fee & Receipt */}
+          <AnimatePresence>
+            {(newStatus === 'gov_approved' || newStatus === 'completed') && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-3 pt-3 border-t border-border/40">
+                {/* Paid by Client Card Checkbox */}
+                <div className="flex items-center gap-2 py-1.5 bg-primary/5 px-3.5 rounded-xl border border-primary/10">
+                  <input
+                    type="checkbox"
+                    id="paid_by_client"
+                    checked={paidByClient}
+                    onChange={(e) => setPaidByClient(e.target.checked)}
+                    className="w-4 h-4 rounded accent-primary bg-muted/20 border-border cursor-pointer"
+                  />
+                  <label htmlFor="paid_by_client" className="text-[10px] font-bold text-muted-foreground cursor-pointer select-none uppercase tracking-wider flex-1">
+                    {isRtl ? 'العميل دفع ببطاقته (دفع مباشر)' : 'Paid by Client Card (Direct Pay)'}
+                  </label>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-primary uppercase tracking-widest block">
+                    Actual Government Fee Spent (OMR)
+                  </label>
+                  <input
+                    type="text"
+                    value={actualFee}
+                    onChange={(e) => {
+                      const text = e.target.value;
+                      if (/^\d*\.?\d*$/.test(text)) {
+                        setActualFee(text);
+                      }
+                    }}
+                    placeholder="0.000 OMR"
+                    className="w-full bg-muted/30 border border-border focus:border-primary rounded-xl px-4 py-2.5 text-sm text-foreground outline-none transition-all font-mono"
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-primary uppercase tracking-widest block">
+                    Government Receipt Document
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      id="receipt_file_upload"
+                      className="hidden"
+                      onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                      accept="image/*,.pdf"
+                    />
+                    <label 
+                      htmlFor="receipt_file_upload"
+                      className="w-full flex items-center justify-center gap-2 border border-dashed border-border rounded-xl px-4 py-3 text-xs text-muted-foreground hover:bg-muted/50 cursor-pointer transition-colors"
+                    >
+                      <Upload size={14} />
+                      {receiptFile ? receiptFile.name : "Upload Payment Receipt"}
+                    </label>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Footer */}
@@ -407,6 +555,14 @@ const TaskRow = ({ task, onUpdate }: { task: any; onUpdate: () => void }) => {
   const docs = task.documents || [];
   const inputs = docs.filter((d: any) => d.document_category !== 'output');
   const outputs = docs.filter((d: any) => d.document_category === 'output');
+
+  const isTrusted = task.job?.client?.is_trusted;
+  const ministryFee = task.ministry_fee || 0;
+  const ministryAllocated = task.ministry_fee_allocated || 0;
+  const serviceAllocated = task.service_fee_allocated || 0;
+  const hasFunds = ministryAllocated > 0 || serviceAllocated > 0;
+  const isMinistryFunded = ministryAllocated >= ministryFee;
+  const isLocked = !isTrusted && !isMinistryFunded && (ministryFee > 0);
 
   const handleDownloadDoc = async (doc: any) => {
     try {
@@ -528,7 +684,13 @@ const TaskRow = ({ task, onUpdate }: { task: any; onUpdate: () => void }) => {
                 <Shield size={8} /> PRO
               </span>
             )}
-            <DeadlineBadge dateStr={task.target_completion_date} />
+            {isLocked ? (
+              <span className="flex items-center gap-1 text-[8px] font-bold text-rose-500 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded uppercase tracking-widest" title="Awaiting Ministry Fee Payment">
+                <AlertCircle size={10} /> LOCKED
+              </span>
+            ) : (
+              <DeadlineBadge dateStr={task.target_completion_date} />
+            )}
           </div>
 
           <h4 className="text-xs font-bold text-foreground truncate">
@@ -557,10 +719,54 @@ const TaskRow = ({ task, onUpdate }: { task: any; onUpdate: () => void }) => {
               ))}
             </div>
           )}
+
+          {/* Logged Expenses / Ministry Fees spent */}
+          {task.expenses && task.expenses.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {task.expenses.map((expense: any) => {
+                const isApproved = expense.status === 'approved';
+                const isRejected = expense.status === 'rejected';
+                
+                const handleViewReceipt = async (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  if (!expense.receipt_url) return;
+                  try {
+                    const { data, error } = await supabase.storage.from('documents').createSignedUrl(expense.receipt_url, 3600);
+                    if (error) throw error;
+                    if (data?.signedUrl) {
+                      window.open(data.signedUrl, '_blank');
+                    }
+                  } catch (err) {
+                    toast.error('Could not open receipt document.');
+                  }
+                };
+
+                return (
+                  <button
+                    key={expense.id}
+                    onClick={handleViewReceipt}
+                    className={`inline-flex items-center gap-1.5 text-[8px] font-bold px-2.5 py-0.5 rounded-lg border transition-all ${
+                      isApproved 
+                        ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20' 
+                        : isRejected
+                        ? 'text-rose-400 bg-rose-500/10 border-rose-500/20 hover:bg-rose-500/20'
+                        : 'text-amber-400 bg-amber-400/10 border-amber-400/20 hover:bg-amber-400/20'
+                    }`}
+                    title={`View Government Receipt. Notes: ${expense.notes || 'None'}`}
+                  >
+                    <Wallet size={8} />
+                    Ministry Fee: {Number(expense.amount).toFixed(3)} OMR 
+                    {expense.status === 'pending_approval' ? ' (PENDING AUDIT)' : isApproved ? ' (AUDITED)' : ' (REJECTED)'}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-          {task.status !== 'completed' && task.status !== 'cancelled' && (
+
+          {task.status !== 'completed' && task.status !== 'cancelled' && !isLocked && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -570,6 +776,9 @@ const TaskRow = ({ task, onUpdate }: { task: any; onUpdate: () => void }) => {
             >
               Update
             </button>
+          )}
+          {isLocked && task.status !== 'completed' && task.status !== 'cancelled' && (
+             <span className="text-[9px] font-bold text-rose-500/60 uppercase tracking-widest px-2">Awaiting Funds</span>
           )}
           <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground">
             {showDocs ? 'Close' : 'Files'}
@@ -706,6 +915,7 @@ const TaskRow = ({ task, onUpdate }: { task: any; onUpdate: () => void }) => {
           />
         )}
       </AnimatePresence>
+
     </div>
   );
 };
@@ -786,6 +996,8 @@ const MyTasks: React.FC = () => {
   const { profile } = useAuth();
   const { data: tasks = [], isLoading, refetch } = useMyOpsTasks(profile?.id || null);
   const [filter, setFilter] = useState<FilterTab>('all');
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
 
   const now = new Date();
 
@@ -852,14 +1064,26 @@ const MyTasks: React.FC = () => {
       groups[jobId].services.push(task);
     });
 
+    // Sort services inside each group by display_order and item_number
+    Object.values(groups).forEach(g => {
+      g.services.sort((a, b) => {
+        const orderA = a.display_order ?? 1;
+        const orderB = b.display_order ?? 1;
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        return (a.item_number || 1) - (b.item_number || 1);
+      });
+    });
+
     return Object.values(groups);
   };
 
   const FILTER_TABS: { key: FilterTab; label: string; count: number; color?: string }[] = [
-    { key: 'all', label: 'My Work', count: active.length },
-    { key: 'urgent', label: 'Urgent', count: urgent.length, color: 'text-yellow-400' },
-    { key: 'on_hold', label: 'On Hold', count: onHold.length, color: 'text-red-400' },
-    { key: 'completed', label: 'Done', count: done.length },
+    { key: 'all', label: isRtl ? 'عملي الجاري' : 'My Work', count: active.length },
+    { key: 'urgent', label: isRtl ? 'عاجل' : 'Urgent', count: urgent.length, color: 'text-yellow-400' },
+    { key: 'on_hold', label: isRtl ? 'متوقف مؤقتاً' : 'On Hold', count: onHold.length, color: 'text-red-400' },
+    { key: 'completed', label: isRtl ? 'مكتمل' : 'Done', count: done.length },
   ];
 
   if (isLoading) {
@@ -875,14 +1099,14 @@ const MyTasks: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-syne text-2xl font-bold text-foreground">My Work</h1>
+          <h1 className="font-syne text-2xl font-bold text-foreground">{isRtl ? 'مهامي الجارية' : 'My Work'}</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {active.length} active task{active.length !== 1 ? 's' : ''} assigned to you
+            {isRtl ? `لديك ${active.length} مهمة نشطة مسندة إليك` : `${active.length} active task${active.length !== 1 ? 's' : ''} assigned to you`}
           </p>
         </div>
         {urgent.length > 0 && (
           <div className="flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 px-3 py-1.5 rounded-xl text-xs font-bold">
-            <AlertCircle size={12} /> {urgent.length} Urgent
+            <AlertCircle size={12} /> {urgent.length} {isRtl ? 'عاجل' : 'Urgent'}
           </div>
         )}
       </div>
@@ -917,7 +1141,7 @@ const MyTasks: React.FC = () => {
           {overdue.length > 0 && (
             <div className="space-y-3">
               <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest flex items-center gap-1.5">
-                <AlertCircle size={11} /> Overdue — {overdue.length}
+                <AlertCircle size={11} /> {isRtl ? 'متأخرة' : 'Overdue'} — {overdue.length}
               </p>
               {groupTasksByJob(overdue).map(group => <GroupedJobCard key={group.jobId} group={group} onUpdate={refetch} />)}
             </div>
@@ -927,7 +1151,7 @@ const MyTasks: React.FC = () => {
           {soonDue.length > 0 && (
             <div className="space-y-3">
               <p className="text-[10px] font-bold text-yellow-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Clock size={11} /> Due Soon — {soonDue.length}
+                <Clock size={11} /> {isRtl ? 'مستحقة قريباً' : 'Due Soon'} — {soonDue.length}
               </p>
               {groupTasksByJob(soonDue).map(group => <GroupedJobCard key={group.jobId} group={group} onUpdate={refetch} />)}
             </div>
@@ -937,7 +1161,7 @@ const MyTasks: React.FC = () => {
           {onTrack.length > 0 && (
             <div className="space-y-3">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                <CheckCircle2 size={11} /> In Progress — {onTrack.length}
+                <CheckCircle2 size={11} /> {isRtl ? 'قيد العمل' : 'In Progress'} — {onTrack.length}
               </p>
               {groupTasksByJob(onTrack).map(group => <GroupedJobCard key={group.jobId} group={group} onUpdate={refetch} />)}
             </div>
@@ -946,8 +1170,8 @@ const MyTasks: React.FC = () => {
           {active.length === 0 && (
             <div className="text-center border-2 border-dashed border-border rounded-3xl py-16">
               <Layers size={32} className="text-muted-foreground mx-auto mb-3" />
-              <p className="font-bold text-foreground mb-1">No active tasks</p>
-              <p className="text-xs text-muted-foreground">Tasks assigned to you will appear here.</p>
+              <p className="font-bold text-foreground mb-1">{isRtl ? 'لا توجد مهام نشطة' : 'No active tasks'}</p>
+              <p className="text-xs text-muted-foreground">{isRtl ? 'المهام المسندة إليك ستظهر هنا.' : 'Tasks assigned to you will appear here.'}</p>
             </div>
           )}
         </div>
@@ -955,7 +1179,7 @@ const MyTasks: React.FC = () => {
         <div className="space-y-3">
           {displayTasks.length === 0 ? (
             <div className="text-center border-2 border-dashed border-border rounded-3xl py-12">
-              <p className="text-sm text-muted-foreground">No tasks in this category</p>
+              <p className="text-sm text-muted-foreground">{isRtl ? 'لا توجد مهام في هذه الفئة' : 'No tasks in this category'}</p>
             </div>
           ) : (
             groupTasksByJob(displayTasks).map(group => <GroupedJobCard key={group.jobId} group={group} onUpdate={refetch} />)

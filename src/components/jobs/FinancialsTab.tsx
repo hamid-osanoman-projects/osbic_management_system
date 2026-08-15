@@ -1,10 +1,13 @@
 import { type Job, useUpdateJobPayment } from '../../hooks/shared/useJobs';
-import { DollarSign, ArrowUpRight, CheckCircle2, Clock, FileText, Check, ExternalLink, Activity } from 'lucide-react';
+import { DollarSign, ArrowUpRight, CheckCircle2, Clock, FileText, Check, ExternalLink, Activity, Eye, Download } from 'lucide-react';
 import InvoiceButton from './InvoiceButton';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '../../lib/supabase';
+import { downloadInvoice, downloadReceipt } from '../../utils/invoiceGenerator';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -22,6 +25,20 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
   const [uploadingFor, setUploadingFor] = useState<'advance' | 'remaining' | null>(null);
   const [customAmount, setCustomAmount] = useState<number>(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Query payments to construct receipt documents
+  const { data: payments = [] } = useQuery({
+    queryKey: ['job_payments', job.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('job_payments')
+        .select('*')
+        .eq('job_id', job.id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+  });
 
   const isStaff = isAdmin || isEmployee;
 
@@ -154,12 +171,23 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
                        <p className="text-sm font-bold text-foreground">Estimated Net Profit: <span className="text-primary">{projectProfitability.toLocaleString()} OMR</span></p>
                     </div>
                  </div>
-                 <div className="flex items-center gap-3">
-                    <InvoiceButton job={job} type="full" className="bg-primary/10 hover:bg-primary/20" />
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase bg-card dark:bg-white/5 px-3 py-1.5 rounded-lg border border-border dark:border-white/5">
-                       Internal Analytics
-                    </div>
-                 </div>
+                  <div className="flex items-center gap-2">
+                     <button
+                       onClick={() => downloadInvoice(job, 'full', 'view')}
+                       className="px-4 py-2.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-1.5 shadow-lg shadow-primary/5"
+                     >
+                       <Eye size={12} /> View Invoice
+                     </button>
+                     <button
+                       onClick={() => downloadInvoice(job, 'full', 'download')}
+                       className="px-4 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-1.5"
+                     >
+                       <Download size={12} /> Download
+                     </button>
+                     <div className="text-[10px] font-bold text-muted-foreground uppercase bg-card dark:bg-white/5 px-3 py-1.5 rounded-lg border border-border dark:border-white/5">
+                        Internal Analytics
+                     </div>
+                  </div>
               </div>
            </div>
         </div>
@@ -249,18 +277,70 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
               )}
             </div>
 
-            {job.advance_receipt_url && (
-              <div className="flex flex-col sm:flex-row items-center gap-3 mb-6">
-                <div className="flex-1 flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-border group w-full">
+            <div className="space-y-4 mb-6">
+              {/* 1. Client Attachment (if any uploaded) */}
+              {job.advance_receipt_url && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-border group w-full">
                   <FileText size={14} className="text-muted-foreground/60" />
-                  <span className="text-[10px] text-muted-foreground flex-1 truncate">Receipt Attached</span>
-                  <a href={job.advance_receipt_url} target="_blank" rel="noreferrer" className="text-primary hover:text-foreground transition-colors">
+                  <span className="text-[10px] text-muted-foreground flex-1 truncate">Uploaded Slip</span>
+                  <a href={job.advance_receipt_url} target="_blank" rel="noreferrer" className="text-primary hover:text-foreground transition-colors" title="View attached document">
                     <ExternalLink size={12} />
                   </a>
                 </div>
-                <InvoiceButton job={job} type="advance" className="w-full sm:w-auto" />
+              )}
+
+              {/* 2. Official System Invoice (Always Available) */}
+              <div className="space-y-1.5">
+                <span className="text-[9px] text-muted-foreground/60 font-bold uppercase tracking-widest block">Official Invoice</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => downloadInvoice(job, 'advance', 'view')}
+                    className="flex-1 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1"
+                  >
+                    <Eye size={12} /> View
+                  </button>
+                  <button
+                    onClick={() => downloadInvoice(job, 'advance', 'download')}
+                    className="flex-1 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1"
+                  >
+                    <Download size={12} /> Download
+                  </button>
+                </div>
               </div>
-            )}
+
+              {/* 3. Official System Receipt (If Paid) */}
+              {job.advance_paid && (() => {
+                const advancePayment = payments.find(p => p.status === 'verified' && Math.abs(Number(p.amount) - Number(job.advance_due_amount)) < 1.0) ||
+                                       payments.find(p => p.status === 'verified') || 
+                                       { amount: job.advance_due_amount, created_at: job.advance_paid_at };
+
+                const receiptJob = {
+                  ...job,
+                  services: steps.map(s => ({ service_name: s.name_en, total_fee: s.actual_gov_fee || s.estimated_gov_fee, quantity: 1 })),
+                  payments: payments
+                };
+
+                return (
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] text-emerald-400/80 font-bold uppercase tracking-widest block">Official Receipt</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => downloadReceipt(receiptJob, advancePayment, 'view')}
+                        className="flex-1 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1"
+                      >
+                        <Eye size={12} /> View
+                      </button>
+                      <button
+                        onClick={() => downloadReceipt(receiptJob, advancePayment, 'download')}
+                        className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-[#0A0F1E] rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1"
+                      >
+                        <Download size={12} /> Download
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
 
             {isEmployee && (
               <div className="space-y-3">
@@ -352,18 +432,70 @@ const FinancialsTab = ({ job, steps, isAdmin, isEmployee }: Props) => {
               )}
             </div>
 
-            {job.remaining_receipt_url && (
-              <div className="flex flex-col sm:flex-row items-center gap-3 mb-6">
-                <div className="flex-1 flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-border group w-full">
+            <div className="space-y-4 mb-6">
+              {/* 1. Client Attachment (if any uploaded) */}
+              {job.remaining_receipt_url && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-border group w-full">
                   <FileText size={14} className="text-muted-foreground/60" />
-                  <span className="text-[10px] text-muted-foreground flex-1 truncate">Receipt Attached</span>
-                  <a href={job.remaining_receipt_url} target="_blank" rel="noreferrer" className="text-primary hover:text-foreground transition-colors">
+                  <span className="text-[10px] text-muted-foreground flex-1 truncate">Uploaded Slip</span>
+                  <a href={job.remaining_receipt_url} target="_blank" rel="noreferrer" className="text-primary hover:text-foreground transition-colors" title="View attached document">
                     <ExternalLink size={12} />
                   </a>
                 </div>
-                <InvoiceButton job={job} type="remaining" className="w-full sm:w-auto" />
+              )}
+
+              {/* 2. Official System Invoice (Always Available) */}
+              <div className="space-y-1.5">
+                <span className="text-[9px] text-muted-foreground/60 font-bold uppercase tracking-widest block">Official Invoice</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => downloadInvoice(job, 'remaining', 'view')}
+                    className="flex-1 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1"
+                  >
+                    <Eye size={12} /> View
+                  </button>
+                  <button
+                    onClick={() => downloadInvoice(job, 'remaining', 'download')}
+                    className="flex-1 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1"
+                  >
+                    <Download size={12} /> Download
+                  </button>
+                </div>
               </div>
-            )}
+
+              {/* 3. Official System Receipt (If Paid) */}
+              {job.remaining_paid && (() => {
+                const finalPayment = payments.find(p => p.status === 'verified' && Math.abs(Number(p.amount) - Number(job.remaining_due_amount)) < 1.0) ||
+                                     payments.filter(p => p.status === 'verified')[1] || 
+                                     { amount: job.remaining_due_amount, created_at: job.remaining_paid_at };
+
+                const receiptJob = {
+                  ...job,
+                  services: steps.map(s => ({ service_name: s.name_en, total_fee: s.actual_gov_fee || s.estimated_gov_fee, quantity: 1 })),
+                  payments: payments
+                };
+
+                return (
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] text-emerald-400/80 font-bold uppercase tracking-widest block">Official Receipt</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => downloadReceipt(receiptJob, finalPayment, 'view')}
+                        className="flex-1 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1"
+                      >
+                        <Eye size={12} /> View
+                      </button>
+                      <button
+                        onClick={() => downloadReceipt(receiptJob, finalPayment, 'download')}
+                        className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-[#0A0F1E] rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1"
+                      >
+                        <Download size={12} /> Download
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
 
             {isEmployee && (
               <div className="space-y-3">

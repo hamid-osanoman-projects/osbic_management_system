@@ -40,8 +40,11 @@ const PackageForm = () => {
     description_ar: '',
     icon: 'Package',
     discount_percentage: 0,
+    fixed_price: null as number | null,
     is_active: true
   });
+  
+  const [pricingStrategy, setPricingStrategy] = useState<'discount' | 'fixed'>('discount');
 
   const [selectedServices, setSelectedServices] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,11 +69,48 @@ const PackageForm = () => {
         description_ar: pkg.description_ar,
         icon: pkg.icon || 'Package',
         discount_percentage: pkg.discount_percentage,
+        fixed_price: pkg.fixed_price,
         is_active: pkg.is_active
       });
+      setPricingStrategy(pkg.fixed_price != null ? 'fixed' : 'discount');
       setSelectedServices(pkg.services || []);
     }
   }, [pkg, isNew]);
+
+  const getLiveTotals = () => {
+    let totalWorkFee = 0;
+    let totalMinistryFee = 0;
+    
+    selectedServices.forEach((s: any) => {
+      const workFee = Number(s.service?.work_fee) || 0;
+      const ministryFee = Number(s.service?.ministry_fee) || 0;
+      const qty = Number(s.default_quantity) || 1;
+      
+      totalWorkFee += workFee * qty;
+      totalMinistryFee += ministryFee * qty;
+    });
+    
+    const subtotal = totalWorkFee + totalMinistryFee;
+    let discountAmount = 0;
+    
+    if (pricingStrategy === 'fixed' && formData.fixed_price != null && formData.fixed_price > 0) {
+      discountAmount = Math.max(0, subtotal - formData.fixed_price);
+    } else if (pricingStrategy === 'discount' && formData.discount_percentage > 0) {
+      discountAmount = subtotal * (formData.discount_percentage / 100);
+    }
+    
+    const finalPrice = Math.max(0, subtotal - discountAmount);
+    
+    return {
+      work: totalWorkFee,
+      ministry: totalMinistryFee,
+      subtotal,
+      discount: discountAmount,
+      total: finalPrice
+    };
+  };
+
+  const liveTotals = getLiveTotals();
 
   const handleToggleService = (service: any) => {
     const isSelected = selectedServices.find(s => 
@@ -138,6 +178,8 @@ const PackageForm = () => {
 
     savePkg({
       ...formData,
+      discount_percentage: pricingStrategy === 'discount' ? formData.discount_percentage : 0,
+      fixed_price: pricingStrategy === 'fixed' ? formData.fixed_price : null,
       id: isNew ? undefined : id,
       services: selectedServices
     }, {
@@ -285,7 +327,11 @@ const PackageForm = () => {
                                  <span className="text-[8px] bg-emerald-500 text-white px-1.5 py-0.5 rounded uppercase font-bold tracking-widest">Custom New</span>
                                )}
                             </div>
-                            <p className="text-[10px] text-muted-foreground/60">{CATEGORY_LABELS[service.service?.category || service.category] || 'General'}</p>
+                             <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                               <p className="text-[10px] text-muted-foreground/60">{CATEGORY_LABELS[service.service?.category || service.category] || 'General'}</p>
+                               <span className="text-muted-foreground/20 text-[9px]">•</span>
+                               <p className="text-[10px] text-muted-foreground/80 font-mono">Gov Fee: <span className="text-foreground font-bold">{(Number(service.service?.ministry_fee) || 0).toFixed(3)}</span> OMR</p>
+                             </div>
                          </div>
                          <button 
                           onClick={() => {
@@ -401,21 +447,63 @@ const PackageForm = () => {
         <div className="space-y-8">
            <section className="bg-card border border-border rounded-3xl p-8 shadow-sm space-y-6">
               <h3 className="text-xs font-bold text-muted-foreground/40 uppercase tracking-widest">Configuration</h3>
-              
               <div className="space-y-4">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Bundle Discount (%)</label>
-                    <div className="relative">
-                       <input 
-                         type="number" 
-                         value={formData.discount_percentage}
-                         onChange={(e) => setFormData({...formData, discount_percentage: parseInt(e.target.value) || 0})}
-                         className="w-full bg-background border border-border focus:border-primary/50 p-4 rounded-2xl outline-none transition-all text-sm font-bold pr-12"
-                       />
-                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">%</span>
-                    </div>
-                    <p className="text-[9px] text-emerald-500 font-medium px-1 italic">Clients save because of this bundle</p>
+                 <div className="flex bg-muted rounded-xl p-1 relative">
+                   <button
+                     onClick={() => setPricingStrategy('discount')}
+                     className={cn(
+                       "flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all z-10",
+                       pricingStrategy === 'discount' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                     )}
+                   >
+                     % Discount
+                   </button>
+                   <button
+                     onClick={() => setPricingStrategy('fixed')}
+                     className={cn(
+                       "flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all z-10",
+                       pricingStrategy === 'fixed' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                     )}
+                   >
+                     Fixed Price
+                   </button>
+                   <div 
+                     className={cn(
+                       "absolute top-1 bottom-1 w-[calc(50%-4px)] bg-primary rounded-lg transition-all duration-300 ease-out",
+                       pricingStrategy === 'discount' ? "left-1" : "left-[calc(50%+2px)]"
+                     )} 
+                   />
                  </div>
+
+                 {pricingStrategy === 'discount' ? (
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Bundle Discount (%)</label>
+                      <div className="relative">
+                         <input 
+                           type="number" 
+                           value={formData.discount_percentage}
+                           onChange={(e) => setFormData({...formData, discount_percentage: parseInt(e.target.value) || 0})}
+                           className="w-full bg-background border border-border focus:border-primary/50 p-4 rounded-2xl outline-none transition-all text-sm font-bold pr-12"
+                         />
+                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">%</span>
+                      </div>
+                      <p className="text-[9px] text-emerald-500 font-medium px-1 italic">Clients save because of this bundle</p>
+                   </div>
+                 ) : (
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Fixed Flat Price (OMR)</label>
+                      <div className="relative">
+                         <input 
+                           type="number" 
+                           value={formData.fixed_price || ''}
+                           onChange={(e) => setFormData({...formData, fixed_price: parseFloat(e.target.value) || 0})}
+                           className="w-full bg-background border border-border focus:border-primary/50 p-4 rounded-2xl outline-none transition-all text-sm font-bold pr-14"
+                         />
+                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-[10px]">OMR</span>
+                      </div>
+                      <p className="text-[9px] text-emerald-500 font-medium px-1 italic">Overrides individual service fees</p>
+                   </div>
+                 )}
 
                  <div className="pt-4 flex items-center justify-between px-1">
                     <span className="text-xs font-bold text-foreground">Active Availability</span>
@@ -433,7 +521,23 @@ const PackageForm = () => {
                     </button>
                  </div>
               </div>
-           </section>
+            </section>
+
+            <section className="bg-card border border-border rounded-3xl p-8 shadow-sm space-y-6">
+               <h3 className="text-xs font-bold text-muted-foreground/40 uppercase tracking-widest">Live Package Summary</h3>
+               <div className="space-y-4 font-mono text-xs pt-2">
+                  <div className="flex justify-between items-center text-muted-foreground">
+                    <span>Summed Gov Fees:</span>
+                    <span className="font-bold text-foreground">{liveTotals.ministry.toFixed(3)} OMR</span>
+                  </div>
+                  {pricingStrategy === 'fixed' && formData.fixed_price != null && formData.fixed_price > 0 && (
+                    <div className="flex justify-between items-center text-muted-foreground border-t border-border/40 pt-2">
+                      <span>Configured Flat Price:</span>
+                      <span className="font-bold text-foreground">{formData.fixed_price.toFixed(3)} OMR</span>
+                    </div>
+                  )}
+               </div>
+            </section>
 
            <section className="bg-primary/5 border border-primary/20 rounded-3xl p-8 space-y-4">
               <div className="flex items-center gap-3 text-primary">
@@ -499,7 +603,11 @@ const PackageForm = () => {
                            </div>
                            <div>
                               <p className="text-sm font-bold text-foreground">{service.name_en}</p>
-                              <p className="text-[10px] text-muted-foreground/60">{CATEGORY_LABELS[service.category] || 'General'}</p>
+                               <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                  <p className="text-[10px] text-muted-foreground/60">{CATEGORY_LABELS[service.category] || 'General'}</p>
+                                  <span className="text-muted-foreground/20 text-[9px]">•</span>
+                                  <p className="text-[10px] text-muted-foreground/80 font-mono">Gov Fee: <span className="text-foreground font-bold">{(Number(service.ministry_fee) || 0).toFixed(3)}</span> OMR</p>
+                               </div>
                            </div>
                         </div>
                         <Plus size={16} className="text-primary opacity-0 group-hover:opacity-100 transition-opacity" />

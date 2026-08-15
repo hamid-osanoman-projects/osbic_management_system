@@ -89,7 +89,7 @@ const CreateClientSlideOver = ({ isOpen, onClose, clientToEdit, onClientCreated 
         toast.success('Client updated successfully!');
         onClose();
       } else {
-        const createPayload = { ...databasePayload, created_by: profile?.id };
+        const createPayload = { ...databasePayload, created_by: profile?.id, branch_id: profile?.branch_id };
         const data = await createClientMutation.mutateAsync(createPayload);
         setCreatedClient(data);
         toast.success('Client registered successfully!');

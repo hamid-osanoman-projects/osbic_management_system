@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useBranch } from '../../contexts/BranchContext';
 import { 
   Search, Filter, Check, X as XIcon, 
   Eye, Edit3, UserPlus, Archive, Trash2,
@@ -18,6 +19,7 @@ function cn(...inputs: any[]) {
 
 const Clients = () => {
   const navigate = useNavigate();
+  const { selectedBranchId } = useBranch();
   const { data: clients, isLoading: isClientsLoading } = useAdminClients();
   const { data: employees, isLoading: isEmployeesLoading } = useAdminEmployees();
   const isLoading = isClientsLoading || isEmployeesLoading;
@@ -64,7 +66,14 @@ const Clients = () => {
     }
   };
 
-  const filteredClients = clients?.filter(c => {
+  const branchClients = clients?.filter(c => {
+    if (selectedBranchId) {
+      return c.branch_id === selectedBranchId;
+    }
+    return true;
+  }) || [];
+
+  const filteredClients = branchClients.filter(c => {
     const matchesSearch = c.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
       c.client_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.email?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -74,9 +83,9 @@ const Clients = () => {
     return matchesSearch && matchesArchiveStatus;
   });
 
-  const totalClients = clients?.length || 0;
-  const activeClients = clients?.filter(c => c.is_active).length || 0;
-  const archivedClients = clients?.filter(c => !c.is_active).length || 0;
+  const totalClients = branchClients.length;
+  const activeClients = branchClients.filter(c => c.is_active).length;
+  const archivedClients = branchClients.filter(c => !c.is_active).length;
 
   return (
     <div className="space-y-6 pb-16">

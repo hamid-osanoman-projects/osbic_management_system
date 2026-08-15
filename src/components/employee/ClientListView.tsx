@@ -2,6 +2,7 @@ import React from 'react';
 import { User, Mail, Phone, ChevronRight, LayoutGrid, List, Zap, Edit2, Trash2, X } from 'lucide-react';
 import { useDeleteClient } from '../../hooks/admin/useAdminClients';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 
 export interface ClientProfile {
@@ -38,6 +39,8 @@ const DeleteClientModal = ({
   client: ClientProfile | null;
   onConfirm: (id: string) => void;
 }) => {
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
   const [confirmText, setConfirmText] = React.useState('');
   
   if (!isOpen || !client) return null;
@@ -53,14 +56,16 @@ const DeleteClientModal = ({
           <Trash2 size={24} />
         </div>
         
-        <h3 className="text-xl font-bold font-syne text-foreground mb-2">Delete Client</h3>
+        <h3 className="text-xl font-bold font-syne text-foreground mb-2">
+          {isRtl ? 'حذف العميل' : 'Delete Client'}
+        </h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Are you sure you want to delete <span className="font-bold text-foreground">{client.full_name}</span>? This action cannot be undone.
+          {isRtl ? `هل أنت متأكد من رغبتك في حذف ${client.full_name}؟ لا يمكن التراجع عن هذا الإجراء.` : `Are you sure you want to delete ${client.full_name}? This action cannot be undone.`}
         </p>
         
         <div className="bg-muted/50 p-4 rounded-xl border border-border mb-6">
           <p className="text-xs text-muted-foreground mb-2">
-            Please type <strong className="text-foreground select-all">{client.full_name}</strong> to confirm.
+            {isRtl ? `يرجى كتابة ${client.full_name} للتأكيد.` : `Please type ${client.full_name} to confirm.`}
           </p>
           <input
             type="text"
@@ -73,14 +78,14 @@ const DeleteClientModal = ({
         
         <div className="flex justify-end gap-3">
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl font-bold text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-            Cancel
+            {isRtl ? 'إلغاء' : 'Cancel'}
           </button>
           <button 
             disabled={confirmText !== client.full_name}
             onClick={() => onConfirm(client.id)}
             className="px-5 py-2.5 rounded-xl font-bold text-sm bg-destructive text-destructive-foreground hover:brightness-110 disabled:opacity-50 transition-all shadow-lg shadow-destructive/20"
           >
-            Delete Client
+            {isRtl ? 'حذف العميل' : 'Delete Client'}
           </button>
         </div>
       </div>
@@ -94,6 +99,8 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
   const [filterType, setFilterType] = React.useState<'all' | 'mine' | 'assigned'>('all');
   const { mutate: deleteClient } = useDeleteClient();
   const { profile } = useAuth();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
   
   const handleDeleteConfirm = (id: string) => {
     deleteClient(id);
@@ -102,10 +109,10 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 bg-background no-scrollbar">
+    <div className="flex-1 overflow-y-auto p-8 bg-background no-scrollbar" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-syne font-bold text-foreground">Client Directory</h2>
+          <h2 className="text-2xl font-syne font-bold text-foreground">{isRtl ? 'دليل العملاء' : 'Client Directory'}</h2>
           <div className="flex items-center gap-4">
             <div className="flex bg-muted/50 p-1 rounded-xl border border-border">
               <button 
@@ -127,7 +134,7 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
                 onClick={onNewClient}
                 className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl flex items-center gap-2 hover:shadow-[0_0_20px_rgba(212,175,55,0.2)] transition-all active:scale-95 text-sm"
               >
-                <User size={16} /> Add Client
+                <User size={16} /> {isRtl ? 'إضافة عميل' : 'Add Client'}
               </button>
             )}
           </div>
@@ -140,13 +147,13 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
                 onClick={() => onClientTypeChange('standard')}
                 className={`flex-1 flex justify-center items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${clientTypeFilter === 'standard' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <User size={16} /> Standard Clients
+                <User size={16} /> {isRtl ? 'العملاء الاعتياديين' : 'Standard Clients'}
               </button>
               <button 
                 onClick={() => onClientTypeChange('walk-in')}
                 className={`flex-1 flex justify-center items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${clientTypeFilter === 'walk-in' ? 'bg-amber-500 text-amber-950 shadow-lg shadow-amber-500/20' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Zap size={16} /> Walk-in
+                <Zap size={16} /> {isRtl ? 'حضور مباشر' : 'Walk-in'}
               </button>
             </div>
             
@@ -158,7 +165,7 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
                     onClick={() => setFilterType(f)}
                     className={`relative flex-1 px-4 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-colors whitespace-nowrap ${filterType === f ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                   >
-                    {f === 'mine' ? 'My Registrations' : 'All Clients'}
+                    {f === 'mine' ? (isRtl ? 'تسجيلاتي' : 'My Registrations') : (isRtl ? 'جميع العملاء' : 'All Clients')}
                     {filterType === f && (
                       <motion.div layoutId="clientListFilter" className="absolute inset-0 bg-card rounded-xl shadow-sm border border-border -z-10" />
                     )}
@@ -171,22 +178,28 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
         
         <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full border-collapse" dir={isRtl ? 'rtl' : 'ltr'}>
               <thead>
-                <tr className="bg-muted/50 border-b border-border">
-                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Client</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden sm:table-cell">Contact Info</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden md:table-cell">Joined</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Projects</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right">Actions</th>
+                <tr className="bg-muted/50 border-b border-border text-right">
+                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-start">{isRtl ? 'العميل' : 'Client'}</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden sm:table-cell text-start">{isRtl ? 'معلومات الاتصال' : 'Contact Info'}</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden md:table-cell text-start">{isRtl ? 'تاريخ الانضمام' : 'Joined'}</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-start">{isRtl ? 'المشاريع' : 'Projects'}</th>
+                  <th className={`px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest ${isRtl ? 'text-left' : 'text-right'}`}>{isRtl ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {(() => {
                   const filtered = clients.filter(c => {
-                    if (clientTypeFilter !== 'standard') return true;
-                    if (filterType === 'mine' && c.created_by !== profile?.id) return false;
-                    if (filterType === 'assigned' && c.created_by === profile?.id) return false;
+                    const isWalkIn = c.email?.startsWith('walkin_') || c.email?.endsWith('@osbic.local') || c.id?.startsWith('walkin-');
+                    
+                    if (clientTypeFilter === 'standard' && isWalkIn) return false;
+                    if (clientTypeFilter === 'walk-in' && !isWalkIn) return false;
+
+                    if (clientTypeFilter === 'standard') {
+                      if (filterType === 'mine' && c.created_by !== profile?.id) return false;
+                      if (filterType === 'assigned' && c.created_by === profile?.id) return false;
+                    }
                     return true;
                   });
                   
@@ -194,7 +207,7 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
                     return (
                       <tr>
                         <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground text-sm">
-                          No clients found.
+                          {isRtl ? 'لم يتم العثور على عملاء.' : 'No clients found.'}
                         </td>
                       </tr>
                     );
@@ -227,12 +240,12 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
                                 )}
                                 {clientTypeFilter === 'standard' && client.created_by === profile?.id && (
                                   <span className="inline-block px-1.5 py-0.5 rounded md bg-primary/10 text-primary text-[8px] font-bold uppercase tracking-widest border border-primary/20">
-                                    My Client
+                                    {isRtl ? 'عميلي' : 'My Client'}
                                   </span>
                                 )}
                                 {clientTypeFilter === 'standard' && client.created_by !== profile?.id && client.created_by && (
                                   <span className="inline-block px-1.5 py-0.5 rounded md bg-amber-500/10 text-amber-500 text-[8px] font-bold uppercase tracking-widest border border-amber-500/20">
-                                    Assigned
+                                    {isRtl ? 'مسند' : 'Assigned'}
                                   </span>
                                 )}
                               </div>
@@ -259,19 +272,19 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
                         </td>
                         
                         <td className="px-6 py-4 hidden md:table-cell text-sm text-muted-foreground">
-                          {client.created_at ? new Date(client.created_at).toLocaleDateString() : 'Unknown'}
+                          {client.created_at ? new Date(client.created_at).toLocaleDateString(isRtl ? 'ar-OM' : 'en-US') : 'Unknown'}
                         </td>
                         
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="text-center">
                               <p className="text-sm font-bold text-foreground">{activeJobs.length}</p>
-                              <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Active</p>
+                              <p className="text-[9px] uppercase tracking-widest text-muted-foreground">{isRtl ? 'نشط' : 'Active'}</p>
                             </div>
                             <div className="w-[1px] h-6 bg-border" />
                             <div className="text-center">
                               <p className="text-sm font-bold text-muted-foreground">{clientJobs.length}</p>
-                              <p className="text-[9px] uppercase tracking-widest text-muted-foreground opacity-50">Total</p>
+                              <p className="text-[9px] uppercase tracking-widest text-muted-foreground opacity-50">{isRtl ? 'الإجمالي' : 'Total'}</p>
                             </div>
                           </div>
                         </td>
@@ -284,7 +297,7 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
                                 if (onEditClient) onEditClient(client);
                               }}
                               className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
-                              title="Edit Client"
+                              title={isRtl ? 'تعديل العميل' : 'Edit Client'}
                             >
                               <Edit2 size={16} />
                             </button>
@@ -295,11 +308,11 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ clients, jobs, o
                                 setDeleteModalOpen(true);
                               }}
                               className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
-                              title="Delete Client"
+                              title={isRtl ? 'حذف العميل' : 'Delete Client'}
                             >
                               <Trash2 size={16} />
                             </button>
-                            <button className="p-2 text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 rounded-lg transition-all ml-2">
+                            <button className={`p-2 text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 rounded-lg transition-all ml-2 ${isRtl ? 'rotate-180' : ''}`}>
                               <ChevronRight size={18} />
                             </button>
                           </div>

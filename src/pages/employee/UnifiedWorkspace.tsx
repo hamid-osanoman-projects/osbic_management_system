@@ -14,12 +14,16 @@ import { JobBuilder } from '../../components/employee/JobBuilder';
 import CreateClientSlideOver from '../../components/shared/clients/CreateClientSlideOver';
 import WalkInModal from '../../components/employee/WalkInModal';
 
+import { useTranslation } from 'react-i18next';
+
 interface UnifiedWorkspaceProps {
   filterType: 'tasks' | 'clients' | 'pipeline';
 }
 
 const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
   const { profile } = useAuth();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
   
   const adminQuery = useAdminJobs();
   const employeeQuery = useEmployeeJobs(profile?.id || '');
@@ -50,6 +54,10 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
       setSelectedJobId(urlJobId);
       setTaskViewMode('split');
     }
+    const action = searchParams.get('action');
+    if (action === 'new-project') {
+      setIsBuildingJob(true);
+    }
   }, [searchParams, jobs]);
 
   // Filtering logic based on role & view type
@@ -58,7 +66,12 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
     
     switch (filterType) {
       case 'tasks':
-        let taskJobs = jobs.filter(job => job.employee_id === profile.id);
+        let taskJobs = jobs.filter(job => 
+          job.employee_id === profile.id || 
+          job.sales_employee_id === profile.id || 
+          job.assigned_by === profile.id || 
+          job.is_operator
+        );
         if (taskFilter === 'self') {
            taskJobs = taskJobs.filter(j => j.assigned_by === profile.id);
         } else if (taskFilter === 'manager') {
@@ -82,8 +95,8 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
   };
 
   const filteredJobs = getFilteredJobs();
-  const quickTasks = filteredJobs.filter(j => j.service_name === 'Quick Task (POS)');
-  const standardTasks = filteredJobs.filter(j => j.service_name !== 'Quick Task (POS)');
+  const quickTasks = filteredJobs.filter(j => j.service_name === 'Quick Task (POS)' || j.entry_type === 'walkin');
+  const standardTasks = filteredJobs.filter(j => j.service_name !== 'Quick Task (POS)' && j.entry_type !== 'walkin');
   
   const displayJobs = jobTypeFilter === 'quick' ? quickTasks : standardTasks;
   const selectedJob = jobs?.find(j => j.id === selectedJobId);
@@ -99,68 +112,72 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
   };
 
   // Derive unique clients from the filtered jobs
+  // Derive unique clients from the filtered jobs & DB profiles
   const uniqueClients = React.useMemo(() => {
-    if (!jobs) return [];
-    
+    // 1. Separate real database profiles into Standard vs Walk-in
+    const dbProfiles = realClients || [];
+    const dbStandard = dbProfiles.filter(p => !p.email?.startsWith('walkin_') && !p.email?.endsWith('@osbic.local'));
+    const dbWalkIn = dbProfiles.filter(p => p.email?.startsWith('walkin_') || p.email?.endsWith('@osbic.local'));
+
     if (clientTypeFilter === 'walk-in') {
+      // Walk-in tab: Combine database walk-in profiles AND extracted walk-ins from quick tasks
       const walkInClientsMap = new Map();
-      jobs.forEach(job => {
-        if (filterType === 'clients' && (job.employee_id === profile?.id || profile?.is_manager)) {
-          if (job.service_name === 'Quick Task (POS)' && job.client_name === 'Walk-in Customer') {
-            const actualName = getClientName(job);
-            
-            let phone = undefined;
-            if (job.notes) {
-              const phoneMatch = job.notes.match(/\((.*?)\)/);
-              if (phoneMatch && phoneMatch[1] && phoneMatch[1] !== 'Anonymous') {
-                phone = phoneMatch[1];
+      
+      // Add DB walk-in profiles
+      dbWalkIn.forEach(p => {
+        walkInClientsMap.set(p.id, {
+          id: p.id,
+          full_name: p.full_name,
+          avatar_url: p.avatar_url,
+          created_at: p.created_at,
+          email: p.email,
+          phone: p.phone,
+          client_code: p.client_code || 'WALKIN',
+          created_by: p.created_by
+        });
+      });
+
+      // Extract walk-ins from quick tasks
+      if (jobs) {
+        jobs.forEach(job => {
+          if (filterType === 'clients' && (job.employee_id === profile?.id || profile?.is_manager)) {
+            if (job.service_name === 'Quick Task (POS)' && job.client_name === 'Walk-in Customer') {
+              const actualName = getClientName(job);
+              
+              let phone = undefined;
+              if (job.notes) {
+                const phoneMatch = job.notes.match(/\((.*?)\)/);
+                if (phoneMatch && phoneMatch[1] && phoneMatch[1] !== 'Anonymous') {
+                  phone = phoneMatch[1];
+                }
+              }
+              
+              const key = `${actualName}-${phone || 'no-phone'}`;
+              
+              // Only add if not already in map under a DB profile id
+              if (!walkInClientsMap.has(`walkin-${key}`)) {
+                 walkInClientsMap.set(`walkin-${key}`, {
+                   id: `walkin-${key}`,
+                   full_name: actualName,
+                   avatar_url: null,
+                   created_at: job.started_date,
+                   email: undefined,
+                   phone: phone,
+                   client_code: `WALKIN`,
+                   created_by: job.employee_id
+                 });
               }
             }
-            
-            const key = `${actualName}-${phone || 'no-phone'}`;
-            
-            if (!walkInClientsMap.has(key)) {
-               walkInClientsMap.set(key, {
-                 id: `walkin-${key}`,
-                 full_name: actualName,
-                 avatar_url: null,
-                 created_at: job.started_date,
-                 email: undefined,
-                 phone: phone,
-                 client_code: `WALKIN`
-               });
-            }
           }
-        }
-      });
+        });
+      }
+
       return Array.from(walkInClientsMap.values());
     } else {
-      // Standard Clients: Use actual DB clients if available, fallback to job extraction
-      if (realClients && realClients.length > 0) {
-         return realClients;
-      }
-      
-      const clientMap = new Map();
-      jobs.forEach(job => {
-        // Only include clients the user owns, unless they are a manager
-        if (filterType === 'clients' && (job.employee_id === profile?.id || profile?.is_manager)) {
-          if (job.client_name !== 'Walk-in Customer') {
-            if (!clientMap.has(job.client_id)) {
-              clientMap.set(job.client_id, {
-                id: job.client_id,
-                full_name: job.client_name,
-                avatar_url: job.client_avatar,
-                created_at: new Date().toISOString(), // Mocking for now since it's not in Job
-                email: 'client@example.com',
-                phone: '+968 9XXXXXXX'
-              });
-            }
-          }
-        }
-      });
-      return Array.from(clientMap.values());
+      // Standard Clients tab: return only the standard database profiles
+      return dbStandard;
     }
-  }, [jobs, filterType, profile, clientTypeFilter, realClients]);
+  }, [jobs, realClients, clientTypeFilter, filterType, profile]);
 
   const selectedClient = uniqueClients.find(c => c.id === selectedClientId);
   const clientJobs = React.useMemo(() => {
@@ -171,33 +188,48 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
      return jobs.filter(j => j.client_id === selectedClientId);
   }, [jobs, selectedClientId, clientTypeFilter, selectedClient]);
 
-  const renderJobBuilderModal = () => (
-    <AnimatePresence>
-      {isBuildingJob && (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-black/40 backdrop-blur-sm"
-        >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            className="w-full max-w-3xl max-h-[90vh] bg-[#1a2130] rounded-[32px] overflow-hidden shadow-2xl relative flex flex-col border border-white/10"
+  const renderJobBuilderModal = () => {
+    const handleClose = () => {
+      setIsBuildingJob(false);
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('action');
+      newParams.delete('clientId');
+      newParams.delete('serviceId');
+      newParams.delete('entryType');
+      setSearchParams(newParams);
+    };
+
+    return (
+      <AnimatePresence>
+        {isBuildingJob && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-black/40 backdrop-blur-sm"
           >
-            <JobBuilder 
-              onClose={() => setIsBuildingJob(false)}
-              onJobCreated={() => {
-                setIsBuildingJob(false);
-                refetch(); // Refetch jobs after creation
-              }} 
-            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-3xl max-h-[90vh] bg-[#1a2130] rounded-[32px] overflow-hidden shadow-2xl relative flex flex-col border border-white/10"
+            >
+              <JobBuilder 
+                onClose={handleClose}
+                onJobCreated={() => {
+                  handleClose();
+                  refetch(); // Refetch jobs after creation
+                }} 
+                preSelectedClientId={searchParams.get('clientId')}
+                preSelectedServiceId={searchParams.get('serviceId')}
+                preSelectedEntryType={searchParams.get('entryType') as any}
+              />
+            </motion.div>
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+        )}
+      </AnimatePresence>
+    );
+  };
 
   const renderModals = () => (
     <>
@@ -292,8 +324,8 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
         {/* Header & Controls */}
         <div className="p-6 border-b border-border bg-card shrink-0">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-syne font-bold text-foreground capitalize">
-              {filterType.replace('_', ' ')}
+            <h2 className="text-xl md:text-2xl font-syne font-bold text-foreground capitalize whitespace-nowrap">
+              {filterType === 'tasks' ? t('ops.tasks') : filterType === 'clients' ? t('ops.clients') : t('ops.pipeline')}
             </h2>
             {filterType === 'pipeline' && (
               <button 
@@ -346,15 +378,15 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
             <div className="flex bg-muted/50 p-1 rounded-xl border border-border mb-4 w-full">
               <button 
                 onClick={() => setJobTypeFilter('standard')}
-                className={`flex-1 flex justify-center items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${jobTypeFilter === 'standard' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`flex-1 flex justify-center items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap shrink-0 transition-all ${jobTypeFilter === 'standard' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Briefcase size={14} /> Standard
+                <Briefcase size={14} /> {isRtl ? 'اعتيادي' : 'Standard'}
               </button>
               <button 
                 onClick={() => setJobTypeFilter('quick')}
-                className={`flex-1 flex justify-center items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${jobTypeFilter === 'quick' ? 'bg-card shadow-sm text-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`flex-1 flex justify-center items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap shrink-0 transition-all ${jobTypeFilter === 'quick' ? 'bg-card shadow-sm text-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Zap size={14} /> Walk-in
+                <Zap size={14} /> {isRtl ? 'حضور مباشر' : 'Walk-in'}
               </button>
             </div>
           )}
@@ -364,11 +396,11 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
               <Search size={16} className="text-muted-foreground mr-2" />
               <input 
                 type="text" 
-                placeholder="Search jobs or clients..." 
+                placeholder={t('ops.search_placeholder')} 
                 className="w-full bg-transparent py-2.5 text-sm outline-none"
               />
             </div>
-            <button className="p-2.5 bg-muted/50 border border-border rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+            <button className="p-2.5 bg-muted/50 border border-border rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
               <Filter size={18} />
             </button>
           </div>
@@ -377,11 +409,11 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
         {/* Task / Client List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
           {isLoading ? (
-            <div className="text-center text-muted-foreground p-8 text-sm animate-pulse">Loading workspace...</div>
+            <div className="text-center text-muted-foreground p-8 text-sm animate-pulse">{isRtl ? 'جاري تحميل مساحة العمل...' : 'Loading workspace...'}</div>
           ) : filterType === 'clients' ? (
             uniqueClients.length === 0 ? (
               <div className="text-center p-8 border border-dashed border-border rounded-2xl bg-muted/10">
-                <p className="text-muted-foreground text-sm font-medium">No clients found.</p>
+                <p className="text-muted-foreground text-sm font-medium">{isRtl ? 'لم يتم العثور على عملاء.' : 'No clients found.'}</p>
               </div>
             ) : (
               uniqueClients.map(client => (
@@ -415,7 +447,7 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
             )
           ) : filteredJobs.length === 0 ? (
             <div className="text-center p-8 border border-dashed border-border rounded-2xl bg-muted/10">
-              <p className="text-muted-foreground text-sm font-medium">No tasks found in this view.</p>
+              <p className="text-muted-foreground text-sm font-medium">{t('ops.no_tasks')}</p>
             </div>
           ) : (
             <>
@@ -459,7 +491,9 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
                 ))}
                 {displayJobs.length === 0 && (
                   <div className="text-center p-8 border border-dashed border-border rounded-2xl bg-muted/10 mt-4">
-                    <p className="text-muted-foreground text-sm font-medium">No {jobTypeFilter === 'quick' ? 'Walk-in Tasks' : 'Standard Jobs'} found.</p>
+                    <p className="text-muted-foreground text-sm font-medium">
+                      {isRtl ? 'لم يتم العثور على مهام في هذا العرض.' : `No ${jobTypeFilter === 'quick' ? 'Walk-in Tasks' : 'Standard Jobs'} found.`}
+                    </p>
                   </div>
                 )}
               </div>
@@ -491,7 +525,7 @@ const UnifiedWorkspace: React.FC<UnifiedWorkspaceProps> = ({ filterType }) => {
                 </div>
              </div>
              
-             <JobDetailsView job={selectedJob} />
+             <JobDetailsView job={selectedJob} onUpdated={refetch} />
           </motion.div>
         ) : selectedClientId && selectedClient ? (
           <motion.div 

@@ -77,7 +77,7 @@ const ClientProfile = () => {
     if (!file || !profile?.id) return;
 
     // Validate
-    if (file.size > 2 * 1024 * 1024) return toast.error('Photo must be under 2MB');
+    if (file.size > 10 * 1024 * 1024) return toast.error('Photo must be under 10MB');
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return toast.error('Only JPG, PNG or WebP allowed');
 
     setUploadingAvatar(true);

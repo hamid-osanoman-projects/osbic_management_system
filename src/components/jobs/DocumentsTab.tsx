@@ -325,8 +325,8 @@ const DocumentsTab = ({ jobId, documents, isEmployee, isAdmin }: Props) => {
                 className={cn(
                   "flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5",
                   vaultTab === 'clientUploads' 
-                    ? "bg-card text-foreground shadow-lg shadow-black/5" 
-                    : "text-muted-foreground/60 hover:text-foreground"
+                    ? "bg-primary text-white shadow-lg shadow-primary/20 border border-primary/10" 
+                    : "text-muted-foreground/60 hover:text-foreground hover:bg-white/5"
                 )}
               >
                 Client Requirements
@@ -336,8 +336,8 @@ const DocumentsTab = ({ jobId, documents, isEmployee, isAdmin }: Props) => {
                 className={cn(
                   "flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5",
                   vaultTab === 'staffUploads' 
-                    ? "bg-card text-foreground shadow-lg shadow-black/5" 
-                    : "text-muted-foreground/60 hover:text-foreground"
+                    ? "bg-primary text-white shadow-lg shadow-primary/20 border border-primary/10" 
+                    : "text-muted-foreground/60 hover:text-foreground hover:bg-white/5"
                 )}
               >
                 Issued Deliverables

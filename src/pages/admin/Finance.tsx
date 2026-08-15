@@ -5,6 +5,7 @@ import {
   ArrowDownRight, RefreshCw, Loader2, Users
 } from 'lucide-react';
 import { useFinanceMetrics } from '../../hooks/admin/useFinance';
+import { useBranch } from '../../contexts/BranchContext';
 
 const StatCard = ({ title, amount, trend, subtext, icon: Icon, color }: any) => (
   <motion.div 
@@ -30,7 +31,8 @@ const StatCard = ({ title, amount, trend, subtext, icon: Icon, color }: any) => 
 );
 
 const Finance = () => {
-  const { data: metrics, isLoading, refetch } = useFinanceMetrics();
+  const { selectedBranchId } = useBranch();
+  const { data: metrics, isLoading, refetch } = useFinanceMetrics(selectedBranchId);
 
   if (isLoading) {
     return (

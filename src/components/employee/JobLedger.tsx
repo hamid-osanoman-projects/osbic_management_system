@@ -1,219 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Receipt, DollarSign, CheckCircle2, AlertCircle, X, CreditCard, Banknote, Landmark, Upload, Paperclip, Download, Eye } from 'lucide-react';
+import { Plus, Receipt, DollarSign, CheckCircle2, AlertCircle, X, CreditCard, Banknote, Landmark, Upload, Paperclip, Download, Eye, Loader2, AlertTriangle, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import { pdf } from '@react-pdf/renderer';
+import { downloadReceipt } from '../../utils/invoiceGenerator';
+import { AllocationModal } from './AllocationModal';
 
-const AdvanceForm = ({ job, onSave }: { job: any, onSave: () => void }) => {
-  const [amount, setAmount] = useState(job.advance_amount?.toString() || '0');
-  const [method, setMethod] = useState<'cash' | 'bank_transfer' | 'pos' | 'online'>('bank_transfer');
-  const [reference, setReference] = useState('');
-  const [dateReceived, setDateReceived] = useState(new Date().toISOString().split('T')[0]);
-  const [isSaving, setIsSaving] = useState(false);
+const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
-  const handleSave = async () => {
-    if ((method === 'bank_transfer' || method === 'online') && !reference.trim()) {
-      toast.error('Reference number is required for bank transfer or online payment');
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from('jobs')
-        .update({
-          advance_paid: true,
-          advance_paid_at: new Date(dateReceived).toISOString(),
-          advance_payment_method: method,
-          advance_reference: reference || null,
-          advance_amount: parseFloat(amount)
-        })
-        .eq('id', job.id);
 
-      if (error) throw error;
-      toast.success('Advance payment recorded!');
-      onSave();
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to save');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <div className="space-y-3 pt-2">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Amount (OMR)</label>
-          <input
-            type="number"
-            step="0.001"
-            value={amount}
-            onChange={e => setAmount(e.target.value)}
-            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
-          />
-        </div>
-        <div>
-          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Date Received</label>
-          <input
-            type="date"
-            value={dateReceived}
-            onChange={e => setDateReceived(e.target.value)}
-            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">Payment Method</label>
-        <div className="flex flex-wrap gap-4">
-          {(['bank_transfer', 'pos', 'cash', 'online'] as const).map(m => (
-            <label key={m} className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-              <input
-                type="radio"
-                name="advance_method"
-                checked={method === m}
-                onChange={() => setMethod(m)}
-                className="accent-primary"
-              />
-              <span className="capitalize">{m.replace('_', ' ')}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {(method === 'bank_transfer' || method === 'online') && (
-        <div>
-          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Reference Number *</label>
-          <input
-            type="text"
-            placeholder="e.g. Transaction Ref"
-            value={reference}
-            onChange={e => setReference(e.target.value)}
-            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
-            required
-          />
-        </div>
-      )}
-
-      <button
-        onClick={handleSave}
-        disabled={isSaving}
-        className="w-full bg-primary text-[#0A0F1E] font-bold text-xs py-2.5 rounded-xl hover:bg-primary/95 transition-all disabled:opacity-50"
-      >
-        {isSaving ? 'Saving...' : 'Mark Advance as Paid'}
-      </button>
-    </div>
-  );
-};
-
-const RemainingForm = ({ job, onSave }: { job: any, onSave: () => void }) => {
-  const [amount, setAmount] = useState(job.remaining_amount?.toString() || '0');
-  const [method, setMethod] = useState<'cash' | 'bank_transfer' | 'pos' | 'online'>('bank_transfer');
-  const [reference, setReference] = useState('');
-  const [dateReceived, setDateReceived] = useState(new Date().toISOString().split('T')[0]);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const handleSave = async () => {
-    if ((method === 'bank_transfer' || method === 'online') && !reference.trim()) {
-      toast.error('Reference number is required for bank transfer or online payment');
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from('jobs')
-        .update({
-          remaining_paid: true,
-          remaining_paid_at: new Date(dateReceived).toISOString(),
-          remaining_payment_method: method,
-          remaining_reference: reference || null,
-          remaining_amount: parseFloat(amount)
-        })
-        .eq('id', job.id);
-
-      if (error) throw error;
-      toast.success('Remaining payment recorded!');
-      onSave();
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to save');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <div className="space-y-3 pt-2">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Amount (OMR)</label>
-          <input
-            type="number"
-            step="0.001"
-            value={amount}
-            onChange={e => setAmount(e.target.value)}
-            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
-          />
-        </div>
-        <div>
-          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Date Received</label>
-          <input
-            type="date"
-            value={dateReceived}
-            onChange={e => setDateReceived(e.target.value)}
-            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">Payment Method</label>
-        <div className="flex flex-wrap gap-4">
-          {(['bank_transfer', 'pos', 'cash', 'online'] as const).map(m => (
-            <label key={m} className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-              <input
-                type="radio"
-                name="remaining_method"
-                checked={method === m}
-                onChange={() => setMethod(m)}
-                className="accent-primary"
-              />
-              <span className="capitalize">{m.replace('_', ' ')}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {(method === 'bank_transfer' || method === 'online') && (
-        <div>
-          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Reference Number *</label>
-          <input
-            type="text"
-            placeholder="e.g. Transaction Ref"
-            value={reference}
-            onChange={e => setReference(e.target.value)}
-            className="w-full bg-white/5 border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
-            required
-          />
-        </div>
-      )}
-
-      <button
-        onClick={handleSave}
-        disabled={isSaving}
-        className="w-full bg-primary text-[#0A0F1E] font-bold text-xs py-2.5 rounded-xl hover:bg-primary/95 transition-all disabled:opacity-50"
-      >
-        {isSaving ? 'Saving...' : 'Mark Final Payment as Paid'}
-      </button>
-    </div>
-  );
-};
 
 export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentReceived: () => void }) => {
   const { profile } = useAuth();
   const [additionalCharges, setAdditionalCharges] = useState<any[]>([]);
   const [subTasks, setSubTasks] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [jobServices, setJobServices] = useState<any[]>([]);
+  const [paymentAllocations, setPaymentAllocations] = useState<any[]>([]);
+  const [allocatingPayment, setAllocatingPayment] = useState<any>(null);
+  const [isAllocating, setIsAllocating] = useState(false);
   const [isAddingCharge, setIsAddingCharge] = useState(false);
   const [isAddingPayment, setIsAddingPayment] = useState(false);
   const [newCharge, setNewCharge] = useState({ description: '', amount: '' });
@@ -221,6 +29,40 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Derived Financial Metrics
+  const totalAdditional = additionalCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
+  const totalSubTasks = subTasks.reduce((sum, st) => sum + Number(st.ministry_fee), 0);
+  const totalBilled = job.work_fee + job.ministry_fee + totalAdditional + totalSubTasks;
+  const totalPaid = payments.reduce((sum, pay) => sum + Number(pay.amount), 0);
+  const totalVerified = payments.filter(p => p.status === 'verified').reduce((sum, pay) => sum + Number(pay.amount), 0);
+  const totalSpent = expenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
+  const remainingBalance = totalBilled - totalPaid;
+
+  const [paymentType, setPaymentType] = useState<'advance' | 'remaining' | 'custom'>('advance');
+  const [showAllServices, setShowAllServices] = useState(false);
+
+  // Auto-switch payment tab based on whether advance is paid
+  useEffect(() => {
+    if (job.advance_paid) {
+      setPaymentType('remaining');
+    } else {
+      setPaymentType('advance');
+    }
+  }, [job.advance_paid]);
+
+  // Pre-fill payment amount automatically
+  useEffect(() => {
+    if (paymentType === 'advance') {
+      const advAmount = Number(job.advance_due_amount) || (totalBilled * (Number(job.advance_percentage || 50) / 100));
+      setNewPayment(prev => ({ ...prev, amount: advAmount.toFixed(3) }));
+    } else if (paymentType === 'remaining') {
+      const remAmount = Math.max(0, totalBilled - totalPaid);
+      setNewPayment(prev => ({ ...prev, amount: remAmount.toFixed(3) }));
+    } else if (paymentType === 'custom') {
+      setNewPayment(prev => ({ ...prev, amount: '' }));
+    }
+  }, [paymentType, job.advance_due_amount, job.advance_percentage, totalBilled, totalPaid]);
 
   const loadChargesAndPayments = async () => {
     setLoading(true);
@@ -247,6 +89,34 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
       .eq('job_id', job.id)
       .order('created_at', { ascending: true });
     if (payData) setPayments(payData);
+
+    // Fetch Payment Allocations
+    const paymentIds = payData?.map(p => p.id) || [];
+    if (paymentIds.length > 0) {
+      const { data: allocs } = await supabase
+        .from('payment_allocations')
+        .select('*')
+        .in('payment_id', paymentIds);
+      if (allocs) setPaymentAllocations(allocs);
+    } else {
+      setPaymentAllocations([]);
+    }
+
+    // Fetch Expenses
+    const { data: expData } = await supabase
+      .from('job_expenses')
+      .select('*')
+      .eq('job_id', job.id)
+      .eq('status', 'approved');
+    if (expData) setExpenses(expData);
+
+    // Fetch Job Services for Allocation
+    const { data: jsData } = await supabase
+      .from('job_services')
+      .select('*')
+      .eq('job_id', job.id)
+      .order('display_order', { ascending: true });
+    if (jsData) setJobServices(jsData);
 
     setLoading(false);
   };
@@ -362,27 +232,10 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
       setNewPayment({ amount: '', method: 'bank_transfer', reference: '', notes: '' });
       setReceiptFile(null);
       setIsAddingPayment(false);
+      setAllocatingPayment(data); // Trigger allocation modal
       
-      // Update job totals in DB
-      const totalAdditional = additionalCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
-      const totalSubTasks = subTasks.reduce((sum, st) => sum + Number(st.ministry_fee), 0);
-      const newTotalBilled = job.work_fee + job.ministry_fee + totalAdditional + totalSubTasks;
-      const newTotalPaid = updatedPayments.reduce((sum, pay) => sum + Number(pay.amount), 0);
-      const newRemaining = Math.max(0, newTotalBilled - newTotalPaid);
-      
-      await supabase.from('jobs').update({
-        remaining_amount: newRemaining,
-        remaining_paid: newRemaining <= 0,
-        advance_paid: newTotalPaid > 0,
-        advance_amount: newTotalPaid // Storing total paid in advance_amount for UI compatibility
-      }).eq('id', job.id);
-      
-      // If the job was in draft, recording the first payment can auto-confirm it
-      if (job.status === 'draft') {
-        await handleConfirmPayment();
-      } else {
-        onPaymentReceived();
-      }
+      // Do not prematurely mark jobs table fields as paid. They will update automatically when verified.
+      onPaymentReceived();
     }
     } catch (err: any) {
       console.error(err);
@@ -424,11 +277,92 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
     onPaymentReceived();
   };
 
-  const totalAdditional = additionalCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
-  const totalSubTasks = subTasks.reduce((sum, st) => sum + Number(st.ministry_fee), 0);
-  const totalBilled = job.work_fee + job.ministry_fee + totalAdditional + totalSubTasks;
-  const totalPaid = payments.reduce((sum, pay) => sum + Number(pay.amount), 0);
-  const remainingBalance = totalBilled - totalPaid;
+  const handleVerifyPayment = async (paymentId: string) => {
+    try {
+      const { error: verifyErr } = await supabase
+        .from('job_payments')
+        .update({
+          status: 'verified',
+          verified_by: profile?.id,
+          verified_at: new Date().toISOString()
+        })
+        .eq('id', paymentId);
+      if (verifyErr) throw verifyErr;
+
+      const { data: verifiedList } = await supabase
+        .from('job_payments')
+        .select('amount')
+        .eq('job_id', job.id)
+        .eq('status', 'verified');
+
+      const totalPaid = (verifiedList || []).reduce((sum, p) => sum + Number(p.amount), 0);
+      const totalAdditional = additionalCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
+      const totalSubTasks = subTasks.reduce((sum, st) => sum + Number(st.ministry_fee), 0);
+      const totalBilled = job.work_fee + job.ministry_fee + totalAdditional + totalSubTasks;
+      const remaining = Math.max(0, totalBilled - totalPaid);
+
+      const isAdvancePaid = totalPaid >= (totalBilled * 0.5);
+      const isRemainingPaid = totalPaid >= totalBilled;
+
+      await supabase.from('jobs').update({
+        advance_paid: isAdvancePaid,
+        advance_paid_at: isAdvancePaid ? (job.advance_paid_at || new Date().toISOString()) : null,
+        remaining_paid: isRemainingPaid,
+        remaining_paid_at: isRemainingPaid ? (job.remaining_paid_at || new Date().toISOString()) : null,
+        advance_amount: totalPaid,
+        remaining_amount: remaining
+      }).eq('id', job.id);
+
+      toast.success('Payment verified successfully. Receipt is now active!');
+      setPayments(payments.map(p => p.id === paymentId ? { ...p, status: 'verified', verified_by: profile?.id, verified_at: new Date().toISOString() } : p));
+      onPaymentReceived();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to verify payment');
+    }
+  };
+
+  const handleGenerateReceipt = async (payment: any, action: 'download' | 'view' = 'download') => {
+    try {
+      // Create a unified job object that downloadReceipt expects
+      const receiptJob = {
+        ...job,
+        services: jobServices,
+        payments: payments,
+        client: job.client || { full_name: job.client_name, company_name: '' }
+      };
+      
+      downloadReceipt(receiptJob, payment, action);
+    } catch (err) {
+      toast.error('Failed to generate receipt');
+    }
+  };
+
+  // Calculate Wallet Balance
+  // We estimate allocated funds by seeing which services are funded. Since we don't have exact per-service ministry fee,
+  // we'll just show the total ministry fee and total paid, and let the user decide.
+  const isFundedHelper = (service: any) => {
+    const currentMinistryAllocated = service.ministry_fee_allocated || 0;
+    const reqMinistryFee = service.ministry_fee || 0;
+    const isAutoUnlocked = reqMinistryFee > 0 && currentMinistryAllocated >= reqMinistryFee;
+    return service.is_funded || isAutoUnlocked || Number(service.total_fee) === 0;
+  };
+
+  const fundedCount = jobServices.filter(isFundedHelper).length;
+  const lockedCount = jobServices.filter(s => !isFundedHelper(s)).length;
+
+  const handleToggleFund = async (serviceId: string, currentVal: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('job_services')
+        .update({ is_funded: !currentVal })
+        .eq('id', serviceId);
+      if (error) throw error;
+      setJobServices(jobServices.map(s => s.id === serviceId ? { ...s, is_funded: !currentVal } : s));
+      toast.success(!currentVal ? 'Service Unlocked!' : 'Service Locked');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update allocation');
+    }
+  };
 
   const mode = localStorage.getItem('employee_mode') || 'sales';
   const isSalesMode = mode === 'sales';
@@ -566,68 +500,363 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
           <div className="mt-8 border-t border-border pt-8 space-y-6">
             <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment Recording</h4>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* ADVANCE PAYMENT BLOCK */}
-              <div className="bg-white/5 border border-border/80 rounded-2xl p-5 space-y-4 relative overflow-hidden">
-                <div className="flex items-center justify-between gap-4">
-                  <h5 className="text-sm font-bold text-foreground">1. Advance Payment</h5>
-                  {job.advance_paid ? (
-                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                      <CheckCircle2 size={10} /> Paid
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                      Pending
-                    </span>
-                  )}
+            {remainingBalance <= 0 ? (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-3xl p-6 text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 mx-auto">
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <h5 className="text-base font-syne font-bold text-emerald-400">Ledger Reconciled & Fully Paid</h5>
+                  <p className="text-xs text-emerald-500/70 mt-1">This project has no remaining balance due. All milestones are fully funded.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-[#0e1424]/40 border border-border/80 rounded-3xl p-6 space-y-6">
+                <div className="flex flex-col gap-1 border-b border-border/40 pb-4">
+                  <h5 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <DollarSign size={16} className="text-primary" /> Record Client Payment
+                  </h5>
+                  <p className="text-xs text-muted-foreground font-medium">Select a payment option below to auto-fill or enter a custom amount</p>
                 </div>
 
-                {job.advance_paid ? (
-                  <div className="text-xs text-muted-foreground space-y-1.5 pt-1">
-                    <p>Amount: <span className="font-bold text-foreground">{Number(job.advance_amount).toFixed(3)} OMR</span></p>
-                    <p>Method: <span className="font-bold text-foreground capitalize">{job.advance_payment_method}</span></p>
-                    {job.advance_reference && <p>Reference: <span className="font-mono text-foreground">{job.advance_reference}</span></p>}
-                    <p>Received: <span className="font-bold text-foreground">{job.advance_paid_at ? new Date(job.advance_paid_at).toLocaleDateString() : 'N/A'}</span></p>
+                {/* Modern Radio Cards (Option A) */}
+                <div className={cn(
+                  "grid grid-cols-1 gap-3 pt-2",
+                  job.advance_paid ? "sm:grid-cols-2" : "sm:grid-cols-3"
+                )}>
+                  {/* Card 1: Advance Payment */}
+                  {!job.advance_paid && (
+                    <div
+                      onClick={() => setPaymentType('advance')}
+                      className={cn(
+                        "relative rounded-2xl border p-4 cursor-pointer transition-all flex flex-col text-left gap-1 group overflow-hidden select-none",
+                        paymentType === 'advance'
+                          ? "bg-primary/10 border-primary shadow-md shadow-primary/5"
+                          : "bg-muted/10 border-border hover:border-border/80 hover:bg-muted/20"
+                      )}
+                    >
+                      <div className="flex justify-between items-center w-full">
+                        <span className={cn(
+                          "text-[9px] font-bold uppercase tracking-widest",
+                          paymentType === 'advance' ? "text-primary" : "text-muted-foreground"
+                        )}>
+                          1. Advance Payment
+                        </span>
+                        <div className={cn(
+                          "w-4 h-4 rounded-full border flex items-center justify-center transition-all",
+                          paymentType === 'advance' 
+                            ? "border-primary bg-primary text-primary-foreground" 
+                            : "border-border text-transparent group-hover:border-muted-foreground"
+                        )}>
+                          {paymentType === 'advance' && <CheckCircle2 size={10} className="stroke-[3]" />}
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold font-mono text-foreground mt-1">
+                        {(Number(job.advance_due_amount) || (totalBilled * (Number(job.advance_percentage || 50) / 100))).toFixed(3)} OMR
+                      </span>
+                      <span className="text-[9px] text-muted-foreground mt-0.5 leading-none">
+                        Initial setup deposit ({job.advance_percentage || 50}%)
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Card 2: Remaining Balance */}
+                  <div
+                    onClick={() => setPaymentType('remaining')}
+                    className={cn(
+                      "relative rounded-2xl border p-4 cursor-pointer transition-all flex flex-col text-left gap-1 group overflow-hidden select-none",
+                      paymentType === 'remaining'
+                        ? "bg-primary/10 border-primary shadow-md shadow-primary/5"
+                        : "bg-muted/10 border-border hover:border-border/80 hover:bg-muted/20"
+                    )}
+                  >
+                    <div className="flex justify-between items-center w-full">
+                      <span className={cn(
+                        "text-[9px] font-bold uppercase tracking-widest",
+                        paymentType === 'remaining' ? "text-primary" : "text-muted-foreground"
+                      )}>
+                        {job.advance_paid ? "1. Remaining Balance" : "2. Full Payment"}
+                      </span>
+                      <div className={cn(
+                        "w-4 h-4 rounded-full border flex items-center justify-center transition-all",
+                        paymentType === 'remaining' 
+                          ? "border-primary bg-primary text-primary-foreground" 
+                          : "border-border text-transparent group-hover:border-muted-foreground"
+                      )}>
+                        {paymentType === 'remaining' && <CheckCircle2 size={10} className="stroke-[3]" />}
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold font-mono text-foreground mt-1">
+                      {Math.max(0, totalBilled - totalPaid).toFixed(3)} OMR
+                    </span>
+                    <span className="text-[9px] text-muted-foreground mt-0.5 leading-none">
+                      {job.advance_paid ? "Clear outstanding balance (100%)" : "Pay total amount in full (100%)"}
+                    </span>
                   </div>
-                ) : (
-                  <AdvanceForm job={job} onSave={onPaymentReceived} />
-                )}
+
+                  {/* Card 3: Custom / Partial */}
+                  <div
+                    onClick={() => setPaymentType('custom')}
+                    className={cn(
+                      "relative rounded-2xl border p-4 cursor-pointer transition-all flex flex-col text-left gap-1 group overflow-hidden select-none",
+                      paymentType === 'custom'
+                        ? "bg-primary/10 border-primary shadow-md shadow-primary/5"
+                        : "bg-muted/10 border-border hover:border-border/80 hover:bg-muted/20"
+                    )}
+                  >
+                    <div className="flex justify-between items-center w-full">
+                      <span className={cn(
+                        "text-[9px] font-bold uppercase tracking-widest",
+                        paymentType === 'custom' ? "text-primary" : "text-muted-foreground"
+                      )}>
+                        {job.advance_paid ? "2. Custom / Partial" : "3. Custom / Partial"}
+                      </span>
+                      <div className={cn(
+                        "w-4 h-4 rounded-full border flex items-center justify-center transition-all",
+                        paymentType === 'custom' 
+                          ? "border-primary bg-primary text-primary-foreground" 
+                          : "border-border text-transparent group-hover:border-muted-foreground"
+                      )}>
+                        {paymentType === 'custom' && <CheckCircle2 size={10} className="stroke-[3]" />}
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold font-mono text-foreground mt-1">
+                      Custom Amount
+                    </span>
+                    <span className="text-[9px] text-muted-foreground mt-0.5 leading-none">
+                      Enter any custom payment value
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Balance Due Reminder */}
+                  <div className="flex items-center justify-between bg-muted/30 border border-border/60 rounded-xl px-4 py-2.5">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Outstanding Balance</span>
+                    <span className="text-sm font-bold font-mono text-amber-400">{remainingBalance.toFixed(3)} OMR</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest block mb-1.5">Amount (OMR)</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.001"
+                          placeholder="0.000"
+                          value={newPayment.amount}
+                          disabled={paymentType !== 'custom'}
+                          onChange={e => setNewPayment({ ...newPayment, amount: e.target.value })}
+                          className={`w-full bg-card border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-primary disabled:opacity-75 disabled:bg-muted/10 font-mono font-bold text-foreground transition-colors ${
+                            paymentType === 'custom' && Number(newPayment.amount) > remainingBalance
+                              ? 'border-amber-400/70 focus:border-amber-400'
+                              : paymentType === 'custom' && Number(newPayment.amount) > 0 && Math.abs(Number(newPayment.amount) - remainingBalance) < 0.001
+                              ? 'border-emerald-400/70 focus:border-emerald-400'
+                              : 'border-border'
+                          }`}
+                        />
+                        {paymentType !== 'custom' && (
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded uppercase tracking-wider">
+                            Auto-locked
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Real-time amount validation feedback */}
+                      {paymentType === 'custom' && Number(newPayment.amount) > 0 && (() => {
+                        const entered = Number(newPayment.amount);
+                        const over = entered - remainingBalance;
+                        const isOver = entered > remainingBalance;
+                        const isExact = Math.abs(over) < 0.001;
+                        if (isExact) return (
+                          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
+                            <CheckCircle2 size={11} /> Perfect — exactly settles the outstanding balance
+                          </div>
+                        );
+                        if (isOver) return (
+                          <div className="mt-1.5 p-2.5 bg-amber-400/10 border border-amber-400/30 rounded-xl space-y-0.5">
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400">
+                              <AlertTriangle size={11} /> Overpayment Warning!
+                            </div>
+                            <p className="text-[10px] text-amber-400/80 leading-relaxed">
+                              This is <span className="font-bold">{over.toFixed(3)} OMR more</span> than the outstanding balance of <span className="font-bold">{remainingBalance.toFixed(3)} OMR</span>. Double-check the amount before saving.
+                            </p>
+                          </div>
+                        );
+                        return (
+                          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground">
+                            <TrendingUp size={11} /> {(remainingBalance - entered).toFixed(3)} OMR will still be outstanding after this
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest block mb-1.5">Payment Method</label>
+                      <select
+                        value={newPayment.method}
+                        onChange={e => setNewPayment({ ...newPayment, method: e.target.value })}
+                        className="w-full bg-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-primary text-foreground font-semibold"
+                      >
+                        <option value="bank_transfer">🏛️ Bank Transfer</option>
+                        <option value="pos">💳 POS / Card</option>
+                        <option value="cash">💵 Cash</option>
+                        <option value="online">🌐 Online Payment</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {newPayment.method !== 'cash' && (
+                      <div>
+                        <label className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest block mb-1.5">Reference Number *</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Transaction ID or Bank Ref"
+                          value={newPayment.reference}
+                          onChange={e => setNewPayment({ ...newPayment, reference: e.target.value })}
+                          className="w-full bg-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+                    )}
+
+                    <div className={cn(newPayment.method === 'cash' ? "sm:col-span-2" : "")}>
+                      <label className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest block mb-1.5">Document Proof (Optional)</label>
+                      <div className="flex items-center gap-3">
+                        <label className="flex-1 flex items-center justify-center gap-2 border border-dashed border-border hover:border-primary/50 bg-card hover:bg-primary/5 transition-all rounded-xl p-2.5 cursor-pointer group">
+                          <Upload size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
+                          <span className="text-xs text-muted-foreground group-hover:text-primary transition-colors truncate max-w-[200px]">
+                            {receiptFile ? receiptFile.name : 'Upload Invoice or Receipt (PDF, Image)'}
+                          </span>
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="image/*,.pdf"
+                            onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                        {receiptFile && (
+                          <button 
+                            onClick={() => setReceiptFile(null)}
+                            className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20 transition-colors"
+                          >
+                            <X size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest block mb-1.5">Internal Notes (Optional)</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Add reference notes or ledger remarks here..."
+                      value={newPayment.notes}
+                      onChange={e => setNewPayment({ ...newPayment, notes: e.target.value })}
+                      className="w-full bg-card border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary text-foreground resize-none"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={handleRecordPayment}
+                    className="w-full py-3 bg-primary text-[#0A0F1E] font-bold rounded-xl hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-xs uppercase tracking-widest"
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin text-[#0A0F1E]" /> Recording Payment...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} /> Record Payment
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* FUND ALLOCATION / TRANCHE BLOCK */}
+            <div className="mt-8 bg-card border border-primary/20 rounded-2xl p-6 relative overflow-hidden shadow-sm">
+              <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <Landmark size={16} className="text-primary" /> 
+                    Service Allocation & Authorization
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select which services Operations is allowed to work on based on funds received. 
+                    <span className="font-bold text-foreground ml-1">Total Paid: {totalPaid.toFixed(3)} OMR</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 bg-muted/40 border border-border px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-wider select-none whitespace-nowrap">
+                  <span className="text-emerald-500 font-extrabold">{fundedCount} Unlocked</span>
+                  <span className="text-muted-foreground/30">•</span>
+                  <span className="text-amber-500 font-extrabold">{lockedCount} Locked</span>
+                </div>
               </div>
 
-              {/* REMAINING PAYMENT BLOCK */}
-              {job.advance_paid ? (
-                <div className="bg-white/5 border border-border/80 rounded-2xl p-5 space-y-4 relative overflow-hidden">
-                  <div className="flex items-center justify-between gap-4">
-                    <h5 className="text-sm font-bold text-foreground">2. Final Payment</h5>
-                    {job.remaining_paid ? (
-                      <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                        <CheckCircle2 size={10} /> Paid
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                        Pending
-                      </span>
-                    )}
-                  </div>
-
-                  {job.remaining_paid ? (
-                    <div className="text-xs text-muted-foreground space-y-1.5 pt-1">
-                      <p>Amount: <span className="font-bold text-foreground">{Number(job.remaining_amount).toFixed(3)} OMR</span></p>
-                      <p>Method: <span className="font-bold text-foreground capitalize">{job.remaining_payment_method}</span></p>
-                      {job.remaining_reference && <p>Reference: <span className="font-mono text-foreground">{job.remaining_reference}</span></p>}
-                      <p>Received: <span className="font-bold text-foreground">{job.remaining_paid_at ? new Date(job.remaining_paid_at).toLocaleDateString() : 'N/A'}</span></p>
-                    </div>
-                  ) : (
-                    <RemainingForm job={job} onSave={onPaymentReceived} />
-                  )}
-                </div>
+              {jobServices.length === 0 ? (
+                <div className="text-center py-4 text-xs text-muted-foreground">No services found for this job.</div>
               ) : (
-                <div className="border border-dashed border-border rounded-2xl p-5 flex flex-col items-center justify-center text-center">
-                  <AlertCircle size={20} className="text-muted-foreground/30 mb-2" />
-                  <p className="text-xs text-muted-foreground/60 italic">Final payment is locked until the advance payment is marked as verified.</p>
+                <div className="space-y-3">
+                  {(showAllServices ? jobServices : jobServices.slice(0, 3)).map((service, idx) => {
+                    const currentMinistryAllocated = service.ministry_fee_allocated || 0;
+                    const reqMinistryFee = service.ministry_fee || 0;
+                    const isAutoUnlocked = reqMinistryFee > 0 && currentMinistryAllocated >= reqMinistryFee;
+                    const isServiceFunded = service.is_funded || isAutoUnlocked || Number(service.total_fee) === 0;
+                    const isFree = Number(service.total_fee) === 0;
+                    
+                    return (
+                      <div key={service.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${isServiceFunded ? 'bg-primary/5 border-primary/30' : 'bg-muted/10 border-border opacity-75'}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isServiceFunded ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                            {idx + 1}
+                          </div>
+                          <div>
+                            <h5 className={`text-sm font-bold ${isServiceFunded ? 'text-foreground' : 'text-muted-foreground line-through decoration-muted-foreground/30'}`}>
+                              {service.service_name}
+                            </h5>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mt-0.5">
+                              {isFree ? '⚡ Free Service (Auto-Unlocked)' : (isAutoUnlocked ? '⚡ Funded (Auto-Unlocked)' : (isServiceFunded ? '✅ Authorized for Ops' : '🔒 Locked (Awaiting Funds)'))}
+                            </p>
+                          </div>
+                        </div>
+                        {isFree ? (
+                          <span className="text-[10px] font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20 uppercase tracking-widest font-mono">Free</span>
+                        ) : (isAutoUnlocked || service.is_funded) ? (
+                          <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 uppercase tracking-widest font-mono">Funded</span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-rose-500 bg-rose-500/10 px-3 py-1.5 rounded-xl border border-rose-500/20 uppercase tracking-widest font-mono">Locked</span>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {jobServices.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllServices(!showAllServices)}
+                      className="w-full py-2.5 mt-2 border border-dashed border-border hover:border-primary/50 text-xs font-bold text-muted-foreground hover:text-primary rounded-xl flex items-center justify-center gap-1.5 transition-all bg-card/20 hover:bg-primary/5"
+                    >
+                      {showAllServices ? (
+                        <>
+                          <ChevronUp size={14} /> Show Less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown size={14} /> Show All Services ({jobServices.length})
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
+
           </div>
         )}
 
@@ -635,14 +864,6 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
         <div className="mt-8 border-t border-border pt-8">
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment History</h4>
-            {!isAddingPayment && (
-              <button 
-                onClick={() => setIsAddingPayment(true)}
-                className="text-xs font-bold text-primary flex items-center gap-1 hover:text-primary/80 transition-colors"
-              >
-                <Plus size={14} /> Verify Payment
-              </button>
-            )}
           </div>
 
           <div className="space-y-2">
@@ -654,6 +875,17 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
                     {payment.payment_method === 'bank_transfer' && <Landmark size={14} className="text-blue-500" />}
                     {(payment.payment_method === 'pos' || payment.payment_method === 'online') && <CreditCard size={14} className="text-purple-500" />}
                     <span className="text-sm font-bold text-foreground capitalize">{payment.payment_method.replace('_', ' ')}</span>
+                    
+                    {payment.status === 'pending' && (
+                      <span className="ml-2 text-[9px] font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
+                        <AlertCircle size={10} /> Pending Verification
+                      </span>
+                    )}
+                    {payment.status === 'verified' && (
+                      <span className="ml-2 text-[9px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
+                        <CheckCircle2 size={10} /> Verified
+                      </span>
+                    )}
                   </div>
                   <div className="text-[10px] text-muted-foreground flex items-center gap-2">
                     <span>{new Date(payment.created_at).toLocaleDateString()}</span>
@@ -683,141 +915,123 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
                             onClick={() => handleViewReceipt(filePath)}
                             className="flex items-center gap-1.5 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-md transition-colors"
                           >
-                            <Eye size={10} /> View
-                          </button>
-                          <button 
-                            onClick={() => handleDownloadReceipt(filePath, fileName)}
-                            className="flex items-center gap-1.5 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-md transition-colors"
-                          >
-                            <Download size={10} /> Download
+                            <Eye size={10} /> View Upload
                           </button>
                         </div>
                       );
                     }
                     return null;
                   })()}
+                  {(() => {
+                    const totalMinistryBilled = jobServices.reduce((sum, s) => sum + (s.ministry_fee || 0), 0);
+                    const totalMinistryAllocated = jobServices.reduce((sum, s) => sum + (s.ministry_fee_allocated || 0) + (s.ministry_fee_pending || 0), 0);
+                    const remainingMinistryDue = Math.max(0, totalMinistryBilled - totalMinistryAllocated);
+
+                    const allocatedForThis = paymentAllocations
+                      .filter(a => a.payment_id === payment.id)
+                      .reduce((sum, a) => sum + Number(a.amount), 0);
+                    
+                    // Only show "Allocate Funds" if there are unpaid ministry fees and this payment hasn't already allocated its full amount
+                    const canAllocateMore = remainingMinistryDue > 0 && allocatedForThis < Number(payment.amount);
+
+                    return payment.status === 'verified' ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button 
+                          onClick={() => handleGenerateReceipt(payment, 'view')}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg transition-colors border border-emerald-500/20"
+                        >
+                          <Eye size={12} /> View Receipt
+                        </button>
+                        <button 
+                          onClick={() => handleGenerateReceipt(payment, 'download')}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg transition-colors border border-blue-500/20"
+                        >
+                          <Download size={12} /> Download Receipt
+                        </button>
+                        {canAllocateMore && (
+                          <button 
+                            onClick={() => setAllocatingPayment(payment)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors border border-amber-500/20"
+                          >
+                            <Landmark size={12} /> Allocate Funds
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {payment.status === 'pending' && (profile?.role === 'admin' || profile?.is_manager || profile?.can_do_accounts) && (
+                          <button 
+                            onClick={() => handleVerifyPayment(payment.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white bg-emerald-500 hover:bg-emerald-400 rounded-lg transition-colors shadow-lg shadow-emerald-500/15"
+                          >
+                            <CheckCircle2 size={12} /> Verify Payment
+                          </button>
+                        )}
+                        {canAllocateMore && (
+                          <button 
+                            onClick={() => setAllocatingPayment(payment)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors border border-amber-500/20"
+                          >
+                            <Landmark size={12} /> Allocate Funds
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <span className="font-mono text-sm text-emerald-500 font-bold">+{Number(payment.amount).toFixed(3)} OMR</span>
               </div>
             ))}
 
-            {payments.length === 0 && !isAddingPayment && (
+            {payments.length === 0 && (
               <div className="text-center border border-dashed border-border rounded-xl p-6 text-muted-foreground text-xs">
                 No payments recorded yet.
               </div>
             )}
-
-            <AnimatePresence>
-              {isAddingPayment && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                  <div className="p-5 border border-primary/30 bg-primary/5 rounded-xl space-y-4">
-                    <h5 className="font-syne font-bold text-sm text-foreground flex items-center gap-2">
-                      <DollarSign size={16} className="text-emerald-500" /> Record New Payment
-                    </h5>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">Amount (OMR)</label>
-                        <input
-                          type="number"
-                          placeholder="0.000"
-                          value={newPayment.amount}
-                          onChange={e => setNewPayment({ ...newPayment, amount: e.target.value })}
-                          className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">Method</label>
-                        <select
-                          value={newPayment.method}
-                          onChange={e => setNewPayment({ ...newPayment, method: e.target.value })}
-                          className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
-                        >
-                          <option value="bank_transfer">Bank Transfer</option>
-                          <option value="pos">POS / Card</option>
-                          <option value="cash">Cash</option>
-                          <option value="online">Online Payment</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">Reference Number (Optional)</label>
-                      <input
-                        type="text"
-                        placeholder="Transaction ID or Receipt No."
-                        value={newPayment.reference}
-                        onChange={e => setNewPayment({ ...newPayment, reference: e.target.value })}
-                        className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">Document / Proof (Optional)</label>
-                      <div className="flex items-center gap-3">
-                        <label className="flex-1 flex items-center justify-center gap-2 border border-dashed border-border hover:border-primary/50 bg-background hover:bg-primary/5 transition-all rounded-lg p-3 cursor-pointer group">
-                          <Upload size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-                          <span className="text-xs text-muted-foreground group-hover:text-primary transition-colors">
-                            {receiptFile ? receiptFile.name : 'Upload Invoice or Receipt (PDF, Image)'}
-                          </span>
-                          <input 
-                            type="file" 
-                            className="hidden" 
-                            accept="image/*,.pdf"
-                            onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                          />
-                        </label>
-                        {receiptFile && (
-                          <button 
-                            onClick={() => setReceiptFile(null)}
-                            className="p-3 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-colors"
-                          >
-                            <X size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end gap-3 pt-2">
-                      <button 
-                        disabled={isUploading}
-                        onClick={() => {
-                          setIsAddingPayment(false);
-                          setReceiptFile(null);
-                        }} 
-                        className="px-4 py-2 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest disabled:opacity-50"
-                      >
-                        Cancel
-                      </button>
-                      <button 
-                        disabled={isUploading}
-                        onClick={handleRecordPayment} 
-                        className="px-6 py-2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md shadow-primary/20 flex items-center gap-2 disabled:opacity-50"
-                      >
-                        {isUploading ? <><span className="animate-spin text-lg leading-none">⟳</span> Uploading...</> : <><CheckCircle2 size={14} /> Verify Payment</>}
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         </div>
 
         {/* Total Summaries */}
-        <div className="mt-8 bg-muted/20 border border-border rounded-[1.5rem] p-6 grid grid-cols-3 divide-x divide-border">
+        <div className="mt-8 bg-muted/20 border border-border rounded-[1.5rem] p-6 grid grid-cols-2 md:grid-cols-4 gap-y-6 divide-x divide-border">
           <div className="px-4 text-center">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Billed</p>
             <p className="text-xl font-mono font-bold text-foreground">{totalBilled.toFixed(3)} <span className="text-xs text-muted-foreground ml-0.5">OMR</span></p>
           </div>
           <div className="px-4 text-center">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Paid</p>
-            <p className="text-xl font-mono font-bold text-emerald-500">{totalPaid.toFixed(3)} <span className="text-xs text-emerald-500/50 ml-0.5">OMR</span></p>
+            <p className="text-xl font-mono font-bold text-emerald-500 flex flex-col items-center">
+              <span>{totalPaid.toFixed(3)} <span className="text-xs text-emerald-500/50 ml-0.5">OMR</span></span>
+              {totalVerified < totalPaid && (
+                <span className="text-[9px] font-medium text-amber-500 mt-1">({totalVerified.toFixed(3)} Verified)</span>
+              )}
+            </p>
+          </div>
+          <div className="px-4 text-center">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Spent (Ops)</p>
+            <p className="text-xl font-mono font-bold text-rose-500">{totalSpent.toFixed(3)} <span className="text-xs text-rose-500/50 ml-0.5">OMR</span></p>
           </div>
           <div className="px-4 text-center">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Amount Due</p>
-            <p className={`text-2xl font-mono font-black ${remainingBalance > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+            <p className={`text-2xl font-mono font-black ${remainingBalance > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
               {remainingBalance.toFixed(3)} <span className="text-sm opacity-50 ml-0.5">OMR</span>
             </p>
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {allocatingPayment && (
+          <AllocationModal 
+            payment={allocatingPayment}
+            jobServices={jobServices}
+            onClose={() => setAllocatingPayment(null)}
+            onSuccess={() => {
+              setAllocatingPayment(null);
+              loadChargesAndPayments();
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

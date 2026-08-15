@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { 
   Download, 
@@ -15,7 +16,8 @@ import {
   Ban,
   DollarSign,
   Compass,
-  TrendingUp
+  TrendingUp,
+  User
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -27,6 +29,8 @@ import { format, subDays, startOfWeek, startOfMonth, isAfter, isBefore, startOfD
 
 export default function EmployeeReports() {
   const { user, profile } = useAuth();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
   
   // States
   const [reportType, setReportType] = useState<'payments' | 'jobs' | 'sales'>('payments');
@@ -50,15 +54,23 @@ export default function EmployeeReports() {
             ministry_fee,
             work_fee,
             employee_id,
+            sales_employee_id,
             status,
             client:profiles!client_id(full_name),
-            service:services!service_id(name_en)
+            service:services!service_id(name_en, name_ar)
           )
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return ((data as any[]) || []).filter(p => p.job?.employee_id === user.id);
+      return ((data as any[]) || []).filter(p => {
+        const j = p.job;
+        if (!j) return false;
+        if (j.sales_employee_id) {
+          return j.sales_employee_id === user.id;
+        }
+        return j.employee_id === user.id;
+      });
     },
     enabled: !!user?.id
   });
@@ -73,13 +85,18 @@ export default function EmployeeReports() {
         .select(`
           *,
           client:profiles!client_id(full_name),
-          service:services!service_id(name_en)
+          service:services!service_id(name_en, name_ar)
         `)
-        .eq('employee_id', user.id)
+        .or(`sales_employee_id.eq.${user.id},employee_id.eq.${user.id}`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      return (data || []).filter((j: any) => {
+        if (j.sales_employee_id) {
+          return j.sales_employee_id === user.id;
+        }
+        return j.employee_id === user.id;
+      });
     },
     enabled: !!user?.id
   });
@@ -361,12 +378,12 @@ export default function EmployeeReports() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 font-sans">
         <div>
-          <h1 className="text-2xl font-syne font-bold text-foreground">Employee Reports</h1>
-          <p className="text-muted-foreground text-sm mt-1">Monitor your paid works, advances, and overall job assignments.</p>
+          <h1 className="text-2xl font-syne font-bold text-foreground">{isRtl ? 'تقارير الموظف' : 'Employee Reports'}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{isRtl ? 'مراقبة أعمالك المدفوعة، السلفيات، والمهام المسندة.' : 'Monitor your paid works, advances, and overall job assignments.'}</p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto flex-1 justify-end">
@@ -376,20 +393,20 @@ export default function EmployeeReports() {
               onClick={() => setReportType('payments')}
               className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${reportType === 'payments' ? 'bg-background shadow-sm text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              <Wallet size={14} /> Paid Report
+              <Wallet size={14} /> {isRtl ? 'تقرير المدفوعات' : 'Paid Report'}
             </button>
             <button
               onClick={() => setReportType('jobs')}
               className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${reportType === 'jobs' ? 'bg-background shadow-sm text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              <Briefcase size={14} /> All Jobs
+              <Briefcase size={14} /> {isRtl ? 'جميع الوظائف' : 'All Jobs'}
             </button>
             {profile?.can_do_sales && (
               <button
                 onClick={() => setReportType('sales')}
                 className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${reportType === 'sales' ? 'bg-background shadow-sm text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Compass size={14} /> Sales Report
+                <Compass size={14} /> {isRtl ? 'تقرير المبيعات' : 'Sales Report'}
               </button>
             )}
           </div>
@@ -400,31 +417,31 @@ export default function EmployeeReports() {
               onClick={() => setTimeFilter('today')}
               className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${timeFilter === 'today' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              Today
+              {isRtl ? 'اليوم' : 'Today'}
             </button>
             <button
               onClick={() => setTimeFilter('week')}
               className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${timeFilter === 'week' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              Week
+              {isRtl ? 'الأسبوع' : 'Week'}
             </button>
             <button
               onClick={() => setTimeFilter('month')}
               className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${timeFilter === 'month' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              Month
+              {isRtl ? 'الشهر' : 'Month'}
             </button>
             <button
               onClick={() => setTimeFilter('all')}
               className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${timeFilter === 'all' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              All
+              {isRtl ? 'الكل' : 'All'}
             </button>
             <button
               onClick={() => setTimeFilter('custom')}
               className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${timeFilter === 'custom' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              Custom
+              {isRtl ? 'مخصص' : 'Custom'}
             </button>
           </div>
 
@@ -434,7 +451,7 @@ export default function EmployeeReports() {
               className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 shrink-0"
             >
               <Download size={16} />
-              Export CSV
+              {isRtl ? 'تصدير CSV' : 'Export CSV'}
             </button>
           </div>
         </div>
@@ -445,11 +462,11 @@ export default function EmployeeReports() {
         <motion.div 
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
-          className="flex items-center gap-4 bg-card border border-border p-4 rounded-xl"
+          className="flex items-center gap-4 bg-card border border-border p-4 rounded-xl font-sans"
         >
           <div className="flex items-center gap-2">
             <CalendarIcon size={16} className="text-muted-foreground" />
-            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">From:</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{isRtl ? 'من:' : 'From:'}</span>
             <input 
               type="date" 
               value={customStartDate} 
@@ -459,7 +476,7 @@ export default function EmployeeReports() {
           </div>
           <div className="flex items-center gap-2">
             <CalendarIcon size={16} className="text-muted-foreground" />
-            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">To:</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{isRtl ? 'إلى:' : 'To:'}</span>
             <input 
               type="date" 
               value={customEndDate} 
@@ -471,7 +488,7 @@ export default function EmployeeReports() {
       )}
 
       {reportType === 'sales' ? (
-        <div className="space-y-6">
+        <div className="space-y-6 font-sans">
           {/* Sales Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Total Leads */}
@@ -479,7 +496,7 @@ export default function EmployeeReports() {
               <div className="absolute -right-6 -top-6 w-32 h-32 bg-primary/10 rounded-full blur-2xl group-hover:bg-primary/20 transition-all" />
               <div className="flex items-start justify-between relative z-10">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Leads Managed</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{isRtl ? 'إجمالي العملاء المحتملين' : 'Total Leads Managed'}</p>
                   <h3 className="text-3xl font-syne font-bold text-foreground">
                     {salesStats.totalLeadsCount}
                   </h3>
@@ -495,7 +512,7 @@ export default function EmployeeReports() {
               <div className="absolute -right-6 -top-6 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all" />
               <div className="flex items-start justify-between relative z-10">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Conversion Rate</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{isRtl ? 'معدل التحويل' : 'Conversion Rate'}</p>
                   <h3 className="text-3xl font-syne font-bold text-foreground">
                     {salesStats.conversionRate.toFixed(1)}%
                   </h3>
@@ -511,9 +528,9 @@ export default function EmployeeReports() {
               <div className="absolute -right-6 -top-6 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all" />
               <div className="flex items-start justify-between relative z-10">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Pipeline Value</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{isRtl ? 'قيمة خط الأنابيب' : 'Pipeline Value'}</p>
                   <h3 className="text-3xl font-syne font-bold text-foreground">
-                    <span className="text-blue-500 text-lg mr-1">OMR</span>
+                    <span className="text-blue-500 text-lg mr-1">{isRtl ? 'ر.ع.' : 'OMR'}</span>
                     {salesStats.pipelineValue.toFixed(3)}
                   </h3>
                 </div>
@@ -528,9 +545,9 @@ export default function EmployeeReports() {
               <div className="absolute -right-6 -top-6 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all" />
               <div className="flex items-start justify-between relative z-10">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Avg Quotation Value</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{isRtl ? 'متوسط قيمة العرض' : 'Avg Quotation Value'}</p>
                   <h3 className="text-3xl font-syne font-bold text-foreground">
-                    <span className="text-amber-500 text-lg mr-1">OMR</span>
+                    <span className="text-amber-500 text-lg mr-1">{isRtl ? 'ر.ع.' : 'OMR'}</span>
                     {salesStats.avgQuotationValue.toFixed(3)}
                   </h3>
                 </div>
@@ -545,16 +562,32 @@ export default function EmployeeReports() {
             {/* Pipeline Funnel */}
             <div className="bg-card border border-border p-6 rounded-2xl space-y-4 lg:col-span-2">
               <h3 className="text-sm font-bold text-foreground uppercase tracking-widest flex items-center gap-2">
-                <TrendingUp size={16} className="text-primary" /> Pipeline Funnel Distribution
+                <TrendingUp size={16} className="text-primary" /> {isRtl ? 'توزيع قمع المبيعات' : 'Pipeline Funnel Distribution'}
               </h3>
               <div className="space-y-3.5 pt-2">
                 {Object.entries(salesStats.leadsByStatus).map(([statusKey, count]) => {
                   const percentage = salesStats.totalLeadsCount > 0 ? (count / salesStats.totalLeadsCount) * 100 : 0;
+                  
+                  const getStatusLabelAr = (k: string) => {
+                    switch (k) {
+                      case 'new': return 'جديد';
+                      case 'contacted': return 'تم التواصل';
+                      case 'interested': return 'مهتم';
+                      case 'qualified': return 'مؤهل';
+                      case 'quoted': return 'تم تقديم عرض';
+                      case 'negotiating:': return 'تفاوض';
+                      case 'converted': return 'متحول';
+                      case 'lost': return 'خسارة';
+                      case 'on_hold': return 'قيد الانتظار';
+                      default: return k;
+                    }
+                  };
+
                   return (
                     <div key={statusKey} className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold uppercase tracking-wider text-muted-foreground">
-                          {statusKey.replace('_', ' ')}
+                          {isRtl ? getStatusLabelAr(statusKey) : statusKey.replace('_', ' ')}
                         </span>
                         <span className="font-bold text-foreground">
                           {count} ({percentage.toFixed(1)}%)
@@ -581,7 +614,7 @@ export default function EmployeeReports() {
             {/* Lead Sources breakdown */}
             <div className="bg-card border border-border p-6 rounded-2xl space-y-4">
               <h3 className="text-sm font-bold text-foreground uppercase tracking-widest">
-                Lead Capture Channels
+                {isRtl ? 'قنوات جذب العملاء' : 'Lead Capture Channels'}
               </h3>
               <div className="space-y-3 pt-2">
                 {Object.keys(salesStats.leadsBySource).length > 0 ? (
@@ -591,17 +624,17 @@ export default function EmployeeReports() {
                       <div key={sourceName} className="flex items-center justify-between p-3 bg-muted/20 border border-border/40 rounded-xl">
                         <div>
                           <p className="text-xs font-bold text-foreground">{sourceName}</p>
-                          <p className="text-[10px] text-muted-foreground">Channel source</p>
+                          <p className="text-[10px] text-muted-foreground">{isRtl ? 'مصدر القناة' : 'Channel source'}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs font-bold text-primary">{count} leads</p>
-                          <p className="text-[9px] text-muted-foreground">{percentage.toFixed(1)}% share</p>
+                          <p className="text-xs font-bold text-primary">{count} {isRtl ? 'عميل' : 'leads'}</p>
+                          <p className="text-[9px] text-muted-foreground">{percentage.toFixed(1)}% {isRtl ? 'نسبة المشاركة' : 'share'}</p>
                         </div>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="text-center py-8 text-xs text-muted-foreground">No channels recorded.</div>
+                  <div className="text-center py-8 text-xs text-muted-foreground">{isRtl ? 'لم يتم تسجيل قنوات.' : 'No channels recorded.'}</div>
                 )}
               </div>
             </div>
@@ -610,30 +643,30 @@ export default function EmployeeReports() {
           {/* Opportunities Detail Table */}
           <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col min-h-[400px]">
             <div className="p-4 border-b border-border flex items-center justify-between">
-              <h3 className="text-sm font-bold text-foreground uppercase tracking-widest">Active Opportunities ({filteredLeads.length})</h3>
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-widest">{isRtl ? `الفرص النشطة (${filteredLeads.length})` : `Active Opportunities (${filteredLeads.length})`}</h3>
               <div className="relative w-full max-w-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                <Search className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-muted-foreground`} size={16} />
                 <input
                   type="text"
-                  placeholder="Search Opportunities..."
+                  placeholder={isRtl ? 'البحث عن الفرص...' : 'Search Opportunities...'}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-muted/50 border border-border rounded-xl pl-10 pr-4 py-2 text-sm outline-none focus:border-primary transition-colors placeholder:text-muted-foreground/50"
+                  className={`w-full bg-muted/50 border border-border rounded-xl ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 text-sm outline-none focus:border-primary transition-colors placeholder:text-muted-foreground/50`}
                 />
               </div>
             </div>
 
             <div className="flex-1 overflow-auto no-scrollbar">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full border-collapse" dir={isRtl ? 'rtl' : 'ltr'}>
                 <thead>
-                  <tr className="bg-muted/10 border-b border-border">
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Lead Code</th>
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Contact</th>
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Company</th>
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Date Added</th>
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Source</th>
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-center">Status</th>
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-right">Quotes Total</th>
+                  <tr className="bg-muted/10 border-b border-border text-right">
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-start">{isRtl ? 'رمز العميل المحتمل' : 'Lead Code'}</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-start">{isRtl ? 'جهة الاتصال' : 'Contact'}</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-start">{isRtl ? 'الشركة' : 'Company'}</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-start">{isRtl ? 'تاريخ الإضافة' : 'Date Added'}</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-start">{isRtl ? 'المصدر' : 'Source'}</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-center">{isRtl ? 'الحالة' : 'Status'}</th>
+                    <th className={`p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground ${isRtl ? 'text-left' : 'text-right'}`}>{isRtl ? 'إجمالي العروض' : 'Quotes Total'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
@@ -641,29 +674,45 @@ export default function EmployeeReports() {
                     filteredLeads.map(lead => {
                       const leadQuotes = filteredQuotations.filter(q => q.lead_id === lead.id);
                       const leadQuotesTotal = leadQuotes.reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
+                      
+                      const getStatusLabelAr = (k: string) => {
+                        switch (k) {
+                          case 'new': return 'جديد';
+                          case 'contacted': return 'تم التواصل';
+                          case 'interested': return 'مهتم';
+                          case 'qualified': return 'مؤهل';
+                          case 'quoted': return 'تم تقديم عرض';
+                          case 'negotiating:': return 'تفاوض';
+                          case 'converted': return 'متحول';
+                          case 'lost': return 'خسارة';
+                          case 'on_hold': return 'قيد الانتظار';
+                          default: return k;
+                        }
+                      };
+
                       return (
-                        <tr key={lead.id} className="hover:bg-white/5 transition-colors">
+                        <tr key={lead.id} className="hover:bg-white/5 transition-colors text-start">
                           <td className="p-4 whitespace-nowrap text-xs font-mono font-bold text-muted-foreground">{lead.lead_code || '-'}</td>
                           <td className="p-4 whitespace-nowrap text-xs font-bold text-foreground">{lead.contact_name}</td>
                           <td className="p-4 whitespace-nowrap text-xs text-muted-foreground">{lead.company_name || '-'}</td>
-                          <td className="p-4 whitespace-nowrap text-xs text-muted-foreground">{format(new Date(lead.created_at), 'MMM dd, yyyy')}</td>
+                          <td className="p-4 whitespace-nowrap text-xs text-muted-foreground">{format(new Date(lead.created_at), isRtl ? 'yyyy/MM/dd' : 'MMM dd, yyyy')}</td>
                           <td className="p-4 whitespace-nowrap text-xs">
-                            <span className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold">{lead.lead_sources?.name || 'Direct'}</span>
+                            <span className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold">{lead.lead_sources?.name || (isRtl ? 'مباشر' : 'Direct')}</span>
                           </td>
                           <td className="p-4 whitespace-nowrap text-center">
                             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-muted/20 text-muted-foreground">
-                              {lead.status.replace('_', ' ')}
+                              {isRtl ? getStatusLabelAr(lead.status) : lead.status.replace('_', ' ')}
                             </span>
                           </td>
-                          <td className="p-4 whitespace-nowrap text-right text-xs font-bold text-primary">
-                            {leadQuotesTotal > 0 ? `${leadQuotesTotal.toFixed(3)} OMR` : '-'}
+                          <td className={`p-4 whitespace-nowrap text-xs font-bold text-primary ${isRtl ? 'text-left' : 'text-right'}`}>
+                            {leadQuotesTotal > 0 ? (isRtl ? `${leadQuotesTotal.toFixed(3)} ر.ع.` : `${leadQuotesTotal.toFixed(3)} OMR`) : '-'}
                           </td>
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">No opportunities found in the active timeframe.</td>
+                      <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">{isRtl ? 'لم يتم العثور على فرص في الفترة الزمنية النشطة.' : 'No opportunities found in the active timeframe.'}</td>
                     </tr>
                   )}
                 </tbody>
@@ -684,9 +733,9 @@ export default function EmployeeReports() {
                   <div className="absolute -right-6 -top-6 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all" />
                   <div className="flex items-start justify-between relative z-10">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Payments Collected</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{isRtl ? 'المدفوعات المحصلة' : 'Payments Collected'}</p>
                       <h3 className="text-3xl font-syne font-bold text-foreground">
-                        <span className="text-emerald-500 text-lg mr-1">OMR</span>
+                        <span className="text-emerald-500 text-lg mr-1">{isRtl ? 'ر.ع.' : 'OMR'}</span>
                         {totalCollected.toFixed(3)}
                       </h3>
                     </div>
@@ -700,7 +749,7 @@ export default function EmployeeReports() {
                   <div className="absolute -right-6 -top-6 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all" />
                   <div className="flex items-start justify-between relative z-10">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Jobs Involved</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{isRtl ? 'الوظائف المعنية' : 'Jobs Involved'}</p>
                       <h3 className="text-3xl font-syne font-bold text-foreground">
                         {uniqueJobsFromPaymentsSet.size}
                       </h3>
@@ -715,7 +764,7 @@ export default function EmployeeReports() {
                   <div className="absolute -right-6 -top-6 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all" />
                   <div className="flex items-start justify-between relative z-10">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Transactions</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{isRtl ? 'إجمالي المعاملات' : 'Total Transactions'}</p>
                       <h3 className="text-3xl font-syne font-bold text-foreground">
                         {filteredPayments.length}
                       </h3>
@@ -732,7 +781,7 @@ export default function EmployeeReports() {
                   <div className="absolute -right-6 -top-6 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all" />
                   <div className="flex items-start justify-between relative z-10">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Jobs Assigned</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{isRtl ? 'إجمالي الوظائف المسندة' : 'Total Jobs Assigned'}</p>
                       <h3 className="text-3xl font-syne font-bold text-foreground">
                         {filteredJobs.length}
                       </h3>
@@ -747,7 +796,7 @@ export default function EmployeeReports() {
                   <div className="absolute -right-6 -top-6 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all" />
                   <div className="flex items-start justify-between relative z-10">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Fully Completed Jobs</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{isRtl ? 'الوظائف المكتملة بالكامل' : 'Fully Completed Jobs'}</p>
                       <h3 className="text-3xl font-syne font-bold text-foreground">
                         {completedJobsCount}
                       </h3>
@@ -762,9 +811,9 @@ export default function EmployeeReports() {
                   <div className="absolute -right-6 -top-6 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all" />
                   <div className="flex items-start justify-between relative z-10">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Expected Profit</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{isRtl ? 'إجمالي الربح المتوقع' : 'Total Expected Profit'}</p>
                       <h3 className="text-3xl font-syne font-bold text-foreground">
-                        <span className="text-amber-500 text-lg mr-1">OMR</span>
+                        <span className="text-amber-500 text-lg mr-1">{isRtl ? 'ر.ع.' : 'OMR'}</span>
                         {totalJobProfits.toFixed(3)}
                       </h3>
                     </div>
@@ -782,14 +831,14 @@ export default function EmployeeReports() {
                 <div className="flex items-start justify-between relative z-10">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
-                      INC (Target 1200)
+                      {isRtl ? 'الحافز (الهدف ١٢٠٠)' : 'INC (Target 1200)'}
                     </p>
                     <h3 className="text-3xl font-syne font-bold text-foreground">
-                      <span className="text-emerald-500 text-lg mr-1">OMR</span>
+                      <span className="text-emerald-500 text-lg mr-1">{isRtl ? 'ر.ع.' : 'OMR'}</span>
                       {incentiveAmount > 0 ? incentiveAmount.toFixed(3) : '0.000'}
                     </h3>
                     <p className="text-[9px] text-muted-foreground mt-2">
-                      Profit Base: {applicableProfit.toFixed(3)}
+                      {isRtl ? 'قاعدة الربح: ' : 'Profit Base: '} {applicableProfit.toFixed(3)}
                     </p>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
@@ -804,38 +853,38 @@ export default function EmployeeReports() {
           <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div className="relative w-full max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                <Search className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-muted-foreground`} size={16} />
                 <input
                   type="text"
-                  placeholder="Search Client, Job Code, Service..."
+                  placeholder={isRtl ? 'البحث عن العميل، رمز الوظيفة، الخدمة...' : 'Search Client, Job Code, Service...'}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-muted/50 border border-border rounded-xl pl-10 pr-4 py-2 text-sm outline-none focus:border-primary transition-colors placeholder:text-muted-foreground/50"
+                  className={`w-full bg-muted/50 border border-border rounded-xl ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 text-sm outline-none focus:border-primary transition-colors placeholder:text-muted-foreground/50`}
                 />
               </div>
             </div>
 
             <div className="flex-1 overflow-auto no-scrollbar">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full border-collapse hidden md:table" dir={isRtl ? 'rtl' : 'ltr'}>
                 <thead className="sticky top-0 bg-card z-10 shadow-sm">
-                  <tr>
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border w-[140px]">Date</th>
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border min-w-[200px]">Service Details</th>
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border">Client</th>
+                  <tr className="text-right">
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border w-[140px] text-start">{isRtl ? 'التاريخ' : 'Date'}</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border min-w-[200px] text-start">{isRtl ? 'تفاصيل الخدمة' : 'Service Details'}</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-start">{isRtl ? 'العميل' : 'Client'}</th>
                     
                     {reportType === 'payments' ? (
                       <>
-                        <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-right">Job Profit</th>
-                        <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-right">Payment Amount</th>
+                        <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-start text-right">{isRtl ? 'ربح الوظيفة' : 'Job Profit'}</th>
+                        <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-start text-right">{isRtl ? 'مبلغ الدفعة' : 'Payment Amount'}</th>
                       </>
                     ) : (
                       <>
-                        <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-right">Service Fee</th>
-                        <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-right">Ministry Fee</th>
-                        <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-center">Payment Status</th>
+                        <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-start text-right">{isRtl ? 'رسوم الخدمة' : 'Service Fee'}</th>
+                        <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-start text-right">{isRtl ? 'الرسوم الحكومية' : 'Ministry Fee'}</th>
+                        <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-center">{isRtl ? 'حالة الدفع' : 'Payment Status'}</th>
                       </>
                     )}
-                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-center">Job Status</th>
+                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border text-center">{isRtl ? 'حالة الوظيفة' : 'Job Status'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -844,7 +893,7 @@ export default function EmployeeReports() {
                       <td colSpan={6} className="p-8 text-center text-muted-foreground">
                         <div className="animate-pulse flex flex-col items-center gap-2">
                           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                          Loading report...
+                          {isRtl ? 'جاري تحميل التقرير...' : 'Loading report...'}
                         </div>
                       </td>
                     </tr>
@@ -855,7 +904,7 @@ export default function EmployeeReports() {
                           <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
                             <AlertCircle size={24} className="text-muted-foreground/50" />
                           </div>
-                          <p>No records found for this period.</p>
+                          <p>{isRtl ? 'لم يتم العثور على سجلات لهذه الفترة.' : 'No records found for this period.'}</p>
                         </div>
                       </td>
                     </tr>
@@ -865,14 +914,14 @@ export default function EmployeeReports() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         key={item.id} 
-                        className="border-b border-border/50 hover:bg-muted/20 transition-colors group"
+                        className="border-b border-border/50 hover:bg-muted/20 transition-colors group text-start"
                       >
                         <td className="p-4">
                           <div className="flex flex-col">
                             <span className="text-sm font-medium text-foreground">
-                              {format(new Date(item.created_at), 'dd MMM yyyy')}
+                              {format(new Date(item.created_at), isRtl ? 'dd LLL yyyy' : 'dd MMM yyyy')}
                             </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">
                               {format(new Date(item.created_at), 'HH:mm')}
                             </span>
                           </div>
@@ -880,7 +929,9 @@ export default function EmployeeReports() {
                         <td className="p-4">
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-foreground">
-                              {reportType === 'payments' ? (item.job?.service?.name_en) : (item.service?.name_en)}
+                              {reportType === 'payments' 
+                                ? (isRtl ? (item.job?.service?.name_ar || item.job?.service?.name_en) : item.job?.service?.name_en) 
+                                : (isRtl ? (item.service?.name_ar || item.service?.name_en) : item.service?.name_en)}
                             </span>
                             <span className="text-[10px] font-mono text-muted-foreground">
                               {reportType === 'payments' ? item.job?.job_code : item.job_code}
@@ -898,20 +949,20 @@ export default function EmployeeReports() {
                             <td className="p-4 text-right">
                               <div className="flex flex-col items-end">
                                 <span className="text-sm font-bold text-amber-500">
-                                  {item.job?.work_fee?.toFixed(3) || '0.000'} OMR
+                                  {item.job?.work_fee?.toFixed(3) || '0.000'} {isRtl ? 'ر.ع.' : 'OMR'}
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">
-                                  Min Fee: {item.job?.ministry_fee?.toFixed(3) || '0.000'}
+                                  {isRtl ? 'الحد الأدنى للرسوم:' : 'Min Fee:'} {item.job?.ministry_fee?.toFixed(3) || '0.000'}
                                 </span>
                               </div>
                             </td>
                             <td className="p-4 text-right">
                               <div className="flex flex-col items-end">
                                 <span className="text-sm font-bold text-emerald-500">
-                                  {item.amount?.toFixed(3) || '0.000'} OMR
+                                  {item.amount?.toFixed(3) || '0.000'} {isRtl ? 'ر.ع.' : 'OMR'}
                                 </span>
                                 <span className="text-[9px] uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full mt-1">
-                                  {item.payment_method}
+                                  {item.payment_method === 'online' ? (isRtl ? 'إلكتروني' : 'online') : item.payment_method === 'bank_transfer' ? (isRtl ? 'تحويل بنكي' : 'bank_transfer') : item.payment_method}
                                 </span>
                               </div>
                             </td>
@@ -922,27 +973,27 @@ export default function EmployeeReports() {
                             <td className="p-4 text-right">
                               <div className="flex flex-col items-end">
                                 <span className="text-sm font-bold text-amber-500">
-                                  {item.work_fee?.toFixed(3) || '0.000'} OMR
+                                  {item.work_fee?.toFixed(3) || '0.000'} {isRtl ? 'ر.ع.' : 'OMR'}
                                 </span>
-                                <span className="text-[10px] text-muted-foreground/60 uppercase tracking-widest">Service Fee</span>
+                                <span className="text-[10px] text-muted-foreground/60 uppercase tracking-widest">{isRtl ? 'رسوم الخدمة' : 'Service Fee'}</span>
                               </div>
                             </td>
                             {/* Ministry Fee */}
                             <td className="p-4 text-right">
                               <div className="flex flex-col items-end">
                                 <span className="text-sm font-bold text-blue-400">
-                                  {item.ministry_fee?.toFixed(3) || '0.000'} OMR
+                                  {item.ministry_fee?.toFixed(3) || '0.000'} {isRtl ? 'ر.ع.' : 'OMR'}
                                 </span>
-                                <span className="text-[10px] text-muted-foreground/60 uppercase tracking-widest">Ministry</span>
+                                <span className="text-[10px] text-muted-foreground/60 uppercase tracking-widest">{isRtl ? 'حكومية' : 'Ministry'}</span>
                               </div>
                             </td>
                             <td className="p-4 text-center">
                               {item.remaining_paid ? (
-                                <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Fully Paid</span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">{isRtl ? 'مدفوع بالكامل' : 'Fully Paid'}</span>
                               ) : item.advance_paid ? (
-                                <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">Advance Paid</span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">{isRtl ? 'مدفوع مقدماً' : 'Advance Paid'}</span>
                               ) : (
-                                <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20">Unpaid</span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20">{isRtl ? 'غير مدفوع' : 'Unpaid'}</span>
                               )}
                             </td>
                           </>
@@ -953,7 +1004,9 @@ export default function EmployeeReports() {
                             getStatusStyle(reportType === 'payments' ? item.job?.status : item.status)
                           }`}>
                             {getStatusIcon(reportType === 'payments' ? item.job?.status : item.status)}
-                            {(reportType === 'payments' ? item.job?.status : item.status)?.replace('_', ' ')}
+                            {reportType === 'payments' 
+                              ? (item.job?.status === 'completed' ? (isRtl ? 'مكتمل' : 'Completed') : item.job?.status === 'active' || item.job?.status === 'in_progress' ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'ملغي' : item.job?.status))
+                              : (item.status === 'completed' ? (isRtl ? 'مكتمل' : 'Completed') : item.status === 'active' || item.status === 'in_progress' ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'ملغي' : item.status))}
                           </span>
                         </td>
                       </motion.tr>
@@ -961,6 +1014,100 @@ export default function EmployeeReports() {
                   )}
                 </tbody>
               </table>
+
+              {/* Mobile Cards (Hidden on md+) */}
+              <div className="md:hidden p-4 space-y-4" dir={isRtl ? 'rtl' : 'ltr'}>
+                {isLoading ? (
+                  <div className="flex flex-col items-center justify-center p-8 gap-2 text-muted-foreground">
+                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm">{isRtl ? 'جاري تحميل التقرير...' : 'Loading report...'}</span>
+                  </div>
+                ) : (reportType === 'payments' ? filteredPayments.length === 0 : filteredJobs.length === 0) ? (
+                  <div className="flex flex-col items-center gap-3 p-12 text-center text-muted-foreground bg-muted/10 rounded-2xl border border-dashed border-border">
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                      <AlertCircle size={24} className="text-muted-foreground/50" />
+                    </div>
+                    <p className="text-sm">{isRtl ? 'لم يتم العثور على سجلات لهذه الفترة.' : 'No records found for this period.'}</p>
+                  </div>
+                ) : (
+                  (reportType === 'payments' ? filteredPayments : filteredJobs).map((item: any) => (
+                    <div key={item.id} className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col gap-3 text-start">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold text-foreground truncate">
+                            {reportType === 'payments' 
+                              ? (isRtl ? (item.job?.service?.name_ar || item.job?.service?.name_en) : item.job?.service?.name_en) 
+                              : (isRtl ? (item.service?.name_ar || item.service?.name_en) : item.service?.name_en)}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-widest font-mono truncate">
+                            {reportType === 'payments' ? item.job?.job_code : item.job_code}
+                          </div>
+                        </div>
+                        <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border ${
+                          getStatusStyle(reportType === 'payments' ? item.job?.status : item.status)
+                        }`}>
+                          {getStatusIcon(reportType === 'payments' ? item.job?.status : item.status)}
+                          {reportType === 'payments' 
+                            ? (item.job?.status === 'completed' ? (isRtl ? 'مكتمل' : 'Completed') : item.job?.status === 'active' || item.job?.status === 'in_progress' ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'ملغي' : item.job?.status))
+                            : (item.status === 'completed' ? (isRtl ? 'مكتمل' : 'Completed') : item.status === 'active' || item.status === 'in_progress' ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'ملغي' : item.status))}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 text-xs text-foreground bg-muted/30 px-3 py-2.5 rounded-lg border border-border/50">
+                        <User size={14} className="text-muted-foreground shrink-0" />
+                        <span className="font-medium truncate">
+                          {reportType === 'payments' ? (item.job?.client?.full_name) : (item.client?.full_name)}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                        {reportType === 'payments' ? (
+                          <>
+                            <div>
+                              <div className="text-[9px] text-muted-foreground uppercase tracking-widest mb-0.5">{isRtl ? 'ربح الوظيفة' : 'Job Profit'}</div>
+                              <div className="text-xs font-bold text-amber-500">{item.job?.work_fee?.toFixed(3) || '0.000'} {isRtl ? 'ر.ع.' : 'OMR'}</div>
+                              <div className="text-[9px] text-muted-foreground mt-0.5">{isRtl ? 'الأدنى:' : 'Min:'} {item.job?.ministry_fee?.toFixed(3) || '0.000'}</div>
+                            </div>
+                            <div className={isRtl ? 'text-left' : 'text-right'}>
+                              <div className="text-[9px] text-muted-foreground uppercase tracking-widest mb-0.5">{isRtl ? 'الدفعة' : 'Payment'}</div>
+                              <div className="text-xs font-bold text-emerald-500">{item.amount?.toFixed(3) || '0.000'} {isRtl ? 'ر.ع.' : 'OMR'}</div>
+                              <div className="inline-block text-[8px] uppercase tracking-widest text-primary bg-primary/10 px-1.5 py-0.5 rounded mt-0.5">
+                                {item.payment_method === 'online' ? (isRtl ? 'إلكتروني' : 'online') : item.payment_method === 'bank_transfer' ? (isRtl ? 'تحويل بنكي' : 'bank_transfer') : item.payment_method}
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <div className="text-[9px] text-muted-foreground uppercase tracking-widest mb-0.5">{isRtl ? 'رسوم الخدمة' : 'Service Fee'}</div>
+                              <div className="text-xs font-bold text-amber-500">{item.work_fee?.toFixed(3) || '0.000'} {isRtl ? 'ر.ع.' : 'OMR'}</div>
+                            </div>
+                            <div className={isRtl ? 'text-left' : 'text-right'}>
+                              <div className="text-[9px] text-muted-foreground uppercase tracking-widest mb-0.5">{isRtl ? 'الرسوم الحكومية' : 'Ministry Fee'}</div>
+                              <div className="text-xs font-bold text-blue-400">{item.ministry_fee?.toFixed(3) || '0.000'} {isRtl ? 'ر.ع.' : 'OMR'}</div>
+                            </div>
+                            <div className="col-span-2 flex justify-between items-center pt-2 mt-1 border-t border-border/30">
+                              <span className="text-[9px] text-muted-foreground uppercase tracking-widest">{isRtl ? 'الدفعة' : 'Payment'}</span>
+                              {item.remaining_paid ? (
+                                <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">{isRtl ? 'مدفوع بالكامل' : 'Fully Paid'}</span>
+                              ) : item.advance_paid ? (
+                                <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">{isRtl ? 'مدفوع مقدماً' : 'Advance Paid'}</span>
+                              ) : (
+                                <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-rose-500/10 text-rose-500 border border-rose-500/20">{isRtl ? 'غير مدفوع' : 'Unpaid'}</span>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-1 justify-end">
+                        <Clock size={10} />
+                        {format(new Date(item.created_at), 'dd MMM yyyy, HH:mm')}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </>

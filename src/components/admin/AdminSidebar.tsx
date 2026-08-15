@@ -34,11 +34,11 @@ function cn(...inputs: ClassValue[]) {
 interface SidebarProps {
   collapsed: boolean;
   setCollapsed: (val: boolean) => void;
+  mobileMenuOpen: boolean;
+  setMobileMenuOpen: (val: boolean) => void;
 }
 
-
-
-const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
+const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed, mobileMenuOpen, setMobileMenuOpen }) => {
   const { profile, signOut } = useAuth();
   const { t, i18n } = useTranslation();
   const { data: requests } = useOperationalRequests();
@@ -83,11 +83,22 @@ const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   };
 
   return (
-    <motion.aside
-      initial={false}
-      animate={{ width: collapsed ? 72 : 260 }}
-      className="relative z-50 flex flex-col bg-sidebar border-r border-border h-screen transition-all duration-300 ease-in-out"
-    >
+    <>
+      {/* Mobile Backdrop overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[45] md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+      
+      <motion.aside
+        initial={false}
+        animate={{ width: collapsed ? 72 : 260 }}
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar border-r border-border h-screen transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${isRtl ? 'right-0 left-auto md:right-auto md:left-0' : ''}`}
+      >
       {/* Logo Section */}
       <div className="flex h-20 items-center px-6 overflow-hidden">
         <div className="flex items-center gap-3 shrink-0">
@@ -124,6 +135,11 @@ const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <motion.div key={item.id} variants={itemVariants}>
             <NavLink
               to={item.path}
+              onClick={() => {
+                if (window.innerWidth < 768) {
+                  setMobileMenuOpen(false);
+                }
+              }}
               className={({ isActive }) =>
                 cn(
                   "group relative flex items-center h-12 rounded-xl transition-all duration-200 outline-none",
@@ -180,10 +196,18 @@ const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           )}
         </div>
 
+        {/* Toggle Collapse Button (Desktop Only) */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="hidden md:flex absolute -right-3 top-10 w-6 h-6 bg-primary border-2 border-background rounded-full items-center justify-center text-primary-foreground hover:scale-110 transition-transform cursor-pointer z-50 shadow-md"
+        >
+           {isRtl ? (collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />) : (collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />)}
+        </button>
+
         <div className="flex flex-col gap-1">
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="flex items-center gap-3 w-full h-10 rounded-xl text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all text-sm group"
+            className="hidden flex items-center gap-3 w-full h-10 rounded-xl text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all text-sm group"
           >
             <div className={cn("shrink-0", collapsed ? "w-full flex justify-center" : "px-3 flex items-center gap-3")}>
                {collapsed ? (isRtl ? <ChevronLeft size={20} /> : <ChevronRight size={20} />) : (isRtl ? <ChevronRight size={20} /> : <ChevronLeft size={20} />)}
@@ -203,6 +227,7 @@ const AdminSidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
         </div>
       </div>
     </motion.aside>
+    </>
   );
 };
 

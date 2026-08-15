@@ -23,6 +23,7 @@ export interface ServicePackage {
   description_ar: string;
   icon: string;
   discount_percentage: number;
+  fixed_price?: number | null;
   is_active: boolean;
   services: PackageServiceRelation[];
   created_at: string;
@@ -88,6 +89,7 @@ export const useAdminPackage = (id?: string) => {
           description_ar: '',
           icon: 'Package',
           discount_percentage: 0,
+          fixed_price: null,
           is_active: true,
           services: [],
           created_at: new Date().toISOString()
@@ -179,6 +181,7 @@ export const useSavePackage = () => {
         description_ar: rest.description_ar,
         icon: rest.icon,
         discount_percentage: rest.discount_percentage,
+        fixed_price: rest.fixed_price,
         is_active: rest.is_active,
         updated_at: new Date().toISOString()
       };

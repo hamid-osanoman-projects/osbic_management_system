@@ -17,7 +17,6 @@ import WorkflowProgressTab from '../../components/jobs/WorkflowProgressTab';
 import DocumentsTab from '../../components/jobs/DocumentsTab';
 import FinancialsTab from '../../components/jobs/FinancialsTab';
 import MessagesTab from '../../components/jobs/MessagesTab';
-import ActivityLogTab from '../../components/jobs/ActivityLogTab';
 import { JobTimelinePanel } from '../../components/jobs/JobTimelinePanel';
 import DeleteJobModal from '../../components/jobs/DeleteJobModal';
 import JobDeletionRequestModal from '../../components/jobs/JobDeletionRequestModal';
@@ -87,7 +86,6 @@ const JobDetail = () => {
     { id: 'documents', label: 'Documents', icon: FolderOpen, count: documents.length },
     { id: 'financials', label: 'Financials', icon: DollarSign },
     { id: 'messages', label: 'Chat Support', icon: MessageCircle, count: unreadCount > 0 ? unreadCount : undefined },
-    { id: 'logs', label: 'Activity Log', icon: Activity },
   ];
 
   const getStatusColor = (status: string) => {
@@ -140,6 +138,7 @@ const JobDetail = () => {
           remainingAmount={job.remaining_due_amount}
           totalFee={job.total_fee}
           isClient={!isAdmin && !isEmployee}
+          hideActionButton={isAdmin}
           jobId={job.id}
           onAction={() => setActiveTab('financials')}
         />
@@ -348,7 +347,6 @@ const JobDetail = () => {
              {activeTab === 'documents' && <DocumentsTab jobId={job.id} documents={documents} isEmployee={isEmployee} isAdmin={isAdmin} />}
              {activeTab === 'financials' && <FinancialsTab job={job} steps={steps} isAdmin={isAdmin} isEmployee={isEmployee} />}
              {activeTab === 'messages' && <MessagesTab jobId={job.id} messages={messages} isAdmin={isAdmin} currentUserType={currentUserType as any} scope="staff_client" />}
-             {activeTab === 'logs' && <ActivityLogTab logs={logs} />}
           </motion.div>
         </AnimatePresence>
       </div>

@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { 
   X, Zap, Search, ChevronRight, User, 
   Building2, Briefcase, Plus, CheckCircle2, ArrowLeft, ArrowRight,
-  Hash, Users, Shield, GitBranch, Layers
+  Hash, Users, Shield, GitBranch, Layers, LayoutGrid, List
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import CreateClientSlideOver from '../shared/clients/CreateClientSlideOver';
@@ -119,7 +119,19 @@ interface ServiceLineItem {
   isCustom?: boolean;
 }
 
-export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, onJobCreated: () => void }) => {
+export const JobBuilder = ({ 
+  onClose, 
+  onJobCreated,
+  preSelectedClientId,
+  preSelectedServiceId,
+  preSelectedEntryType
+}: { 
+  onClose?: () => void;
+  onJobCreated: () => void;
+  preSelectedClientId?: string | null;
+  preSelectedServiceId?: string | null;
+  preSelectedEntryType?: 'lead' | 'walkin' | 'direct' | 'renewal' | null;
+}) => {
   const { profile } = useAuth();
   const { data: services, isLoading: loadingServices } = useAdminServices();
   const { data: packages, isLoading: loadingPackages } = useAdminPackages();
@@ -138,9 +150,10 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
 
   // Step 2: Service Selection
   const [serviceTab, setServiceTab] = useState<'services' | 'packages'>('services');
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
+  const [serviceViewMode, setServiceViewMode] = useState<'grid' | 'list'>('grid');
 
   // Step 3: Configuration — service line items with quantities & fees
   const [serviceLines, setServiceLines] = useState<ServiceLineItem[]>([]);
@@ -150,7 +163,7 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
   // Init Data
   useEffect(() => {
     const fetchDropdownData = async () => {
-      const { data: emps } = await supabase.from('profiles').select('id, full_name').eq('role', 'employee');
+      const { data: emps } = await supabase.from('profiles').select('id, full_name, department').eq('role', 'employee');
       const { data: clis } = await supabase.from('profiles').select('id, full_name, phone').eq('role', 'client');
       if (emps) setEmployees(emps);
       if (clis) setClients(clis);
@@ -158,6 +171,46 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
     fetchDropdownData();
     if (profile) setAssignedTo(profile.id);
   }, [profile]);
+
+  useEffect(() => {
+    if (clients.length > 0 && preSelectedClientId) {
+      const cli = clients.find(c => c.id === preSelectedClientId);
+      if (cli) {
+        setSelectedClient(cli);
+        setStep(2);
+      }
+    }
+  }, [clients, preSelectedClientId]);
+
+  useEffect(() => {
+    if (services && services.length > 0 && preSelectedServiceId) {
+      const svc = services.find(s => s.id === preSelectedServiceId);
+      if (svc) {
+        setSelectedPackage(null);
+        setSelectedServices([svc]);
+        setServiceLines([{
+          service_id: svc.id,
+          service_name: svc.name_en,
+          service_name_ar: svc.name_ar,
+          quantity: 1,
+          work_fee: svc.work_fee || 0,
+          ministry_fee: svc.ministry_fee || 0,
+          is_optional: false,
+          is_parallel: false,
+          notes: '',
+          estimated_days_min: svc.estimated_days || 0,
+          estimated_days_max: svc.estimated_days || 0,
+          requires_pro: svc.requires_pro || false,
+        }]);
+      }
+    }
+  }, [services, preSelectedServiceId]);
+
+  useEffect(() => {
+    if (preSelectedEntryType) {
+      setEntryType(preSelectedEntryType);
+    }
+  }, [preSelectedEntryType]);
 
   // Handle Client Search
   const filteredClients = clients.filter(c => 
@@ -172,36 +225,63 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
   };
 
   const handleSelectService = (service: Service) => {
-    setSelectedService(service);
     setSelectedPackage(null);
-    setServiceLines([{
-      service_id: service.id,
-      service_name: service.name_en,
-      service_name_ar: service.name_ar,
+    let newSelected = [...selectedServices];
+    const exists = newSelected.some(s => s.id === service.id);
+    if (exists) {
+      newSelected = newSelected.filter(s => s.id !== service.id);
+    } else {
+      newSelected.push(service);
+    }
+    setSelectedServices(newSelected);
+
+    setServiceLines(newSelected.map(s => ({
+      service_id: s.id,
+      service_name: s.name_en,
+      service_name_ar: s.name_ar,
       quantity: 1,
-      work_fee: service.work_fee || 0,
-      ministry_fee: service.ministry_fee || 0,
+      work_fee: s.work_fee || 0,
+      ministry_fee: s.ministry_fee || 0,
       is_optional: false,
       is_parallel: false,
       notes: '',
-      estimated_days_min: service.estimated_days || 0,
-      estimated_days_max: service.estimated_days || 0,
-      requires_pro: service.requires_pro || false,
-    }]);
+      estimated_days_min: s.estimated_days || 0,
+      estimated_days_max: s.estimated_days || 0,
+      requires_pro: s.requires_pro || false,
+    })));
   };
 
   const handleSelectPackage = (pkg: any) => {
     setSelectedPackage(pkg);
-    setSelectedService(null);
+    setSelectedServices([]);
+    
+    // Calculate total original work fee to distribute fixed price if needed
+    const totalOriginalWorkFee = (pkg.services || []).reduce((sum: number, ps: any) => {
+      const svc = ps.service || ps;
+      return sum + ((svc.work_fee || 0) * (ps.default_quantity || 1));
+    }, 0);
+
     // Map PackageServiceRelation → ServiceLineItem
     const lines: ServiceLineItem[] = (pkg.services || []).map((ps: any) => {
       const svc = ps.service || ps;
+      const originalWorkFee = svc.work_fee || 0;
+      let finalWorkFee = originalWorkFee;
+
+      if (pkg.fixed_price != null && totalOriginalWorkFee > 0) {
+        // Distribute fixed price proportionally
+        const ratio = originalWorkFee / totalOriginalWorkFee;
+        finalWorkFee = pkg.fixed_price * ratio;
+      } else if (pkg.discount_percentage > 0) {
+        // Apply discount percentage
+        finalWorkFee = originalWorkFee * (1 - pkg.discount_percentage / 100);
+      }
+
       return {
         service_id: ps.service_id || svc.id,
         service_name: svc.name_en || '',
         service_name_ar: svc.name_ar || '',
         quantity: ps.default_quantity || 1,
-        work_fee: svc.work_fee || 0,
+        work_fee: Number(finalWorkFee.toFixed(3)),
         ministry_fee: svc.ministry_fee || 0,
         is_optional: ps.is_optional || false,
         is_parallel: ps.is_parallel || false,
@@ -224,6 +304,10 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
       const totalMin = serviceLines.reduce((s, l) => s + (l.ministry_fee * l.quantity), 0);
       const primaryService = serviceLines[0];
 
+      const jobTitle = selectedPackage 
+        ? selectedPackage.name_en 
+        : (selectedServices.length > 0 ? selectedServices.map(s => s.name_en).join(' + ') : (primaryService.service_name || 'Standard Service'));
+
       // 1. Create the master Job record
       const { data: jobData, error: jobError } = await (supabase.from('jobs').insert({
         job_code: `JOB-${Math.floor(Math.random() * 100000)}`,
@@ -232,6 +316,7 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
         assigned_by: profile?.id,
         service_id: primaryService.service_id,
         status: 'draft',
+        custom_name: jobTitle,
         total_fee: totalWork + totalMin,
         work_fee: totalWork,
         ministry_fee: totalMin,
@@ -244,6 +329,7 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
         entry_type: entryType,
         sales_employee_id: profile?.id,
         ops_employee_id: assignedTo || profile?.id,
+        branch_id: profile?.branch_id,
       } as any).select().single() as any);
 
       if (jobError) throw jobError;
@@ -434,74 +520,187 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
                  </div>
               </div>
 
-              {serviceTab === 'packages' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {packages?.filter(p => p.is_active).map(pkg => (
-                    <button
-                      key={pkg.id}
-                      onClick={() => handleSelectPackage(pkg)}
-                      className={`relative overflow-hidden p-6 rounded-[24px] border transition-all text-left group ${
-                        selectedPackage?.id === pkg.id 
-                          ? 'border-gold bg-gold/5 shadow-[0_0_30px_rgba(212,175,55,0.1)]' 
-                          : 'border-white/10 bg-[#131824] hover:border-white/30 hover:bg-white/5'
-                      }`}
+              {/* Toolbar: Search & View toggle */}
+              <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                <div className="relative flex-1 w-full">
+                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+                  <input
+                    type="text"
+                    placeholder={serviceTab === 'services' ? "Search services by name or category..." : "Search packages by name or description..."}
+                    value={serviceSearchQuery}
+                    onChange={(e) => setServiceSearchQuery(e.target.value)}
+                    className="w-full bg-[#131824]/50 border border-white/5 focus:border-gold/30 rounded-xl pl-11 pr-4 py-3 text-xs text-white placeholder:text-white/30 outline-none transition-all"
+                  />
+                </div>
+                
+                {serviceTab === 'services' && (
+                  <div className="flex bg-black/20 p-1 rounded-xl border border-white/5 shrink-0">
+                    <button 
+                      onClick={() => setServiceViewMode('grid')}
+                      className={`p-1.5 rounded-lg transition-all ${serviceViewMode === 'grid' ? 'bg-white/10 text-gold' : 'text-white/40 hover:text-white'}`}
+                      title="Grid View"
                     >
-                      <div className="flex items-start gap-4 relative z-10">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${selectedPackage?.id === pkg.id ? 'bg-gold/20 text-gold' : 'bg-white/5 text-white/60 group-hover:text-white'}`}>
-                          <Briefcase size={24} />
+                      <LayoutGrid size={14} />
+                    </button>
+                    <button 
+                      onClick={() => setServiceViewMode('list')}
+                      className={`p-1.5 rounded-lg transition-all ${serviceViewMode === 'list' ? 'bg-white/10 text-gold' : 'text-white/40 hover:text-white'}`}
+                      title="List View"
+                    >
+                      <List size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {serviceTab === 'packages' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[450px] overflow-y-auto pr-1 no-scrollbar">
+                  {(() => {
+                    const filteredPackages = (packages || []).filter(pkg => 
+                      pkg.is_active && 
+                      (pkg.name_en?.toLowerCase().includes(serviceSearchQuery.toLowerCase()) || 
+                       pkg.description_en?.toLowerCase().includes(serviceSearchQuery.toLowerCase()))
+                    );
+
+                    if (filteredPackages.length === 0) {
+                      return (
+                        <div className="col-span-full h-[200px] flex items-center justify-center border-2 border-dashed border-white/10 rounded-3xl">
+                          <p className="text-white/40 font-bold uppercase tracking-widest text-xs">No active packages found</p>
                         </div>
-                        <div>
-                          <h4 className={`font-bold uppercase tracking-wider text-sm leading-tight mb-1 ${selectedPackage?.id === pkg.id ? 'text-gold' : 'text-white'}`}>
-                            {pkg.name_en}
-                          </h4>
-                          <p className="text-xs text-white/50 line-clamp-2 mb-2">{pkg.description_en}</p>
-                          <div className="flex gap-2">
-                            <span className="text-[10px] font-bold text-gold bg-gold/10 px-2 py-0.5 rounded-full border border-gold/20">{pkg.services.length} Services</span>
-                            {pkg.discount_percentage > 0 && (
-                               <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">-{pkg.discount_percentage}% OFF</span>
-                            )}
+                      );
+                    }
+
+                    return filteredPackages.map(pkg => (
+                      <button
+                        key={pkg.id}
+                        onClick={() => handleSelectPackage(pkg)}
+                        className={`relative overflow-hidden p-6 rounded-[24px] border transition-all text-left group ${
+                          selectedPackage?.id === pkg.id 
+                            ? 'border-gold bg-gold/5 shadow-[0_0_30px_rgba(212,175,55,0.1)]' 
+                            : 'border-white/10 bg-[#131824] hover:border-white/30 hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-start gap-4 relative z-10">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${selectedPackage?.id === pkg.id ? 'bg-gold/20 text-gold' : 'bg-white/5 text-white/60 group-hover:text-white'}`}>
+                            <Briefcase size={24} />
+                          </div>
+                          <div>
+                            <h4 className={`font-bold uppercase tracking-wider text-sm leading-tight mb-1 ${selectedPackage?.id === pkg.id ? 'text-gold' : 'text-white'}`}>
+                              {pkg.name_en}
+                            </h4>
+                            <p className="text-xs text-white/50 line-clamp-2 mb-2">{pkg.description_en}</p>
+                            <div className="flex gap-2 mt-1">
+                              <span className="text-[10px] font-bold text-gold bg-gold/10 px-2 py-0.5 rounded-full border border-gold/20">{pkg.services?.length || 0} Services</span>
+                              {pkg.fixed_price != null ? (
+                                 <span className="text-[10px] font-bold text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full border border-blue-400/20">{pkg.fixed_price} OMR Flat</span>
+                              ) : pkg.discount_percentage > 0 ? (
+                                 <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">-{pkg.discount_percentage}% OFF</span>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      {selectedPackage?.id === pkg.id && (
-                        <div className="absolute top-4 right-4 text-gold">
-                          <CheckCircle2 size={20} />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                  {(!packages || packages.filter(p => p.is_active).length === 0) && (
-                     <div className="col-span-full h-[200px] flex items-center justify-center border-2 border-dashed border-white/10 rounded-3xl">
-                        <p className="text-white/40 font-bold uppercase tracking-widest text-xs">No active packages found</p>
-                     </div>
-                  )}
+                        {selectedPackage?.id === pkg.id && (
+                          <div className="absolute top-4 right-4 text-gold">
+                            <CheckCircle2 size={20} />
+                          </div>
+                        )}
+                      </button>
+                    ));
+                  })()}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {services?.filter(s => s.is_active).map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => handleSelectService(s)}
-                      className={`relative overflow-hidden p-6 rounded-[24px] border transition-all text-left group ${
-                        selectedService?.id === s.id 
-                          ? 'border-gold bg-gold/5 shadow-[0_0_30px_rgba(212,175,55,0.1)]' 
-                          : 'border-white/10 bg-[#131824] hover:border-white/30 hover:bg-white/5'
-                      }`}
-                    >
-                      <div className="flex flex-col items-center justify-center text-center h-24 gap-4 relative z-10">
-                        <Building2 size={24} className={selectedService?.id === s.id ? 'text-gold' : 'text-white/60 group-hover:text-white'} />
-                        <span className={`font-bold uppercase tracking-wider text-[11px] leading-tight ${selectedService?.id === s.id ? 'text-gold' : 'text-white/80 group-hover:text-white'}`}>
-                          {s.name_en}
-                        </span>
+                (() => {
+                  const filteredServices = (services || []).filter(s => 
+                    s.is_active && 
+                    (s.name_en?.toLowerCase().includes(serviceSearchQuery.toLowerCase()) || 
+                     s.name_ar?.toLowerCase().includes(serviceSearchQuery.toLowerCase()) ||
+                     s.category?.toLowerCase().includes(serviceSearchQuery.toLowerCase()))
+                  );
+
+                  if (filteredServices.length === 0) {
+                    return (
+                      <div className="h-[200px] flex items-center justify-center border-2 border-dashed border-white/10 rounded-3xl">
+                        <p className="text-white/40 font-bold uppercase tracking-widest text-xs">No active services found</p>
                       </div>
-                      {selectedService?.id === s.id && (
-                        <div className="absolute top-3 right-3 text-gold">
-                          <CheckCircle2 size={16} />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                    );
+                  }
+
+                  if (serviceViewMode === 'list') {
+                    return (
+                      <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-1 no-scrollbar">
+                        {filteredServices.map(s => {
+                          const isSelected = selectedServices.some(item => item.id === s.id);
+                          return (
+                            <button
+                              key={s.id}
+                              onClick={() => handleSelectService(s)}
+                              className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-left group ${
+                                isSelected 
+                                  ? 'border-gold bg-gold/5 shadow-[0_0_20px_rgba(212,175,55,0.05)]' 
+                                  : 'border-white/5 bg-[#131824] hover:border-white/20 hover:bg-white/5'
+                              }`}
+                            >
+                              <div className="flex items-center gap-4 min-w-0">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-gold/10 text-gold' : 'bg-white/5 text-white/50 group-hover:text-white'}`}>
+                                  <Building2 size={18} />
+                                </div>
+                                <div className="min-w-0">
+                                  <span className={`font-bold text-xs uppercase tracking-wider block truncate ${isSelected ? 'text-gold' : 'text-white/80 group-hover:text-white'}`}>
+                                    {s.name_en}
+                                  </span>
+                                  <span className="text-[9px] text-white/40 font-bold uppercase tracking-widest mt-0.5 block">{s.category}</span>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-4 shrink-0 pl-4">
+                                <div className="text-right hidden sm:block">
+                                  <p className="text-xs font-bold font-mono text-white/90">{((s.work_fee || 0) + (s.ministry_fee || 0)).toFixed(2)} OMR</p>
+                                  <p className="text-[8px] text-white/40 uppercase font-black tracking-widest">Est. Cost</p>
+                                </div>
+                                <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                                  isSelected ? 'bg-gold border-gold text-black' : 'border-white/20 group-hover:border-white/40'
+                                }`}>
+                                  {isSelected && <CheckCircle2 size={12} className="stroke-[3]" />}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-[450px] overflow-y-auto pr-1 no-scrollbar">
+                      {filteredServices.map(s => {
+                        const isSelected = selectedServices.some(item => item.id === s.id);
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => handleSelectService(s)}
+                            className={`relative overflow-hidden p-6 rounded-[24px] border transition-all text-left group ${
+                              isSelected 
+                                ? 'border-gold bg-gold/5 shadow-[0_0_30px_rgba(212,175,55,0.1)]' 
+                                : 'border-white/10 bg-[#131824] hover:border-white/30 hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex flex-col items-center justify-center text-center h-24 gap-4 relative z-10">
+                              <Building2 size={24} className={isSelected ? 'text-gold' : 'text-white/60 group-hover:text-white'} />
+                              <span className={`font-bold uppercase tracking-wider text-[11px] leading-tight ${isSelected ? 'text-gold' : 'text-white/80 group-hover:text-white'}`}>
+                                {s.name_en}
+                              </span>
+                            </div>
+                            {isSelected && (
+                              <div className="absolute top-3 right-3 text-gold">
+                                <CheckCircle2 size={16} />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
               )}
 
             </motion.div>
@@ -519,10 +718,16 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h3 className="font-syne font-bold text-lg">
-                    {selectedPackage ? selectedPackage.name_en : selectedService?.name_en}
+                    {selectedPackage 
+                      ? selectedPackage.name_en 
+                      : (selectedServices.length > 0 ? selectedServices.map(s => s.name_en).join(' + ') : 'Standard Project')}
                   </h3>
                   <p className="text-xs text-white/40 mt-1">
-                    {selectedPackage ? `Package · ${serviceLines.length} service(s)` : 'Single Service'}
+                    {selectedPackage 
+                      ? `Package · ${serviceLines.length} service(s)` 
+                      : selectedServices.length > 1 
+                        ? `Combined Services · ${selectedServices.length} service(s)` 
+                        : 'Single Service'}
                   </p>
                 </div>
                 <div className="text-right">
@@ -654,11 +859,13 @@ export const JobBuilder = ({ onClose, onJobCreated }: { onClose?: () => void, on
                     onChange={(e) => setAssignedTo(e.target.value)}
                     className="w-full bg-black/30 border border-white/10 focus:border-gold rounded-xl px-4 py-2.5 text-xs text-white font-bold outline-none cursor-pointer transition-colors"
                   >
-                    {employees.map(emp => (
-                      <option key={emp.id} value={emp.id} className="bg-[#131824] text-white">
-                        {emp.full_name}{emp.id === profile?.id ? ' (Me)' : ''}
-                      </option>
-                    ))}
+                    {employees
+                      .filter(emp => emp.department === 'operations' || emp.id === profile?.id)
+                      .map(emp => (
+                        <option key={emp.id} value={emp.id} className="bg-[#131824] text-white">
+                          {emp.full_name}{emp.id === profile?.id ? ' (Me)' : ''}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 

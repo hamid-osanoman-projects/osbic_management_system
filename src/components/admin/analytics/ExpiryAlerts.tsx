@@ -144,9 +144,13 @@ const ExpiryAlerts = () => {
                         <button className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-foreground transition-colors" title="Send Reminder">
                           <Bell size={14} />
                         </button>
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-colors" title="Start Renewal">
-                          <RefreshCw size={12} /> Renew
-                        </button>
+                         <button 
+                           onClick={() => navigate(`/employee/tasks?action=new-project&clientId=${(job as any).client_id}&serviceId=${(job as any).service_id}&entryType=renewal`)}
+                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-colors" 
+                           title="Start Renewal"
+                         >
+                           <RefreshCw size={12} /> Renew
+                         </button>
                         <button 
                           onClick={() => navigate(`/admin/jobs/${job.id}`)}
                           className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors" 

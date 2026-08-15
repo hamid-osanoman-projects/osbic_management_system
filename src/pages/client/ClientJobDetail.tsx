@@ -160,10 +160,10 @@ const ClientJobDetail = () => {
 
   const uploadedInvoiceDoc = documents.find(d => 
     d.status === 'approved' && 
-    (d.file_name.toLowerCase().includes('invoice') || 
-     d.document_type.toLowerCase().includes('invoice') ||
-     d.file_name.includes('فاتورة') || 
-     d.document_type.includes('فاتورة'))
+    ((d.file_name && d.file_name.toLowerCase().includes('invoice')) || 
+     (d.document_type && d.document_type.toLowerCase().includes('invoice')) ||
+     (d.file_name && d.file_name.includes('فاتورة')) || 
+     (d.document_type && d.document_type.includes('فاتورة')))
   );
 
   const handleDownloadUploadedInvoice = async (doc: any) => {

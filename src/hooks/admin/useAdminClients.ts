@@ -191,6 +191,7 @@ export const useCreateClient = () => {
       nationality?: string;
       password: string;
       created_by?: string;
+      branch_id?: string;
     }) => {
       // Step A: Create a temporary Supabase client that DOES NOT save to localStorage.
       const { createClient } = await import('@supabase/supabase-js');
@@ -237,6 +238,7 @@ export const useCreateClient = () => {
           client_code: clientCode,
           is_active: true,
           created_by: newClient.created_by,
+          branch_id: newClient.branch_id,
         }, { onConflict: 'id' })
         .select()
         .single();

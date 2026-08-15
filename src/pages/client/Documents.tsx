@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   FileText, Search, Download, Eye, CheckCircle2,
-  Clock, XCircle, AlertCircle, AlertTriangle, FolderOpen, Calendar
+  Clock, XCircle, AlertCircle, AlertTriangle, FolderOpen, Calendar, RefreshCw
 } from 'lucide-react';
 import { useClientDocuments } from '../../hooks/client/useClientDocuments';
 import { useAuth } from '../../contexts/AuthContext';
@@ -295,6 +295,43 @@ const Documents = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* Expiry Renew Button */}
+                    {doc.status === 'approved' && doc.expiry_date && (
+                      (() => {
+                        const days = Math.ceil((new Date(doc.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                        const needsRenewal = days <= 60;
+                        if (needsRenewal) {
+                          return (
+                            <button
+                              onClick={() => {
+                                const targetPhone = '96872229827'; // OSBIC Primary Office
+                                const message = `Hello! 🌿
+
+I want to request a renewal for my document:
+🔹 *${doc.file_name}* (${doc.document_type})
+• Project Code: ${doc.job_code}
+• Expiry Date: ${new Date(doc.expiry_date).toLocaleDateString()}
+
+*Client Profile:*
+• Name: ${profile?.full_name || 'Anonymous Client'}
+• ID: ${profile?.id ? profile.id.slice(0, 8) : 'N/A'}
+
+Please initiate the renewal job. Thank you!`;
+
+                                const waUrl = `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(message)}`;
+                                window.open(waUrl, '_blank');
+                              }}
+                              className="w-full bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-[#0A0F1E] border border-emerald-500/20 py-2.5 px-4 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 mb-3 active:scale-95 shadow-lg shadow-emerald-500/5 hover:shadow-emerald-500/20"
+                            >
+                              <RefreshCw size={12} />
+                              {isRtl ? 'طلب تجديد المستند' : 'Renew Document'}
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()
+                    )}
 
                     {/* Footer Actions */}
                     <div className="flex gap-2 mt-2 pt-4 border-t border-white/[0.02]">

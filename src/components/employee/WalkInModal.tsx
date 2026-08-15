@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAdminServices } from "../../hooks/admin/useAdminServices";
-import { X, Zap, User, Phone, Search, Shield, Users } from "lucide-react";
+import { X, Zap, User, Phone, Search, Shield, Users, Plus, Trash2, CreditCard, Check } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface WalkInModalProps {
@@ -19,34 +19,87 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
 
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
-  const [selectedService, setSelectedService] = useState<any>(null);
+  const [selectedServices, setSelectedServices] = useState<any[]>([]);
   const [serviceSearch, setServiceSearch] = useState("");
-  const [quantity, setQuantity] = useState(1);
-  const [workFee, setWorkFee] = useState(0);
-  const [ministryFee, setMinistryFee] = useState(0);
   const [notes, setNotes] = useState("");
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(true);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
 
   // POS / Simple Task States
   const [posDescription, setPosDescription] = useState("");
   const [posAmount, setPosAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
 
-  useEffect(() => {
-    if (selectedService && !selectedService.isPosPlaceholder) {
-      setWorkFee(selectedService.work_fee || 0);
-      setMinistryFee(selectedService.ministry_fee || 0);
+  const toggleService = (s: any) => {
+    if (s.isPosPlaceholder) {
+      setSelectedServices([{
+        id: s.id,
+        name: s.name_en,
+        workFee: 0,
+        ministryFee: 0,
+        quantity: 1,
+        paidByClientCard: false,
+        isPosPlaceholder: true
+      }]);
+      setIsDropdownOpen(false);
+      setServiceSearch("");
+      return;
     }
-  }, [selectedService]);
+
+    // Clear POS if it was selected
+    let list = selectedServices.filter(item => !item.isPosPlaceholder);
+
+    const exists = list.some(item => item.id === s.id);
+    if (exists) {
+      list = list.filter(item => item.id !== s.id);
+    } else {
+      list.push({
+        id: s.id,
+        name: s.name_en,
+        workFee: s.work_fee || 0,
+        ministryFee: s.ministry_fee || 0,
+        quantity: 1,
+        paidByClientCard: false,
+        isPosPlaceholder: false
+      });
+    }
+    setSelectedServices(list);
+    setServiceSearch("");
+    setIsDropdownOpen(false);
+  };
+
+  const addCustomTaskWithName = (name: string) => {
+    const list = selectedServices.filter(item => !item.isPosPlaceholder);
+    const customId = `custom_${Date.now()}`;
+    list.push({
+      id: customId,
+      name: name,
+      workFee: 0,
+      ministryFee: 0,
+      quantity: 1,
+      paidByClientCard: false,
+      isCustom: true,
+      isPosPlaceholder: false
+    });
+    setSelectedServices(list);
+  };
+
+  const addCustomTask = () => {
+    addCustomTaskWithName("Custom Service");
+  };
 
   const handleSubmit = async () => {
-    if (!clientName.trim() || !selectedService) {
-      toast.error("Client name and service are required");
+    if (!clientName.trim() || selectedServices.length === 0) {
+      toast.error("Client name and at least one service are required");
       return;
     }
     setIsSubmitting(true);
 
     try {
-      if (selectedService.isPosPlaceholder) {
+      const isPos = selectedServices.length === 1 && selectedServices[0].isPosPlaceholder;
+
+      if (isPos) {
         // POS / Simple Task Flow
         if (!posDescription.trim() || !posAmount) {
           toast.error("Description and amount are required for simple task");
@@ -67,17 +120,98 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
         if (rpcErr) throw rpcErr;
         toast.success(`Quick Task completed for ${clientName}!`);
       } else {
-        // Catalog Service Flow
+        // Catalog & Custom Services Flow
         // 1. Create a walk-in client profile
-        const { data: client, error: cErr } = await (supabase.from("profiles").insert({
-          full_name: clientName.trim(),
-          phone: clientPhone.trim() || null,
-          role: "client",
-          entry_type: "walkin",
-        } as any).select().single() as any);
+        // Create a temporary auth user first to satisfy profiles foreign key constraints
+        const dummyEmail = `walkin_${Date.now()}_${Math.floor(Math.random() * 1000)}@osbic.local`;
+        const dummyPassword = `Walkin_${Math.random().toString(36).slice(-8)}!`;
+
+        const { createClient } = await import('@supabase/supabase-js');
+        const authClient = createClient(
+          import.meta.env.VITE_SUPABASE_URL,
+          import.meta.env.VITE_SUPABASE_ANON_KEY,
+          {
+            auth: {
+              persistSession: false,
+              autoRefreshToken: false,
+              detectSessionInUrl: false
+            }
+          }
+        );
+
+        const { data: authData, error: authError } = await authClient.auth.signUp({
+          email: dummyEmail,
+          password: dummyPassword,
+          options: {
+            data: {
+              full_name: clientName.trim(),
+              role: 'client'
+            }
+          }
+        });
+
+        if (authError) throw authError;
+        if (!authData.user) throw new Error("Failed to register walk-in customer auth credentials.");
+
+        const clientCode = `CLT-${Date.now().toString().slice(-7)}`;
+
+        const { data: client, error: cErr } = await (supabase
+          .from("profiles")
+          .upsert({
+            id: authData.user.id,
+            full_name: clientName.trim(),
+            email: dummyEmail,
+            phone: clientPhone.trim() || null,
+            role: "client",
+            client_code: clientCode,
+            is_active: true,
+            branch_id: profile?.branch_id,
+          }, { onConflict: 'id' })
+          .select()
+          .single() as any);
+
         if (cErr) throw cErr;
 
-        const totalFee = (workFee + ministryFee) * quantity;
+        // Calculate totals across all selected services
+        let totalWorkFee = 0;
+        let totalMinistryFee = 0;
+        let totalFeeToOsan = 0;
+
+        for (const item of selectedServices) {
+          const qty = item.quantity;
+          totalWorkFee += item.workFee * qty;
+          totalMinistryFee += item.ministryFee * qty;
+          
+          const minToOsan = item.paidByClientCard ? 0 : item.ministryFee;
+          totalFeeToOsan += (item.workFee + minToOsan) * qty;
+        }
+
+        // Determine the main service_id to associate with the job
+        const catalogService = selectedServices.find(item => !item.isCustom);
+        let mainServiceId = catalogService?.id;
+
+        if (!mainServiceId) {
+          const quickTaskService = services?.find(s => s.name_en === 'Quick Task (POS)');
+          mainServiceId = quickTaskService?.id || services?.[0]?.id;
+        }
+
+        if (!mainServiceId) {
+          const { data: dbS } = await supabase
+            .from('services')
+            .select('id')
+            .eq('name_en', 'Quick Task (POS)')
+            .maybeSingle();
+          mainServiceId = dbS?.id;
+
+          if (!mainServiceId) {
+            const { data: anyS } = await supabase
+              .from('services')
+              .select('id')
+              .limit(1)
+              .maybeSingle();
+            mainServiceId = anyS?.id;
+          }
+        }
 
         // 2. Create the job record
         const { data: job, error: jErr } = await (supabase.from("jobs").insert({
@@ -85,40 +219,49 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
           client_id: client.id,
           employee_id: profile?.id,
           assigned_by: profile?.id,
-          service_id: selectedService.id,
+          service_id: mainServiceId,
           status: "active",
-          total_fee: totalFee,
-          work_fee: workFee * quantity,
-          ministry_fee: ministryFee * quantity,
+          total_fee: totalFeeToOsan,
+          work_fee: totalWorkFee,
+          ministry_fee: totalMinistryFee,
           ministry_fee_type: "fixed",
           advance_percentage: 0,
           advance_amount: 0,
-          remaining_amount: totalFee,
+          remaining_amount: totalFeeToOsan,
           advance_paid: false,
           remaining_paid: false,
           entry_type: "walkin",
           sales_employee_id: profile?.id,
           ops_employee_id: profile?.id,
+          branch_id: profile?.branch_id,
         } as any).select().single() as any);
         if (jErr) throw jErr;
 
-        // 3. Create job_services rows — one per applicant
-        const rows = Array.from({ length: quantity }, (_: any, i: number) => ({
-          job_id: job.id,
-          service_id: selectedService.id,
-          service_name: selectedService.name_en,
-          display_order: i + 1,
-          quantity,
-          item_number: i + 1,
-          status: "pending",
-          work_fee: workFee,
-          ministry_fee: ministryFee,
-          total_fee: workFee + ministryFee,
-          ops_employee_id: profile?.id,
-          assigned_by: profile?.id,
-          assigned_at: new Date().toISOString(),
-          notes: notes || null,
-        }));
+        // 3. Create job_services rows
+        const rows = [];
+        for (const item of selectedServices) {
+          for (let i = 0; i < item.quantity; i++) {
+            rows.push({
+              job_id: job.id,
+              service_id: item.isCustom ? mainServiceId : item.id,
+              service_name: item.name,
+              display_order: rows.length + 1,
+              quantity: item.quantity,
+              item_number: i + 1,
+              status: "pending",
+              work_fee: item.workFee,
+              ministry_fee: item.ministryFee,
+              total_fee: item.workFee + item.ministryFee,
+              // If paid by client card, mark as fully allocated and unlocked immediately!
+              ministry_fee_allocated: item.paidByClientCard ? item.ministryFee : 0,
+              is_funded: item.paidByClientCard ? true : false,
+              ops_employee_id: profile?.id,
+              assigned_by: profile?.id,
+              assigned_at: new Date().toISOString(),
+              notes: item.paidByClientCard ? `[PAID BY CLIENT CARD] ${notes || ''}` : (notes || null),
+            });
+          }
+        }
 
         const { error: sErr } = await (supabase.from("job_services").insert(rows as any) as any);
         if (sErr) throw sErr;
@@ -131,9 +274,8 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
       setClientPhone("");
       setPosDescription("");
       setPosAmount("");
-      setSelectedService(null);
+      setSelectedServices([]);
       setNotes("");
-      setQuantity(1);
       onJobCreated();
       onClose();
     } catch (err: any) {
@@ -153,15 +295,65 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
     isPosPlaceholder: true
   };
 
-  const filteredServices = [
+  const rawOptions = [
     posServiceOption,
-    ...(services?.filter(
-      (s) =>
-        s.is_active &&
-        (s.name_en.toLowerCase().includes(serviceSearch.toLowerCase()) ||
-          s.name_ar.includes(serviceSearch))
-    ) || [])
+    ...(services?.filter(s => s.is_active) || [])
   ];
+
+  const matched = rawOptions.filter(s =>
+    s.name_en.toLowerCase().includes(serviceSearch.toLowerCase()) ||
+    (s.name_ar && s.name_ar.includes(serviceSearch))
+  );
+
+  const dropdownOptions = [...matched];
+  const hasExactMatch = matched.some(m => m.name_en.toLowerCase() === serviceSearch.trim().toLowerCase());
+  
+  if (serviceSearch.trim() && !hasExactMatch) {
+    dropdownOptions.push({
+      id: "virtual_custom_task",
+      name_en: `✨ Press Enter to add custom task: "${serviceSearch.trim()}"`,
+      isCustomVirtual: true,
+      work_fee: 0,
+      ministry_fee: 0
+    } as any);
+  }
+
+  // Reset active highlighted index when search terms change
+  useEffect(() => {
+    setActiveSearchIndex(0);
+  }, [serviceSearch]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setIsDropdownOpen(true);
+      setActiveSearchIndex(prev => (prev + 1) % dropdownOptions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setIsDropdownOpen(true);
+      setActiveSearchIndex(prev => (prev - 1 + dropdownOptions.length) % dropdownOptions.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (dropdownOptions.length > 0) {
+        const selected = dropdownOptions[activeSearchIndex];
+        if (selected) {
+          if (selected.isCustomVirtual) {
+            addCustomTaskWithName(serviceSearch.trim());
+            setServiceSearch("");
+            setIsDropdownOpen(false);
+          } else {
+            toggleService(selected);
+          }
+        }
+      } else if (serviceSearch.trim()) {
+        addCustomTaskWithName(serviceSearch.trim());
+        setServiceSearch("");
+        setIsDropdownOpen(false);
+      }
+    } else if (e.key === "Escape") {
+      setIsDropdownOpen(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -231,39 +423,197 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
               </div>
 
               {/* Service Selection */}
-              <div className="space-y-3">
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Service *</p>
+              <div className="space-y-2 relative">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block">Select or Create Task *</label>
+                  <button
+                    type="button"
+                    onClick={addCustomTask}
+                    className="text-[10px] font-bold text-gold hover:text-yellow-400 uppercase tracking-widest flex items-center gap-1 hover:underline"
+                  >
+                    ➕ Add Custom Task
+                  </button>
+                </div>
                 <div className="relative">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
                   <input
                     type="text"
                     value={serviceSearch}
-                    onChange={(e) => setServiceSearch(e.target.value)}
-                    placeholder="Search services..."
-                    className="w-full bg-black/30 border border-white/10 focus:border-gold rounded-xl pl-9 pr-3 py-3 text-sm text-white outline-none transition-all placeholder:text-white/20"
+                    autoFocus
+                    onChange={(e) => {
+                      setServiceSearch(e.target.value);
+                      setIsDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Search services or type custom work & hit Enter..."
+                    className="w-full bg-black/30 border border-white/10 focus:border-gold rounded-xl pl-9 pr-3 py-3 text-sm text-white outline-none transition-all placeholder:text-white/20 font-bold"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-1">
-                  {filteredServices?.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => setSelectedService(s)}
-                      className={`text-left p-3 rounded-xl border text-xs font-bold transition-all ${
-                        selectedService?.id === s.id
-                          ? "border-gold bg-gold/10 text-gold"
-                          : "border-white/10 bg-black/20 text-white/70 hover:border-white/30 hover:text-white"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-1">
-                        <span className="line-clamp-2 leading-tight">{s.name_en}</span>
-                        {s.requires_pro && <Shield size={10} className="text-amber-400 shrink-0 mt-0.5" />}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+
+                {/* Combobox Absolute Dropdown */}
+                {isDropdownOpen && dropdownOptions.length > 0 && (
+                  <div className="absolute left-0 right-0 mt-1 max-h-[220px] overflow-y-auto bg-[#1b2331] border border-white/10 rounded-xl shadow-2xl z-[300] py-1">
+                    {dropdownOptions.map((s, idx) => {
+                      const isHighlighted = idx === activeSearchIndex;
+                      const isAlreadySelected = selectedServices.some(item => item.id === s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            // Prevent input blur before selecting
+                            e.preventDefault();
+                          }}
+                          onMouseEnter={() => setActiveSearchIndex(idx)}
+                          onClick={() => {
+                            if (s.isCustomVirtual) {
+                              addCustomTaskWithName(serviceSearch.trim());
+                              setServiceSearch("");
+                              setIsDropdownOpen(false);
+                            } else {
+                              toggleService(s);
+                            }
+                          }}
+                          className={`w-full text-left px-4 py-2.5 text-xs flex items-center justify-between border-b border-white/5 last:border-b-0 transition-colors ${
+                            isHighlighted
+                              ? "bg-gold/10 text-gold font-bold"
+                              : "text-white/80 hover:bg-white/5"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="line-clamp-1">{s.name_en}</span>
+                            {s.requires_pro && <Shield size={10} className="text-amber-400 shrink-0" />}
+                          </div>
+                          {isAlreadySelected && !s.isCustomVirtual && (
+                            <span className="text-[9px] text-gold font-bold bg-gold/15 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Check size={9} /> Selected
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {selectedService && selectedService.isPosPlaceholder && (
+              {/* Selected Services Editor List */}
+              {selectedServices.length > 0 && !selectedServices[0].isPosPlaceholder && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Selected Services ({selectedServices.length})</p>
+                    <p className="text-[9px] text-white/30 font-medium">Configure items below</p>
+                  </div>
+
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    {selectedServices.map((item) => (
+                      <div key={item.id} className="border border-white/5 bg-[#141b26]/50 rounded-2xl p-3.5 space-y-3 transition-all hover:border-white/10">
+                        {/* Row 1: Name and Trash Icon */}
+                        <div className="flex justify-between items-center gap-3">
+                          <div className="flex-1">
+                            {item.isCustom ? (
+                              <input
+                                type="text"
+                                value={item.name}
+                                onChange={(e) => {
+                                  setSelectedServices(prev => prev.map(p => p.id === item.id ? { ...p, name: e.target.value } : p));
+                                }}
+                                className="w-full bg-black/40 border border-white/10 focus:border-gold rounded-lg px-2.5 py-1 text-xs text-white font-bold outline-none placeholder:text-white/20"
+                                placeholder="Enter Custom Service Name..."
+                              />
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-gold shrink-0"></span>
+                                <h4 className="text-xs font-bold text-white leading-tight">{item.name}</h4>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedServices(prev => prev.filter(p => p.id !== item.id))}
+                            className="p-1 text-white/40 hover:text-red-400 hover:bg-white/5 rounded-lg transition-all"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+
+                        {/* Row 2: Grid of Inputs */}
+                        <div className="grid grid-cols-3 gap-2 pt-1">
+                          {/* Qty Dropdown/Input */}
+                          <div className="space-y-1">
+                            <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest block">Qty / Applicants</span>
+                            <div className="flex items-center bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5">
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const val = Math.max(1, parseInt(e.target.value) || 1);
+                                  setSelectedServices(prev => prev.map(p => p.id === item.id ? { ...p, quantity: val } : p));
+                                }}
+                                className="w-full bg-transparent outline-none text-[11px] text-white font-bold text-center font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Work Fee */}
+                          <div className="space-y-1">
+                            <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest block">Work Fee (OMR)</span>
+                            <div className="flex items-center bg-black/40 border border-white/10 focus-within:border-gold rounded-lg px-2 py-1.5">
+                              <input
+                                type="number"
+                                step="0.001"
+                                value={item.workFee}
+                                onChange={(e) => {
+                                  setSelectedServices(prev => prev.map(p => p.id === item.id ? { ...p, workFee: Number(e.target.value) } : p));
+                                }}
+                                className="w-full bg-transparent outline-none text-[11px] text-white font-bold text-right font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Gov Fee */}
+                          <div className="space-y-1">
+                            <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest block">Gov Fee (OMR)</span>
+                            <div className={`flex items-center bg-black/40 border border-white/10 focus-within:border-gold rounded-lg px-2 py-1.5 ${item.paidByClientCard ? 'opacity-40' : ''}`}>
+                              <input
+                                type="number"
+                                step="0.001"
+                                value={item.ministryFee}
+                                disabled={item.paidByClientCard}
+                                onChange={(e) => {
+                                  setSelectedServices(prev => prev.map(p => p.id === item.id ? { ...p, ministryFee: Number(e.target.value) } : p));
+                                }}
+                                className="w-full bg-transparent outline-none text-[11px] text-white font-bold text-right font-mono disabled:cursor-not-allowed"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Paid using Client Card Option */}
+                        <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                          <label htmlFor={`client_card_${item.id}`} className="text-[9px] font-semibold text-white/45 hover:text-white cursor-pointer select-none flex items-center gap-1">
+                            <CreditCard size={10} className="text-gold" />
+                            Client paid government fee directly using their card
+                          </label>
+                          <input
+                            type="checkbox"
+                            id={`client_card_${item.id}`}
+                            checked={item.paidByClientCard}
+                            onChange={(e) => {
+                              setSelectedServices(prev => prev.map(p => p.id === item.id ? { ...p, paidByClientCard: e.target.checked } : p));
+                            }}
+                            className="rounded border-white/10 bg-black/40 text-gold focus:ring-0 focus:ring-offset-0 cursor-pointer w-3.5 h-3.5"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedServices.length === 1 && selectedServices[0].isPosPlaceholder && (
                 <>
                   {/* Task Description */}
                   <div className="space-y-1">
@@ -310,61 +660,16 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
                 </>
               )}
 
-              {selectedService && !selectedService.isPosPlaceholder && (
+              {selectedServices.length > 0 && !selectedServices[0].isPosPlaceholder && (
                 <>
-                  {/* Quantity */}
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-1.5">
-                      <Users size={11} /> Applicants / Quantity
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                        className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center font-bold text-lg transition-colors"
-                      >−</button>
-                      <span className="text-2xl font-bold text-white font-syne w-8 text-center">{quantity}</span>
-                      <button
-                        onClick={() => setQuantity((q) => q + 1)}
-                        className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center font-bold text-lg transition-colors"
-                      >+</button>
-                    </div>
-                  </div>
-
-                  {/* Fees */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest block">Work Fee / item</label>
-                      <div className="flex items-center gap-1 bg-black/30 border border-white/10 focus-within:border-gold rounded-xl px-3 py-2 transition-colors">
-                        <span className="text-white/30 text-[10px] font-bold">OMR</span>
-                        <input
-                          type="number"
-                          step="0.001"
-                          value={workFee}
-                          onChange={(e) => setWorkFee(Number(e.target.value))}
-                          className="flex-1 bg-transparent outline-none text-sm text-white font-bold text-right"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest block">Ministry Fee / item</label>
-                      <div className="flex items-center gap-1 bg-black/30 border border-white/10 focus-within:border-gold rounded-xl px-3 py-2 transition-colors">
-                        <span className="text-white/30 text-[10px] font-bold">OMR</span>
-                        <input
-                          type="number"
-                          step="0.001"
-                          value={ministryFee}
-                          onChange={(e) => setMinistryFee(Number(e.target.value))}
-                          className="flex-1 bg-transparent outline-none text-sm text-white font-bold text-right"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Total */}
                   <div className="bg-gold/5 border border-gold/20 rounded-2xl px-5 py-4 flex items-center justify-between">
                     <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Total Amount</span>
                     <span className="text-2xl font-bold text-gold font-syne">
-                      {((workFee + ministryFee) * quantity).toFixed(3)} <span className="text-sm text-white/40">OMR</span>
+                      {selectedServices.reduce((sum, item) => {
+                        const minFee = item.paidByClientCard ? 0 : item.ministryFee;
+                        return sum + (item.workFee + minFee) * item.quantity;
+                      }, 0).toFixed(3)} <span className="text-sm text-white/40">OMR</span>
                     </span>
                   </div>
 
@@ -393,12 +698,12 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitting || !clientName.trim() || !selectedService}
+                disabled={isSubmitting || !clientName.trim() || selectedServices.length === 0}
                 className="flex-1 py-3 bg-gold hover:bg-yellow-400 text-black font-bold rounded-xl transition-all text-sm disabled:opacity-40 flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   "Submitting..."
-                ) : selectedService?.isPosPlaceholder ? (
+                ) : (selectedServices.length === 1 && selectedServices[0].isPosPlaceholder) ? (
                   <>
                     <Zap size={16} /> Complete Walk-in Task
                   </>

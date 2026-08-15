@@ -4,12 +4,15 @@ import { useAuth } from '../../contexts/AuthContext';
 
 interface QuotationDocumentProps {
   invoice: Invoice;
+  isSimple?: boolean;
 }
 
-export const QuotationDocument = forwardRef<HTMLDivElement, QuotationDocumentProps>(({ invoice }, ref) => {
+export const QuotationDocument = forwardRef<HTMLDivElement, QuotationDocumentProps>(({ invoice, isSimple }, ref) => {
   const { profile } = useAuth();
   const themeColor = '#0088cc';
   const lightBg = '#f0f9ff'; // sky-50
+
+  const resolvedIsSimple = isSimple !== undefined ? isSimple : !!invoice.metadata?.isSimple;
 
   return (
     <div ref={ref} className="bg-white text-black p-10 min-h-[1056px] w-[794px] max-w-full mx-auto shadow-2xl relative overflow-hidden font-sans text-[11px] leading-relaxed print:w-[210mm] print:min-h-[297mm] print:m-0 print:shadow-none print:p-10">
@@ -54,14 +57,32 @@ export const QuotationDocument = forwardRef<HTMLDivElement, QuotationDocumentPro
         <div className="py-1 px-3 mb-3 font-bold text-white uppercase tracking-widest text-[10px]" style={{ backgroundColor: themeColor }}>
           Package Includes
         </div>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-1 px-2">
+        <div className="space-y-1.5 px-2 text-[10px]">
           {invoice.items && invoice.items.length > 0 ? (
-            invoice.items.map((item, idx) => (
-              <div key={idx} className="flex gap-2">
-                <span className="font-bold" style={{ color: themeColor }}>{idx + 1}.</span>
-                <span className="font-medium text-gray-800">{item.description}</span>
-              </div>
-            ))
+            invoice.items.map((item: any, idx) => {
+              const minFee = Math.max(0, parseFloat(item.ministry_fee) || 0);
+              const rawSrv = item.service_fee !== undefined
+                ? parseFloat(item.service_fee)
+                : item.unit_price - minFee;
+              const srvFee = Math.max(0, rawSrv || 0);
+              const totalFee = minFee + srvFee;
+
+              return (
+                <div key={idx} className="flex justify-between items-start border-b border-gray-100 pb-1.5">
+                  <div className="flex gap-2">
+                    <span className="font-bold" style={{ color: themeColor }}>{idx + 1}.</span>
+                    <div>
+                      <span className="font-semibold text-gray-900 text-xs block">{item.description}</span>
+                    </div>
+                  </div>
+                  {!resolvedIsSimple && (
+                    <span className="font-bold text-gray-900 font-mono text-xs text-right shrink-0 mt-0.5 ml-4">
+                      OMR {totalFee.toFixed(3)}
+                    </span>
+                  )}
+                </div>
+              );
+            })
           ) : (
             <p className="text-gray-400 italic">No package items added.</p>
           )}

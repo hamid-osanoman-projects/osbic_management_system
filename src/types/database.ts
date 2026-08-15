@@ -73,8 +73,10 @@ export interface Database {
         updated_at: string | null
         whatsapp: string | null
         nationality: string | null
+        company_name: string | null
         can_do_sales: boolean | null
         can_do_ops: boolean | null
+        can_do_accounts: boolean | null
         is_pro: boolean | null
         monthly_target: number | null
       }, never, 'role'>
@@ -148,6 +150,7 @@ export interface Database {
         sales_employee_id: string | null
         ops_employee_id: string | null
         package_group_id: string | null
+        custom_name: string | null
       }, 'id' | 'created_at' | 'updated_at', 'status' | 'advance_percentage' | 'advance_paid' | 'remaining_paid' | 'expiry_reminder_60_sent' | 'expiry_reminder_30_sent'>
 
       job_payments: TableDef<{
@@ -158,8 +161,11 @@ export interface Database {
         reference_number: string | null
         notes: string | null
         recorded_by: string | null
+        status: 'pending' | 'verified' | 'rejected'
+        verified_by: string | null
+        verified_at: string | null
         created_at: string
-      }, 'id' | 'created_at'>
+      }, 'id' | 'created_at' | 'status'>
 
       job_steps: TableDef<{
         id: string
@@ -517,6 +523,10 @@ export interface Database {
         work_fee: number
         ministry_fee: number
         total_fee: number
+        ministry_fee_allocated: number | null
+        service_fee_allocated: number | null
+        ministry_fee_pending: number | null
+        service_fee_pending: number | null
         started_at: string | null
         completed_at: string | null
         deadline: string | null
@@ -597,6 +607,29 @@ export interface Database {
         added_by: string | null
         created_at: string
       }, 'id' | 'created_at'>
+
+      payment_allocations: TableDef<{
+        id: string
+        payment_id: string
+        job_service_id: string
+        amount: number
+        allocation_type: 'ministry_fee' | 'service_fee'
+        created_at: string
+        created_by: string | null
+      }, 'id' | 'created_at'>
+
+      job_expenses: TableDef<{
+        id: string
+        job_id: string
+        job_service_id: string
+        amount: number
+        expense_type: string
+        receipt_url: string | null
+        notes: string | null
+        status: 'pending_approval' | 'approved' | 'rejected'
+        created_at: string
+        created_by: string | null
+      }, 'id' | 'created_at' | 'status' | 'expense_type'>
     }
     Views: {
       [_ in never]: never

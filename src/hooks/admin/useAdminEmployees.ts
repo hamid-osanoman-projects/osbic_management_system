@@ -30,7 +30,7 @@ export interface Employee {
   phone: string | null;
   avatar_url: string | null;
   role: string;
-  department?: 'sales' | 'operations' | null;
+  department?: 'sales' | 'operations' | 'accounts' | 'pro' | null;
   is_active: boolean;
   created_at: string;
   // Computed stats from jobs table
@@ -40,6 +40,12 @@ export interface Employee {
   avg_completion_days: number;
   // Associated data
   jobs?: any[];
+  can_do_sales?: boolean;
+  can_do_ops?: boolean;
+  can_do_accounts?: boolean;
+  is_pro?: boolean;
+  is_manager?: boolean;
+  branch_id?: string | null;
 }
 
 // ─── List All Employees ──────────────────────────────────────────────────────
@@ -47,20 +53,54 @@ export const useAdminEmployees = () => {
   return useQuery({
     queryKey: ['admin', 'employees'],
     queryFn: async (): Promise<Employee[]> => {
-      const { data, error } = await db
+      // 1. Fetch employee profiles
+      const { data: profiles, error: pError } = await db
         .from('profiles')
         .select('*')
         .eq('role', 'employee')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      return (data ?? []).map((p: any) => ({
-        ...p,
-        full_name: p.full_name ?? 'Unknown',
-        email: p.email ?? '',
-        active_jobs: 0,
-        completed_month: 0,
-      }));
+      if (pError) throw pError;
+
+      // 2. Fetch jobs to compute stats dynamically
+      const { data: jobs, error: jError } = await db
+        .from('jobs')
+        .select('id, employee_id, sales_employee_id, ops_employee_id, status, completed_at, updated_at');
+
+      if (jError) throw jError;
+
+      const now = new Date();
+      const thisMonth = now.getMonth();
+      const thisYear = now.getFullYear();
+
+      return (profiles ?? []).map((p: any) => {
+        // Match jobs where employee is executor (operations/pro), creator (sales), or ops assignee
+        const empJobs = (jobs ?? []).filter((j: any) => 
+          j.employee_id === p.id || j.sales_employee_id === p.id || j.ops_employee_id === p.id
+        );
+
+        // Active jobs = anything not completed and not cancelled (covers pending, awaiting_govt, on_hold)
+        const activeJobs = empJobs.filter((j: any) => 
+          j.status !== 'completed' && j.status !== 'cancelled'
+        ).length;
+
+        // Completed jobs for this month (fallback to updated_at if completed_at is null)
+        const completedMonth = empJobs.filter((j: any) => {
+          if (j.status !== 'completed') return false;
+          const completedDate = j.completed_at || j.updated_at;
+          if (!completedDate) return false;
+          const d = new Date(completedDate);
+          return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+        }).length;
+
+        return {
+          ...p,
+          full_name: p.full_name ?? 'Unknown',
+          email: p.email ?? '',
+          active_jobs: activeJobs,
+          completed_month: completedMonth,
+        };
+      });
     },
   });
 };
@@ -81,11 +121,11 @@ export const useAdminEmployee = (id?: string) => {
 
       if (profileError) throw profileError;
 
-      // 2. Fetch Associated Jobs (match executor or creator)
+      // 2. Fetch Associated Jobs (match executor, creator, or ops associate)
       const { data: jobs, error: jobsError } = await supabase
         .from('jobs')
         .select('*, client:profiles!jobs_client_id_fkey(full_name), service:services(name_en, name_ar)')
-        .or(`employee_id.eq."${id}",sales_employee_id.eq."${id}"`)
+        .or(`employee_id.eq."${id}",sales_employee_id.eq."${id}",ops_employee_id.eq."${id}"`)
         .order('created_at', { ascending: false });
 
       if (jobsError) throw jobsError;
@@ -101,21 +141,23 @@ export const useAdminEmployee = (id?: string) => {
 
       // 4. Calculate Stats
       const totalJobs = jobs?.length || 0;
-      const activeJobs = jobs?.filter((j: any) => j.status === 'active').length || 0;
+      const activeJobs = jobs?.filter((j: any) => j.status !== 'completed' && j.status !== 'cancelled').length || 0;
       
       const now = new Date();
       const thisMonth = now.getMonth();
       const thisYear = now.getFullYear();
       const completedMonth = jobs?.filter((j: any) => {
-        if (j.status !== 'completed' || !j.completed_at) return false;
-        const d = new Date(j.completed_at);
+        if (j.status !== 'completed') return false;
+        const completedDate = j.completed_at || j.updated_at;
+        if (!completedDate) return false;
+        const d = new Date(completedDate);
         return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
       }).length || 0;
 
-      const completedJobs = jobs?.filter((j: any) => j.status === 'completed' && j.completed_at && j.created_at) || [];
+      const completedJobs = jobs?.filter((j: any) => j.status === 'completed' && (j.completed_at || j.updated_at) && j.created_at) || [];
       const totalDays = completedJobs.reduce((acc: number, j: any) => {
         const start = new Date(j.created_at).getTime();
-        const end = new Date(j.completed_at).getTime();
+        const end = new Date(j.completed_at || j.updated_at).getTime();
         return acc + (end - start) / (1000 * 60 * 60 * 24);
       }, 0);
       const avgCompletionDays = completedJobs.length > 0 ? Math.round(totalDays / completedJobs.length) : 0;
@@ -172,7 +214,9 @@ export const useCreateEmployee = () => {
       email: string;
       phone?: string;
       password: string;
+      department?: 'sales' | 'operations' | 'accounts' | 'pro';
       avatar_file?: File | null;
+      branch_id?: string | null;
     }) => {
       // Step B: Create the auth user
       const { data: authData, error: authError } = await guestClient.auth.signUp({
@@ -229,9 +273,11 @@ export const useCreateEmployee = () => {
           email: newEmployee.email,
           phone: newEmployee.phone ?? null,
           role: 'employee',
+          department: newEmployee.department ?? 'operations',
           employee_code: empCode,
           avatar_url: avatarUrl,
           is_active: true,
+          branch_id: newEmployee.branch_id || null,
         }, { onConflict: 'id' })
         .select()
         .single();

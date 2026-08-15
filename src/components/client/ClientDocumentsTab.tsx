@@ -228,8 +228,8 @@ const ClientDocumentsTab = ({ jobId, steps, documents }: Props) => {
             className={cn(
               "flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5",
               vaultTab === 'deliverables' 
-                ? "bg-card text-foreground shadow-lg shadow-black/5" 
-                : "text-muted-foreground/60 hover:text-foreground"
+                ? "bg-primary text-white shadow-lg shadow-primary/20 border border-primary/10" 
+                : "text-muted-foreground/60 hover:text-foreground hover:bg-white/5"
             )}
           >
             Official Deliverables
@@ -239,8 +239,8 @@ const ClientDocumentsTab = ({ jobId, steps, documents }: Props) => {
             className={cn(
               "flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5",
               vaultTab === 'uploads' 
-                ? "bg-card text-foreground shadow-lg shadow-black/5" 
-                : "text-muted-foreground/60 hover:text-foreground"
+                ? "bg-primary text-white shadow-lg shadow-primary/20 border border-primary/10" 
+                : "text-muted-foreground/60 hover:text-foreground hover:bg-white/5"
             )}
           >
             My Uploaded Files

@@ -3,6 +3,7 @@ import { TaskDashboard } from './TaskDashboard';
 import { ChevronRight, LayoutGrid, List as ListIcon, Clock, CheckCircle2, Briefcase, Plus, Zap, Search, Filter, X, ArrowUpDown, RotateCcw, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -34,6 +35,8 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
   onJobTypeChange
 }) => {
   const queryClient = useQueryClient();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'awaiting_govt' | 'completed' | 'on_hold'>('all');
@@ -136,8 +139,8 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
     return 0;
   });
 
-  const quickTasks = filteredJobs.filter(j => j.service_name === 'Quick Task (POS)');
-  const standardTasks = filteredJobs.filter(j => j.service_name !== 'Quick Task (POS)');
+  const quickTasks = filteredJobs.filter(j => j.service_name === 'Quick Task (POS)' || j.entry_type === 'walkin');
+  const standardTasks = filteredJobs.filter(j => j.service_name !== 'Quick Task (POS)' && j.entry_type !== 'walkin');
   
   const displayJobs = jobTypeFilter === 'quick' ? quickTasks : standardTasks;
 
@@ -145,7 +148,7 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
     <tr 
       key={job.id} 
       onClick={() => onTaskSelect(job.id)}
-      className="border-b border-border hover:bg-muted/30 transition-colors cursor-pointer group"
+      className="border-b border-border hover:bg-muted/30 transition-colors cursor-pointer group text-start font-sans"
     >
       <td className="py-4 px-6">
         <div className="flex items-center gap-3">
@@ -169,70 +172,76 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
             job.status === 'active' || job.status === 'in_progress' ? 'bg-primary' :
             job.status === 'draft' ? 'bg-amber-500' : 'bg-muted-foreground'
           }`} />
-          <span className="text-xs font-bold uppercase tracking-wider">{job.status}</span>
+          <span className="text-xs font-bold uppercase tracking-wider">
+            {job.status === 'completed' ? (isRtl ? 'مكتمل' : 'completed') :
+             job.status === 'active' || job.status === 'in_progress' ? (isRtl ? 'نشط' : 'active') :
+             job.status === 'draft' ? (isRtl ? 'مسودة' : 'draft') : (isRtl ? 'معلق' : job.status)}
+          </span>
         </div>
         <div className="text-[10px] text-muted-foreground">
-          {job.completed_steps} of {job.total_steps} steps
+          {isRtl ? `${job.completed_steps} من أصل ${job.total_steps} خطوات` : `${job.completed_steps} of ${job.total_steps} steps`}
         </div>
       </td>
       <td className="py-4 px-6">
-        <div className="text-sm font-bold text-foreground">{(job.total_fee || 0).toFixed(3)} OMR</div>
+        <div className="text-sm font-bold text-foreground">
+          {isRtl ? `${(job.total_fee || 0).toFixed(3)} ر.ع.` : `${(job.total_fee || 0).toFixed(3)} OMR`}
+        </div>
         {job.remaining_paid || job.total_fee === 0 ? (
           <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 flex items-center gap-1 mt-1">
-            <CheckCircle2 size={12} /> Fully Paid
+            <CheckCircle2 size={12} /> {isRtl ? 'مدفوع بالكامل' : 'Fully Paid'}
           </div>
         ) : (
           <div className="text-[10px] font-bold uppercase tracking-widest text-amber-500 flex items-center gap-1 mt-1">
-            <Clock size={12} /> Pending: {job.remaining_paid ? 0 : (job.remaining_due_amount > 0 ? job.remaining_due_amount : job.total_fee).toFixed(3)} OMR
+            <Clock size={12} /> {isRtl ? 'مستحق:' : 'Pending:'} {job.remaining_paid ? 0 : (job.remaining_due_amount > 0 ? job.remaining_due_amount : job.total_fee).toFixed(3)} {isRtl ? 'ر.ع.' : 'OMR'}
           </div>
         )}
       </td>
       <td className="py-4 px-6">
         <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
           <Clock size={12} />
-          {format(new Date(job.started_date), 'MMM dd, yyyy')}
+          {format(new Date(job.started_date), isRtl ? 'yyyy/MM/dd' : 'MMM dd, yyyy')}
         </div>
       </td>
       <td className="py-4 px-6 text-right">
-        <ChevronRight size={18} className="text-muted-foreground group-hover:text-primary transition-colors ml-auto" />
+        <ChevronRight size={18} className={`text-muted-foreground group-hover:text-primary transition-colors ml-auto ${isRtl ? 'rotate-180' : ''}`} />
       </td>
     </tr>
   );
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 bg-background no-scrollbar">
+    <div className="flex-1 overflow-y-auto p-8 bg-background no-scrollbar" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-syne font-bold text-foreground">Task Management</h2>
-          <div className="flex items-center gap-4">
-            <div className="flex bg-muted/50 p-1 rounded-xl border border-border mr-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <h2 className="text-xl md:text-2xl font-syne font-bold text-foreground whitespace-nowrap">{isRtl ? 'إدارة المهام' : 'Task Management'}</h2>
+          <div className="flex items-center gap-2 md:gap-4 overflow-x-auto pb-2 md:pb-0 hide-scrollbar w-full md:w-auto font-sans">
+            <div className="flex bg-muted/50 p-1 rounded-xl border border-border mr-0 md:mr-4 shrink-0">
               <button 
                 onClick={() => onJobTypeChange('standard')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${jobTypeFilter === 'standard' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap shrink-0 transition-all ${jobTypeFilter === 'standard' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Briefcase size={14} /> Standard
+                <Briefcase size={14} /> {isRtl ? 'الاعتيادية' : 'Standard'}
               </button>
               <button 
                 onClick={() => onJobTypeChange('quick')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${jobTypeFilter === 'quick' ? 'bg-card shadow-sm text-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap shrink-0 transition-all ${jobTypeFilter === 'quick' ? 'bg-card shadow-sm text-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Zap size={14} /> Walk-in
+                <Zap size={14} /> {isRtl ? 'حضور مباشر' : 'Walk-in'}
               </button>
             </div>
             
             <button 
               onClick={onWalkIn}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-emerald-950 font-bold text-xs tracking-widest uppercase rounded-xl hover:bg-emerald-400 transition-colors shadow-md shadow-emerald-500/20"
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-emerald-950 font-bold text-[10px] md:text-xs tracking-widest whitespace-nowrap shrink-0 uppercase rounded-xl hover:bg-emerald-400 transition-colors shadow-md shadow-emerald-500/20"
             >
-              <Users size={16} /> Walk-in
+              <Users size={16} /> {isRtl ? 'تسجيل سريع' : 'Walk-in'}
             </button>
             <button 
               onClick={onNewTask}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs tracking-widest uppercase rounded-xl hover:bg-primary/90 transition-colors shadow-md shadow-primary/20"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-[10px] md:text-xs tracking-widest whitespace-nowrap shrink-0 uppercase rounded-xl hover:bg-primary/90 transition-colors shadow-md shadow-primary/20"
             >
-              <Plus size={16} /> New Task
+              <Plus size={16} /> {isRtl ? 'مهمة جديدة' : 'New Task'}
             </button>
-            <div className="flex bg-muted/50 p-1 rounded-xl border border-border">
+            <div className="flex bg-muted/50 p-1 rounded-xl border border-border shrink-0">
               <button 
                 onClick={() => onViewToggle('split')}
                 className={`p-1.5 rounded-lg transition-all ${currentMode === 'split' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
@@ -255,24 +264,24 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
              <h2 className="text-sm font-syne font-bold text-foreground flex items-center gap-2 mb-4">
                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                Pending Acceptance ({pendingJobs.length})
+                {isRtl ? `في انتظار القبول (${pendingJobs.length})` : `Pending Acceptance (${pendingJobs.length})`}
              </h2>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
                {pendingJobs.map(job => (
                  <div key={job.id} className="bg-card border border-primary/20 rounded-xl p-4 flex items-center justify-between shadow-lg">
                     <div>
-                      <h3 className="text-sm font-bold text-foreground">{job.client_name}</h3>
-                      <p className="text-xs text-muted-foreground">{job.service_name}</p>
-                      <p className="text-[10px] text-primary/80 font-bold uppercase tracking-widest mt-1">
-                        Assigned by: {job.assigned_by_role}
-                      </p>
+                       <h3 className="text-sm font-bold text-foreground">{job.client_name}</h3>
+                       <p className="text-xs text-muted-foreground">{job.service_name}</p>
+                       <p className="text-[10px] text-primary/80 font-bold uppercase tracking-widest mt-1">
+                         {isRtl ? 'مسند بواسطة:' : 'Assigned by:'} {job.assigned_by_role === 'employee' ? (isRtl ? 'موظف' : 'employee') : (isRtl ? 'مشرف' : job.assigned_by_role)}
+                       </p>
                     </div>
                     <button
                       onClick={() => acceptJobMutation.mutate(job.id)}
                       disabled={acceptJobMutation.isPending}
                       className="px-4 py-2 bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg hover:bg-gold transition-all disabled:opacity-50"
                     >
-                      Accept Task
+                      {isRtl ? 'قبول المهمة' : 'Accept Task'}
                     </button>
                  </div>
                ))}
@@ -293,50 +302,50 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
           
           {/* Left Section: Expanded Search Input */}
           <div className="w-full md:flex-1 relative min-w-[220px]">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search size={15} className={`absolute ${isRtl ? 'right-3.5' : 'left-3.5'} top-1/2 -translate-y-1/2 text-muted-foreground`} />
             <input 
               type="text" 
-              placeholder="Search Client Name, Service, or Task ID..." 
+              placeholder={isRtl ? 'البحث عن اسم العميل أو الخدمة أو رمز المهمة...' : 'Search Client Name, Service, or Task ID...'} 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-background border border-border outline-none pl-9 pr-8 py-2 rounded-xl text-foreground placeholder:text-muted-foreground/60 text-xs focus:border-primary transition-all"
+              className={`w-full bg-background border border-border outline-none ${isRtl ? 'pr-9 pl-8' : 'pl-9 pr-8'} py-2 rounded-xl text-foreground placeholder:text-muted-foreground/60 text-xs focus:border-primary transition-all`}
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1">
+              <button onClick={() => setSearchQuery('')} className={`absolute ${isRtl ? 'left-2.5' : 'right-2.5'} top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1`}>
                 <X size={14} />
               </button>
             )}
           </div>
 
           {/* Right Section: Single Horizontal Row of Compact Filter Pills */}
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-between md:justify-end text-xs">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-between md:justify-end text-xs font-sans">
             
             {/* Status Filter Dropdown */}
             <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status:</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{isRtl ? 'الحالة:' : 'Status:'}</span>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
                 className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer"
               >
-                <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">All Statuses</option>
-                <option value="active" className="bg-[#0A0F1E] text-slate-100 py-1">Active Workload</option>
-                <option value="awaiting_govt" className="bg-[#0A0F1E] text-slate-100 py-1">Awaiting Govt</option>
-                <option value="completed" className="bg-[#0A0F1E] text-slate-100 py-1">Completed</option>
-                <option value="on_hold" className="bg-[#0A0F1E] text-slate-100 py-1">On Hold</option>
+                <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'جميع الحالات' : 'All Statuses'}</option>
+                <option value="active" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'المهام النشطة' : 'Active Workload'}</option>
+                <option value="awaiting_govt" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'بانتظار الجهات الحكومية' : 'Awaiting Govt'}</option>
+                <option value="completed" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'مكتملة' : 'Completed'}</option>
+                <option value="on_hold" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'قيد الانتظار' : 'On Hold'}</option>
               </select>
             </div>
 
             {/* Service Filter Dropdown */}
             <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
               <Filter size={13} className="text-primary" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Service:</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{isRtl ? 'الخدمة:' : 'Service:'}</span>
               <select
                 value={serviceFilter}
                 onChange={(e) => setServiceFilter(e.target.value)}
                 className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer max-w-[140px] truncate"
               >
-                <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">All Services</option>
+                <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'جميع الخدمات' : 'All Services'}</option>
                 {availableServices.map((svc, i) => (
                   <option key={i} value={svc} className="bg-[#0A0F1E] text-slate-100 py-1">{svc}</option>
                 ))}
@@ -345,30 +354,30 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
 
             {/* Payment Filter Dropdown */}
             <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Payment:</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{isRtl ? 'الدفع:' : 'Payment:'}</span>
               <select
                 value={paymentFilter}
                 onChange={(e) => setPaymentFilter(e.target.value as any)}
                 className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer"
               >
-                <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">All Payments</option>
-                <option value="paid" className="bg-[#0A0F1E] text-slate-100 py-1">Fully Paid</option>
-                <option value="pending" className="bg-[#0A0F1E] text-slate-100 py-1">Pending Payment</option>
+                <option value="all" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'جميع الدفعات' : 'All Payments'}</option>
+                <option value="paid" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'مدفوع بالكامل' : 'Fully Paid'}</option>
+                <option value="pending" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'دفع معلق' : 'Pending Payment'}</option>
               </select>
             </div>
 
             {/* Sorting Dropdown */}
             <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5">
               <ArrowUpDown size={13} className="text-muted-foreground" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Sort:</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{isRtl ? 'الترتيب:' : 'Sort:'}</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="bg-transparent border-none outline-none text-xs text-foreground font-medium cursor-pointer"
               >
-                <option value="newest" className="bg-[#0A0F1E] text-slate-100 py-1">Newest First</option>
-                <option value="oldest" className="bg-[#0A0F1E] text-slate-100 py-1">Oldest First</option>
-                <option value="fee_desc" className="bg-[#0A0F1E] text-slate-100 py-1">Highest Fee</option>
+                <option value="newest" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'الأحدث أولاً' : 'Newest First'}</option>
+                <option value="oldest" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'الأقدم أولاً' : 'Oldest First'}</option>
+                <option value="fee_desc" className="bg-[#0A0F1E] text-slate-100 py-1">{isRtl ? 'الأعلى رسوماً' : 'Highest Fee'}</option>
               </select>
             </div>
 
@@ -378,7 +387,7 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
                 onClick={resetAllFilters}
                 className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-xl text-xs font-bold transition-all whitespace-nowrap"
               >
-                <RotateCcw size={13} /> Reset
+                <RotateCcw size={13} /> {isRtl ? 'إعادة ضبط' : 'Reset'}
               </button>
             )}
           </div>
@@ -386,15 +395,15 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
 
         <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm mt-4">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[800px]">
+            <table className="w-full border-collapse min-w-[800px]" dir={isRtl ? 'rtl' : 'ltr'}>
               <thead>
-                <tr className="border-b border-border bg-muted/20">
-                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Client & Task ID</th>
-                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Service</th>
-                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status & Progress</th>
-                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Financials</th>
-                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Start Date</th>
-                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-right">Action</th>
+                <tr className="border-b border-border bg-muted/20 text-right">
+                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-start">{isRtl ? 'العميل ورمز المهمة' : 'Client & Task ID'}</th>
+                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-start">{isRtl ? 'الخدمة' : 'Service'}</th>
+                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-start">{isRtl ? 'الحالة والتقدم' : 'Status & Progress'}</th>
+                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-start">{isRtl ? 'المالية' : 'Financials'}</th>
+                  <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-start">{isRtl ? 'تاريخ البدء' : 'Start Date'}</th>
+                  <th className={`py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground ${isRtl ? 'text-left' : 'text-right'}`}>{isRtl ? 'الإجراء' : 'Action'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -403,7 +412,9 @@ export const TaskListView: React.FC<TaskListViewProps> = ({
                 {displayJobs.length === 0 && (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">
-                      No {jobTypeFilter === 'quick' ? 'Quick Tasks' : 'Standard Jobs'} found matching your filter.
+                      {isRtl 
+                        ? `لم يتم العثور على ${jobTypeFilter === 'quick' ? 'مهام سريعة' : 'مهام اعتيادية'} تطابق بحثك.` 
+                        : `No ${jobTypeFilter === 'quick' ? 'Quick Tasks' : 'Standard Jobs'} found matching your filter.`}
                     </td>
                   </tr>
                 )}

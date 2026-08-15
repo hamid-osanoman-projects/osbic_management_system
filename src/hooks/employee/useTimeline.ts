@@ -19,6 +19,7 @@ export interface TimelineEntry {
   government_ref: string | null;
   is_delay_event: boolean;
   is_client_caused: boolean;
+  service_name?: string | null;  // snapshot of service name at time of change
 }
 
 export interface StatusUpdatePayload {
@@ -26,6 +27,7 @@ export interface StatusUpdatePayload {
   jobId: string;
   fromStatus: string;
   toStatus: string;
+  serviceName?: string;        // for snapshot in timeline
   reason?: string;
   governmentRef?: string;
   isDelayEvent?: boolean;
@@ -36,6 +38,8 @@ export interface StatusUpdatePayload {
   holdReason?: string;
   rejectionReason?: string;
   notes?: string;
+  issueDate?: string | null;
+  expiryDate?: string | null;
 }
 
 // ─── Fetch timeline for a job_service ────────────────────────────────────────
@@ -66,11 +70,19 @@ export function useJobTimeline(jobId: string | null) {
       if (!jobId) return [];
       const { data, error } = await (supabase
         .from('job_service_timeline')
-        .select('*, changer:profiles!job_service_timeline_changed_by_fkey(full_name, role, is_pro, can_do_ops, can_do_sales)')
+        .select(`
+          *,
+          changer:profiles!job_service_timeline_changed_by_fkey(full_name, role, is_pro, can_do_ops, can_do_sales),
+          service:job_services!job_service_timeline_job_service_id_fkey(service_name)
+        `)
         .eq('job_id', jobId)
         .order('changed_at', { ascending: true }) as any);
       if (error) throw error;
-      return (data || []) as (TimelineEntry & { changer: any })[];
+      // Merge service_name onto each entry for easy access
+      return (data || []).map((row: any) => ({
+        ...row,
+        service_name: row.service?.service_name || row.service_name || null
+      })) as (TimelineEntry & { changer: any })[];
     },
     enabled: !!jobId,
   });
@@ -143,6 +155,10 @@ export function useUpdateServiceStatus() {
       if (payload.toStatus === 'cancelled' && payload.reason) {
         serviceUpdate.cancellation_reason = payload.reason;
       }
+      if (payload.toStatus === 'gov_approved' || payload.toStatus === 'completed') {
+        if (payload.issueDate !== undefined) serviceUpdate.issue_date = payload.issueDate;
+        if (payload.expiryDate !== undefined) serviceUpdate.expiry_date = payload.expiryDate;
+      }
 
       // 4. Update job_service
       const { error: updateError } = await (supabase
@@ -167,6 +183,10 @@ export function useUpdateServiceStatus() {
         is_delay_event: payload.isDelayEvent || payload.toStatus === 'on_hold' || false,
         is_client_caused: payload.isClientCaused || false,
       };
+      // Include service_name snapshot if passed
+      if (payload.serviceName) {
+        timelineRow.service_name = payload.serviceName;
+      }
       const { error: timelineError } = await (supabase
         .from('job_service_timeline')
         .insert(timelineRow) as any);
@@ -197,13 +217,14 @@ export function useMyOpsTasks(employeeId: string | null) {
           *,
           job:jobs(
             id, job_code, status,
-            client:profiles!jobs_client_id_fkey(id, full_name, phone),
+            client:profiles!jobs_client_id_fkey(id, full_name, phone, is_trusted),
             assigned_by_profile:profiles!jobs_assigned_by_fkey(full_name)
           ),
           service:services(name_en, name_ar, requires_pro, estimated_days),
           ops_employee:profiles!job_services_ops_employee_id_fkey(full_name),
           assigner:profiles!job_services_assigned_by_fkey(full_name),
-          documents:job_service_documents(*)
+          documents:job_service_documents(*),
+          expenses:job_expenses(*)
         `)
         .eq('ops_employee_id', employeeId)
         .order('target_completion_date', { ascending: true, nullsFirst: false }) as any);

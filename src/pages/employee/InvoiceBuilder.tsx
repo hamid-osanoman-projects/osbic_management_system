@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Save, Plus, Trash2, FileText, Printer, CheckCircle2, Edit, X } from 'lucide-react';
+import { ChevronLeft, Save, Plus, Trash2, FileText, Printer, CheckCircle2, Edit, X, Eye, Download, AlertCircle, Receipt } from 'lucide-react';
 import { useInvoice, useSaveInvoice, useUpdateInvoiceStatus, useNextInvoiceNumber, type Invoice, type InvoiceItem } from '../../hooks/employee/useInvoices';
 import { useAuth } from '../../contexts/AuthContext';
-import { useAdminClients, useEmployeeClients } from '../../hooks/admin/useAdminClients';
+import { supabase } from '../../lib/supabase';
 import { useAdminJobs, useEmployeeJobs } from '../../hooks/shared/useJobs';
 import { InvoiceDocument } from '../../components/employee/InvoiceDocument';
 import { QuotationDocument } from '../../components/employee/QuotationDocument';
 import { useLeads, useAdminLeads } from '../../hooks/shared/useLeads';
-import { supabase } from '../../lib/supabase';
+import { useAdminClients, useEmployeeClients } from '../../hooks/admin/useAdminClients';
 import { useReactToPrint } from 'react-to-print';
 import toast from 'react-hot-toast';
+import { useQuery } from '@tanstack/react-query';
+import { downloadReceipt } from '../../utils/invoiceGenerator';
 
 const InvoiceBuilder = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,31 +21,14 @@ const InvoiceBuilder = () => {
   const [searchParams] = useSearchParams();
   const viewMode = searchParams.get('view') === 'true';
   const isNew = id === 'new';
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
+  const isPrivileged = role === 'admin' || profile?.is_manager;
+  const [invoiceMode, setInvoiceMode] = useState<'detailed' | 'simple'>('simple');
 
   const { data: initialData, isLoading: isLoadingInvoice } = useInvoice(id);
   const { mutateAsync: saveInvoice, isPending: isSaving } = useSaveInvoice();
   const { mutateAsync: updateStatus } = useUpdateInvoiceStatus();
   
-  // Scope clients and jobs: regular employees only see their assigned clients & jobs
-  const adminClientsQuery = useAdminClients();
-  const employeeClientsQuery = useEmployeeClients(profile?.id);
-  const clients = profile?.is_manager ? adminClientsQuery.data : employeeClientsQuery.data;
-
-  const adminJobsQuery = useAdminJobs();
-  const employeeJobsQuery = useEmployeeJobs(profile?.id || '');
-  const jobs = profile?.is_manager ? adminJobsQuery.data : employeeJobsQuery.data;
-
-  const { useLeadsList } = useLeads(profile?.id);
-  const { useAllLeadsList } = useAdminLeads();
-  const leads = profile?.is_manager ? useAllLeadsList().data : useLeadsList().data;
-
-  const { data: nextInvoiceNumber } = useNextInvoiceNumber();
-
-  const printRef = useRef<HTMLDivElement>(null);
-  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
-  const [selectedPayMode, setSelectedPayMode] = useState('Bank Transfer');
-
   const [formData, setFormData] = useState<Invoice>({
     client_id: '',
     lead_id: null,
@@ -60,9 +45,48 @@ const InvoiceBuilder = () => {
     items: []
   });
 
+  const printRef = useRef<HTMLDivElement>(null);
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [selectedPayMode, setSelectedPayMode] = useState('Bank Transfer');
+
+  // Scope clients and jobs: regular employees only see their assigned clients & jobs
+  const adminClientsQuery = useAdminClients();
+  const employeeClientsQuery = useEmployeeClients(profile?.id);
+  const clients = profile?.is_manager ? adminClientsQuery.data : employeeClientsQuery.data;
+
+  const adminJobsQuery = useAdminJobs();
+  const employeeJobsQuery = useEmployeeJobs(profile?.id || '');
+  const jobs = profile?.is_manager ? adminJobsQuery.data : employeeJobsQuery.data;
+
+  // Fetch payments for the associated job to check verification status and enable viewing receipt
+  const { data: jobPayments } = useQuery({
+    queryKey: ['job_payments', formData.job_id],
+    queryFn: async () => {
+      if (!formData.job_id) return [];
+      const { data, error } = await supabase
+        .from('job_payments')
+        .select('*')
+        .eq('job_id', formData.job_id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!formData.job_id
+  });
+
+  const { useLeadsList } = useLeads(profile?.id);
+  const { useAllLeadsList } = useAdminLeads();
+  const leads = profile?.is_manager ? useAllLeadsList().data : useLeadsList().data;
+
+  const { data: nextInvoiceNumber } = useNextInvoiceNumber();
+
   useEffect(() => {
     if (initialData && !isNew) {
       setFormData(initialData);
+      if (initialData.metadata?.isSimple === false) {
+        setInvoiceMode('detailed');
+      } else {
+        setInvoiceMode('simple');
+      }
     }
   }, [initialData, isNew]);
 
@@ -227,7 +251,11 @@ const InvoiceBuilder = () => {
 
       const invoicePayload = {
         ...formData,
-        employee_id: formData.employee_id || profile?.id
+        employee_id: formData.employee_id || profile?.id,
+        metadata: {
+          ...formData.metadata,
+          isSimple: invoiceMode === 'simple'
+        }
       };
       const savedId = await saveInvoice(invoicePayload);
       toast.success(formData.type === 'quotation' ? 'Quotation saved successfully' : 'Invoice saved successfully');
@@ -276,6 +304,32 @@ const InvoiceBuilder = () => {
       console.error("Payment revert error:", err);
       toast.error('Failed to update status');
     }
+  };
+
+  const handleViewReceipt = () => {
+    const verifiedPayment = jobPayments?.find(p => p.status === 'verified');
+    const associatedJob = jobs?.find(j => j.id === formData.job_id) || formData.job || {};
+    
+    const paymentObj = verifiedPayment || { 
+      amount: formData.total_amount, 
+      created_at: new Date().toISOString(),
+      reference_number: `REC-${associatedJob.job_code || 'MANUAL'}`
+    };
+    
+    downloadReceipt(associatedJob, paymentObj, 'view');
+  };
+
+  const handleDownloadReceipt = () => {
+    const verifiedPayment = jobPayments?.find(p => p.status === 'verified');
+    const associatedJob = jobs?.find(j => j.id === formData.job_id) || formData.job || {};
+    
+    const paymentObj = verifiedPayment || { 
+      amount: formData.total_amount, 
+      created_at: new Date().toISOString(),
+      reference_number: `REC-${associatedJob.job_code || 'MANUAL'}`
+    };
+    
+    downloadReceipt(associatedJob, paymentObj, 'download');
   };
 
   if (isLoadingInvoice) return <div className="p-8 text-center text-muted-foreground">Loading invoice data...</div>;
@@ -332,18 +386,66 @@ const InvoiceBuilder = () => {
              </button>
            ) : (
              <>
-               {!isNew && formData.type === 'invoice' && (
-                 <button 
-                   onClick={togglePaid}
-                   className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-bold transition-colors ${
-                     formData.status === 'paid' 
-                      ? 'bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20'
-                      : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20'
-                   }`}
-                 >
-                   <CheckCircle2 size={16} /> {formData.status === 'paid' ? 'Mark as Unpaid' : 'Mark as PAID'}
-                 </button>
-               )}
+                {/* Payment Status Area — only for saved invoices of type 'invoice' */}
+                {!isNew && formData.type === 'invoice' && (
+                  formData.status === 'paid' ? (
+                    // Already verified/paid — show receipt confirmation badge + View/Download Receipt actions
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs font-bold shadow-md shadow-emerald-500/5">
+                        <CheckCircle2 size={13} /> Receipt Issued
+                      </span>
+                      <button
+                        onClick={handleViewReceipt}
+                        type="button"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-lg shadow-primary/5"
+                        title="View Official Receipt"
+                      >
+                        <Eye size={12} /> View Receipt
+                      </button>
+                      <button
+                        onClick={handleDownloadReceipt}
+                        type="button"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all"
+                        title="Download Official Receipt"
+                      >
+                        <Download size={12} /> Download
+                      </button>
+                    </div>
+                  ) : (
+                    // Unpaid — check if there's a pending payment
+                    jobPayments && jobPayments.some(p => p.status === 'pending') ? (
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded-xl text-xs font-bold animate-pulse">
+                          <AlertCircle size={13} /> Verification Pending
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/80 dark:text-muted-foreground/60 max-w-[200px] leading-tight">
+                          Connect with Accounts to verify the pending deposit.
+                        </span>
+                      </div>
+                    ) : (
+                      // Truly unpaid — no payments recorded
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/5 border border-rose-500/15 text-rose-400/80 rounded-xl text-xs font-bold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                          Unpaid
+                        </span>
+                        {isPrivileged ? (
+                          <button 
+                            onClick={togglePaid}
+                            type="button"
+                            className="flex items-center gap-1.5 px-3 py-1.5 border border-amber-500/20 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all"
+                          >
+                            <CheckCircle2 size={12} /> Override: Mark as Paid
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/60 leading-tight">
+                            Record payment inside the Job's Ledger page.
+                          </span>
+                        )}
+                      </div>
+                    )
+                  )
+                )}
                
                <button 
                  onClick={handleSave}
@@ -575,6 +677,32 @@ const InvoiceBuilder = () => {
 
         {/* RIGHT: DOCUMENT PREVIEW (Visible in Print) */}
         <div className={viewMode ? "w-full max-w-[210mm] mx-auto print:w-full print:block print:static" : "w-full lg:w-[55%] print:w-full print:block print:static"}>
+           {/* Mode Selector (Hidden in Print) */}
+           <div className="flex flex-col sm:flex-row gap-3 p-4 bg-card border border-border rounded-[2rem] mb-6 print:hidden items-center justify-between shadow-xl">
+              <div>
+                <span className="text-xs font-bold text-foreground">Invoice Presentation Mode</span>
+                <p className="text-[9px] text-muted-foreground mt-0.5">Toggle between line-by-line itemized detail and flat package summary</p>
+              </div>
+              <div className="flex bg-[#0d121f] p-1 border border-border rounded-xl">
+                 <button
+                   onClick={() => setInvoiceMode('detailed')}
+                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                     invoiceMode === 'detailed' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                   }`}
+                 >
+                   Detailed
+                 </button>
+                 <button
+                   onClick={() => setInvoiceMode('simple')}
+                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                     invoiceMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                   }`}
+                 >
+                   Simple Summary
+                 </button>
+              </div>
+           </div>
+
            <div className="sticky top-8 rounded-2xl overflow-hidden border border-border shadow-2xl print:shadow-none print:border-none print:overflow-visible print:static">
               <style>{`
                 @media print {
@@ -599,6 +727,7 @@ const InvoiceBuilder = () => {
                     client: clients?.find(c => c.id === formData.client_id),
                     job: jobs?.find(j => j.id === formData.job_id)
                   }} 
+                  isSimple={invoiceMode === 'simple'}
                 />
               </div>
            </div>

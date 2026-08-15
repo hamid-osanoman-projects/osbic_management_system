@@ -173,18 +173,21 @@ const EmployeeDetail = () => {
                   {emp.is_manager && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-400 border border-purple-500/20">Manager</span>}
                   {emp.can_do_sales && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20">Sales</span>}
                   {emp.can_do_ops && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Operations</span>}
+                  {emp.can_do_accounts && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">Accounts</span>}
                   {emp.is_pro && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">PRO</span>}
 
                   <div className="relative">
                     <select
                       value={emp.department || 'operations'}
                       onChange={(e) => {
-                        const newDept = e.target.value as 'sales' | 'operations' | 'pro';
+                        const newDept = e.target.value as 'sales' | 'operations' | 'pro' | 'accounts';
                         const extraUpdates = newDept === 'sales'
-                          ? { can_do_sales: true, can_do_ops: false, is_pro: false }
+                          ? { can_do_sales: true, can_do_ops: false, can_do_accounts: false, is_pro: false }
                           : newDept === 'pro'
-                            ? { is_pro: true, can_do_sales: false, can_do_ops: false }
-                            : { can_do_ops: true, can_do_sales: false, is_pro: false };
+                            ? { is_pro: true, can_do_sales: false, can_do_ops: false, can_do_accounts: false }
+                            : newDept === 'accounts'
+                              ? { can_do_accounts: true, can_do_sales: false, can_do_ops: false, is_pro: false }
+                              : { can_do_ops: true, can_do_sales: false, can_do_accounts: false, is_pro: false };
                         
                         updateEmployee({
                           id: emp.id,
@@ -203,12 +206,15 @@ const EmployeeDetail = () => {
                           ? "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20"
                           : emp.department === 'pro'
                             ? "bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20"
-                            : "bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20",
+                            : emp.department === 'accounts'
+                              ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20"
+                              : "bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20",
                         isUpdating && "opacity-50 cursor-not-allowed"
                       )}
                     >
                       <option value="operations" className="bg-[#131824] text-foreground">Operations Team</option>
                       <option value="sales" className="bg-[#131824] text-foreground">Sales Executive</option>
+                      <option value="accounts" className="bg-[#131824] text-foreground">Accounts Team</option>
                       <option value="pro" className="bg-[#131824] text-foreground">PRO Agent</option>
                     </select>
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
@@ -497,7 +503,7 @@ const EmployeeDetail = () => {
                       <p className="text-[10px] text-muted-foreground/60 mt-0.5">Assigned monthly pipeline volume compared against converted client files</p>
                     </div>
                     <div className="h-[250px] w-full pt-4">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                         <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
                           <XAxis dataKey="name" stroke="#94A3B8" fontSize={10} />
@@ -547,7 +553,7 @@ const EmployeeDetail = () => {
                       <p className="text-[10px] text-muted-foreground/60 mt-0.5">Fulfillment volume tracks total operations finalized by month</p>
                     </div>
                     <div className="h-[250px] w-full pt-4">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                         <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
                           <XAxis dataKey="name" stroke="#94A3B8" fontSize={10} />
@@ -709,11 +715,11 @@ const EmployeeDetail = () => {
                         <Activity size={14} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-foreground">{log.action}</p>
-                        <p className="text-[10px] text-muted-foreground">Entity: {log.entity_name} • {log.details || 'No additional details'}</p>
+                          <p className="text-sm font-bold text-foreground">{log.action}</p>
+                          <p className="text-[10px] text-muted-foreground">Entity: {log.entity_type || 'System'} • {log.new_values ? (typeof log.new_values === 'object' ? JSON.stringify(log.new_values).substring(0, 50) + '...' : String(log.new_values)) : 'No details'}</p>
+                        </div>
                       </div>
-                    </div>
-                    <p className="text-[9px] font-mono text-muted-foreground/60">{new Date(log.created_at).toLocaleString()}</p>
+                      <p className="text-[9px] font-mono text-muted-foreground/60">{new Date(log.created_at).toLocaleString()}</p>
                   </div>
                 ))}
               </div>

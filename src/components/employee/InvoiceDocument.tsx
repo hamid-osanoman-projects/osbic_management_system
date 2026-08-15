@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 
 interface InvoiceDocumentProps {
   invoice: Invoice;
+  isSimple?: boolean;
 }
 
 // Helper to convert numbers to words (simplified for OMR)
@@ -15,10 +16,10 @@ const numberToWords = (amount: number) => {
   return `${whole} Rials only`; // A robust converter would be larger, keeping it simple
 };
 
-export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(({ invoice }, ref) => {
+export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(({ invoice, isSimple = false }, ref) => {
   const isPaid = invoice.status === 'paid';
   const isQuotation = invoice.type === 'quotation';
-  const themeColor = '#8b85f9'; // The purple/indigo color from the model
+  const themeColor = '#3b98d3'; // The brand blue color
 
   return (
     <div ref={ref} className="bg-white text-black p-10 min-h-[1056px] w-[794px] max-w-full mx-auto shadow-2xl relative overflow-hidden font-sans text-[11px] leading-relaxed print:w-full print:min-h-0 print:h-auto print:shadow-none print:p-0 print:m-0 print:overflow-visible">
@@ -76,28 +77,40 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
       <div className="relative z-10 mb-6 print:mb-3">
         <table className="w-full text-left border-collapse text-[11px] print:text-[10px]">
           <thead>
-            <tr className="text-white font-bold" style={{ backgroundColor: themeColor }}>
-              <th className="py-1 px-2 w-8">#</th>
-              <th className="py-1 px-2">Service Name</th>
-              <th className="py-1 px-2 text-center w-16">Quantity</th>
-              <th className="py-1 px-2 text-right w-24">Price/ Unit</th>
-              <th className="py-1 px-2 text-center w-16">VAT %</th>
-              <th className="py-1 px-2 text-right w-24">Final Rate</th>
-              <th className="py-1 px-2 text-right w-24">Amount</th>
+            <tr className="text-white font-bold" style={{ backgroundColor: themeColor, height: '40px' }}>
+              <th className="px-2 align-middle w-8" style={{ height: '40px', lineHeight: '40px', paddingTop: 0, paddingBottom: 0, verticalAlign: 'middle' }}>#</th>
+              <th className="px-2 align-middle" style={{ height: '40px', lineHeight: '40px', paddingTop: 0, paddingBottom: 0, verticalAlign: 'middle' }}>Service Name</th>
+              <th className="px-2 align-middle text-center w-16" style={{ height: '40px', lineHeight: '40px', paddingTop: 0, paddingBottom: 0, verticalAlign: 'middle' }}>Quantity</th>
+              <th className="px-2 align-middle text-right w-24" style={{ height: '40px', lineHeight: '40px', paddingTop: 0, paddingBottom: 0, verticalAlign: 'middle' }}>Price/ Unit</th>
+              <th className="px-2 align-middle text-center w-16" style={{ height: '40px', lineHeight: '40px', paddingTop: 0, paddingBottom: 0, verticalAlign: 'middle' }}>VAT %</th>
+              <th className="px-2 align-middle text-right w-24" style={{ height: '40px', lineHeight: '40px', paddingTop: 0, paddingBottom: 0, verticalAlign: 'middle' }}>Final Rate</th>
+              <th className="px-2 align-middle text-right w-24" style={{ height: '40px', lineHeight: '40px', paddingTop: 0, paddingBottom: 0, verticalAlign: 'middle' }}>Amount</th>
             </tr>
           </thead>
           <tbody>
-            {invoice.items?.map((item, idx) => (
-              <tr key={idx} className="border-b border-gray-300">
-                <td className="py-1.5 px-2 print:py-1">{idx + 1}</td>
-                <td className="py-1.5 px-2 print:py-1 font-bold">{item.description}</td>
-                <td className="py-1.5 px-2 print:py-1 text-center">{item.quantity}</td>
-                <td className="py-1.5 px-2 print:py-1 text-right">OMR {item.unit_price.toFixed(3)}</td>
-                <td className="py-1.5 px-2 print:py-1 text-center">{invoice.tax_percentage}%</td>
-                <td className="py-1.5 px-2 print:py-1 text-right">{item.unit_price.toFixed(3)}</td>
-                <td className="py-1.5 px-2 print:py-1 text-right">OMR {item.total.toFixed(3)}</td>
+            {isSimple ? (
+              <tr className="border-b border-gray-300">
+                <td className="py-3 px-2 align-middle print:py-2">1</td>
+                <td className="py-3 px-2 align-middle print:py-2 font-bold">{invoice.notes || 'Business Setup Services Package'}</td>
+                <td className="py-3 px-2 align-middle print:py-2 text-center">1</td>
+                <td className="py-3 px-2 align-middle print:py-2 text-right">OMR {invoice.subtotal.toFixed(3)}</td>
+                <td className="py-3 px-2 align-middle print:py-2 text-center">{invoice.tax_percentage}%</td>
+                <td className="py-3 px-2 align-middle print:py-2 text-right">OMR {invoice.subtotal.toFixed(3)}</td>
+                <td className="py-3 px-2 align-middle print:py-2 text-right">OMR {invoice.subtotal.toFixed(3)}</td>
               </tr>
-            ))}
+            ) : (
+              invoice.items?.map((item, idx) => (
+                <tr key={idx} className="border-b border-gray-300">
+                  <td className="py-3 px-2 align-middle print:py-2">{idx + 1}</td>
+                  <td className="py-3 px-2 align-middle print:py-2 font-bold">{item.description}</td>
+                  <td className="py-3 px-2 align-middle print:py-2 text-center">{item.quantity}</td>
+                  <td className="py-3 px-2 align-middle print:py-2 text-right">OMR {item.unit_price.toFixed(3)}</td>
+                  <td className="py-3 px-2 align-middle print:py-2 text-center">{invoice.tax_percentage}%</td>
+                  <td className="py-3 px-2 align-middle print:py-2 text-right">OMR {item.unit_price.toFixed(3)}</td>
+                  <td className="py-3 px-2 align-middle print:py-2 text-right">OMR {item.total.toFixed(3)}</td>
+                </tr>
+              ))
+            )}
             {(!invoice.items || invoice.items.length === 0) && (
               <tr>
                 <td colSpan={7} className="py-3 text-center text-gray-400 italic">No items added yet.</td>
@@ -105,13 +118,13 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
             )}
             {/* Total Row */}
             <tr className="border-b-2 border-black font-bold">
-              <td className="py-1.5 px-2 print:py-1"></td>
-              <td className="py-1.5 px-2 print:py-1">Total</td>
-              <td className="py-1.5 px-2 print:py-1 text-center">{invoice.items?.reduce((sum, item) => sum + item.quantity, 0) || 0}</td>
-              <td className="py-1.5 px-2 print:py-1"></td>
-              <td className="py-1.5 px-2 print:py-1"></td>
-              <td className="py-1.5 px-2 print:py-1"></td>
-              <td className="py-1.5 px-2 print:py-1 text-right">OMR {invoice.subtotal.toFixed(3)}</td>
+              <td className="py-2.5 px-2 align-middle print:py-2"></td>
+              <td className="py-2.5 px-2 align-middle print:py-2">Total</td>
+              <td className="py-2.5 px-2 align-middle print:py-2 text-center">{isSimple ? 1 : (invoice.items?.reduce((sum, item) => sum + item.quantity, 0) || 0)}</td>
+              <td className="py-2.5 px-2 align-middle print:py-2"></td>
+              <td className="py-2.5 px-2 align-middle print:py-2"></td>
+              <td className="py-2.5 px-2 align-middle print:py-2"></td>
+              <td className="py-2.5 px-2 align-middle print:py-2 text-right">OMR {invoice.subtotal.toFixed(3)}</td>
             </tr>
           </tbody>
         </table>
@@ -134,29 +147,29 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
 
         {/* Right Side: Totals Table */}
         <div className="w-full flex justify-end">
-           <table className="w-full max-w-[250px] text-right">
+           <table className="w-full max-w-[250px] text-right border-collapse">
              <tbody>
                <tr>
-                 <td className="py-1 px-2 text-gray-600 print:py-0.5">Sub Total</td>
-                 <td className="py-1 px-2 print:py-0.5">OMR {invoice.subtotal.toFixed(3)}</td>
+                 <td className="py-2.5 px-2 align-middle text-gray-600 print:py-1.5">Sub Total</td>
+                 <td className="py-2.5 px-2 align-middle print:py-1.5 font-bold">OMR {invoice.subtotal.toFixed(3)}</td>
                </tr>
-               <tr className="text-white font-bold" style={{ backgroundColor: themeColor }}>
-                 <td className="py-1 px-2 print:py-0.5">Total</td>
-                 <td className="py-1 px-2 print:py-0.5">OMR {invoice.total_amount.toFixed(3)}</td>
-               </tr>
-               <tr>
-                 <td className="py-1 px-2 text-gray-600 border-b border-gray-200 print:py-0.5">Received</td>
-                 <td className="py-1 px-2 border-b border-gray-200 print:py-0.5">OMR {(isPaid ? invoice.total_amount : 0).toFixed(3)}</td>
+               <tr className="text-white font-bold" style={{ backgroundColor: themeColor, height: '36px' }}>
+                 <td className="px-2 align-middle" style={{ height: '36px', lineHeight: '36px', paddingTop: 0, paddingBottom: 0, verticalAlign: 'middle' }}>Total</td>
+                 <td className="px-2 align-middle" style={{ height: '36px', lineHeight: '36px', paddingTop: 0, paddingBottom: 0, verticalAlign: 'middle' }}>OMR {invoice.total_amount.toFixed(3)}</td>
                </tr>
                <tr>
-                 <td className="py-1 px-2 text-gray-600 border-b border-gray-200 print:py-0.5">Balance</td>
-                 <td className="py-1 px-2 border-b border-gray-200 print:py-0.5">OMR {(isPaid ? 0 : invoice.total_amount).toFixed(3)}</td>
+                 <td className="py-2.5 px-2 align-middle text-gray-600 border-b border-gray-200 print:py-1.5">Received</td>
+                 <td className="py-2.5 px-2 align-middle border-b border-gray-200 print:py-1.5 font-bold">OMR {(isPaid ? invoice.total_amount : 0).toFixed(3)}</td>
                </tr>
                <tr>
-                 <td className="py-1 px-2 text-gray-600 border-b border-gray-200 print:py-0.5">
+                 <td className="py-2.5 px-2 align-middle text-gray-600 border-b border-gray-200 print:py-1.5">Balance</td>
+                 <td className="py-2.5 px-2 align-middle border-b border-gray-200 print:py-1.5 font-bold text-red-500">OMR {(isPaid ? 0 : invoice.total_amount).toFixed(3)}</td>
+               </tr>
+               <tr>
+                 <td className="py-2.5 px-2 align-middle text-gray-600 border-b border-gray-200 print:py-1.5">
                    {isPaid ? 'Payment mode' : 'Payment Terms'}
                  </td>
-                 <td className="py-1 px-2 border-b border-gray-200 print:py-0.5">
+                 <td className="py-2.5 px-2 align-middle border-b border-gray-200 print:py-1.5 font-bold">
                    {invoice.terms || (isPaid ? 'Bank Transfer' : 'Payment is due within 10 days.')}
                  </td>
                </tr>

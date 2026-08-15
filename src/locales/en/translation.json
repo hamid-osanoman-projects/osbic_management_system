@@ -46,8 +46,9 @@
     "reports": "Reports",
     "invoices": "Invoices & Quotes",
     "leads": "My Leads",
-    "ops_queue": "My Tasks",
-    "pro_queue": "PRO Queue"
+    "ops_queue": "My Work Queue",
+    "pro_queue": "PRO Queue",
+    "accounts": "Accounts Portal"
   },
   "admin": {
 
@@ -82,5 +83,25 @@
     "monthly_revenue": "This Month",
     "net_profit": "Net Profit",
     "outstanding": "Outstanding"
+  },
+  "ops": {
+    "my_tasks": "My Tasks",
+    "unassigned": "Unassigned",
+    "active": "Active",
+    "completed": "Completed",
+    "pipeline": "Workflow Pipeline",
+    "open_tracker": "Open Tracker",
+    "mark_completed": "Mark as Completed",
+    "save_changes": "Save Changes",
+    "due_date": "Due Date",
+    "assigned_to": "Assigned To",
+    "search_placeholder": "Search tasks by client name or service...",
+    "no_tasks": "No tasks found in this view.",
+    "clients": "Client Accounts",
+    "tasks": "Operations Queue",
+    "all": "All",
+    "self": "Assigned to Me",
+    "manager": "Assigned to Manager",
+    "coworker": "Assigned to Coworker"
   }
 }

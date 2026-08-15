@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useBranch } from '../../contexts/BranchContext';
 import { 
   Zap, Users, UserCheck, AlertCircle, Search, 
   RefreshCw, Loader2, Compass, Calendar, ChevronDown, Check
@@ -25,6 +26,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AdminLeads() {
+  const { selectedBranchId } = useBranch();
   const { useAllLeadsList, useReassignLead } = useAdminLeads();
   const { data: leads, isLoading, refetch } = useAllLeadsList();
   const { data: employees } = useAdminEmployees();
@@ -37,14 +39,22 @@ export default function AdminLeads() {
 
   const employeesList = employees || [];
   
+  // Filter by branch first (leads assigned to employees in this branch OR unassigned leads)
+  const branchLeads = (leads || []).filter(lead => {
+    if (selectedBranchId) {
+      return lead.assigned_to_profile?.branch_id === selectedBranchId || !lead.assigned_to;
+    }
+    return true;
+  });
+
   // Calculate KPIs
-  const totalLeads = leads?.length || 0;
-  const convertedLeads = leads?.filter(l => l.status === 'converted').length || 0;
+  const totalLeads = branchLeads.length;
+  const convertedLeads = branchLeads.filter(l => l.status === 'converted').length;
   const conversionRate = totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0;
-  const activeLeads = leads?.filter(l => !['converted', 'lost'].includes(l.status)).length || 0;
+  const activeLeads = branchLeads.filter(l => !['converted', 'lost'].includes(l.status)).length;
 
   // Filter Leads
-  const filteredLeads = (leads || []).filter(lead => {
+  const filteredLeads = branchLeads.filter(lead => {
     // 1. Search Query
     const query = searchTerm.trim().toLowerCase();
     const matchesSearch = !query || 
@@ -68,7 +78,7 @@ export default function AdminLeads() {
     new: 0, contacted: 0, interested: 0, qualified: 0,
     quoted: 0, negotiating: 0, converted: 0, lost: 0, on_hold: 0
   };
-  leads?.forEach(l => {
+  branchLeads.forEach(l => {
     if (statusCounts[l.status] !== undefined) {
       statusCounts[l.status]++;
     }
@@ -166,7 +176,7 @@ export default function AdminLeads() {
         <section className="bg-card border border-border rounded-[2rem] p-6 lg:p-8 shadow-xl">
           <h3 className="text-lg font-syne font-bold text-foreground mb-6">Lead Pipeline Funnel</h3>
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="name" stroke="#94A3B8" fontSize={9} tickLine={false} />

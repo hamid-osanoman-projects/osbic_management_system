@@ -7,11 +7,14 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import Skeleton from '../../components/ui/Skeleton';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 
 const EmployeeNotifications = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const qc = useQueryClient();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
 
   const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'assignments' | 'system'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,10 +70,10 @@ const EmployeeNotifications = () => {
       .eq('is_read', false);
     
     if (error) {
-      toast.error('Failed to mark all as read');
+      toast.error(isRtl ? 'فشل تحديد الكل كمقروء' : 'Failed to mark all as read');
     } else {
       qc.invalidateQueries({ queryKey: ['employee', 'notifications'] });
-      toast.success('All notifications marked as read');
+      toast.success(isRtl ? 'تم تحديد جميع الإشعارات كمقروءة' : 'All notifications marked as read');
     }
   };
 
@@ -83,8 +86,8 @@ const EmployeeNotifications = () => {
     // Search filtering
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const matchTitle = n.title_en?.toLowerCase().includes(q);
-      const matchBody = n.body_en?.toLowerCase().includes(q);
+      const matchTitle = (isRtl ? n.title_ar : n.title_en)?.toLowerCase().includes(q) || n.title_en?.toLowerCase().includes(q);
+      const matchBody = (isRtl ? n.body_ar : n.body_en)?.toLowerCase().includes(q) || n.body_en?.toLowerCase().includes(q);
       if (!matchTitle && !matchBody) return false;
     }
     
@@ -92,43 +95,43 @@ const EmployeeNotifications = () => {
   });
 
   const tabs = [
-    { id: 'all', label: 'All Alerts' },
-    { id: 'unread', label: 'Unread' },
-    { id: 'assignments', label: 'Assignments' },
-    { id: 'system', label: 'System' }
+    { id: 'all', label: isRtl ? 'جميع التنبيهات' : 'All Alerts' },
+    { id: 'unread', label: isRtl ? 'غير مقروء' : 'Unread' },
+    { id: 'assignments', label: isRtl ? 'المهام المسندة' : 'Assignments' },
+    { id: 'system', label: isRtl ? 'النظام' : 'System' }
   ];
 
   return (
-    <div className="max-w-4xl mx-auto py-12 px-4 space-y-8">
+    <div className="max-w-4xl mx-auto py-12 px-4 space-y-8" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border pb-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border pb-6 font-sans">
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-2">Notification Center</p>
-          <h1 className="text-3xl font-syne font-bold text-foreground tracking-tight">Internal Communications</h1>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-2">{isRtl ? 'مركز الإشعارات' : 'Notification Center'}</p>
+          <h1 className="text-3xl font-syne font-bold text-foreground tracking-tight">{isRtl ? 'الاتصالات الداخلية' : 'Internal Communications'}</h1>
         </div>
         
         <div className="flex items-center gap-4">
           <div className="relative group">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <Search size={14} className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors`} />
             <input 
               type="text"
-              placeholder="Search alerts..."
+              placeholder={isRtl ? 'البحث في التنبيهات...' : 'Search alerts...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent border border-border rounded-xl pl-9 pr-4 py-2 text-sm text-foreground outline-none focus:border-primary/50 transition-all w-full md:w-64 placeholder:text-muted-foreground/50"
+              className={`bg-transparent border border-border rounded-xl ${isRtl ? 'pr-9 pl-4' : 'pl-9 pr-4'} py-2 text-sm text-foreground outline-none focus:border-primary/50 transition-all w-full md:w-64 placeholder:text-muted-foreground/50`}
             />
           </div>
           <button 
             onClick={markAllRead}
             className="px-4 py-2.5 rounded-xl bg-transparent border border-border text-[10px] font-bold text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-all uppercase tracking-widest flex items-center gap-2 whitespace-nowrap"
           >
-            <Check size={14} /> Mark all read
+            <Check size={14} /> {isRtl ? 'تحديد الكل كمقروء' : 'Mark all read'}
           </button>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-6 border-b border-border/30 overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-6 border-b border-border/30 overflow-x-auto no-scrollbar font-sans">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -151,7 +154,7 @@ const EmployeeNotifications = () => {
           <Skeleton height={80} rounded="xl" />
         </div>
       ) : (
-        <div className="space-y-1 pt-2">
+        <div className="space-y-1 pt-2 font-sans">
           <AnimatePresence mode="popLayout">
             {filteredNotifications?.map((notif, index) => (
               <motion.div
@@ -161,7 +164,7 @@ const EmployeeNotifications = () => {
                 exit={{ opacity: 0, scale: 0.95 }}
                 key={notif.id}
                 onClick={() => handleAction(notif)}
-                className={`group flex items-start gap-4 p-4 cursor-pointer transition-colors rounded-xl hover:bg-muted/10 ${index !== 0 ? 'border-t border-border/30' : ''} ${!notif.is_read ? 'bg-primary/[0.02]' : ''}`}
+                className={`group flex items-start gap-4 p-4 cursor-pointer transition-colors rounded-xl hover:bg-muted/10 ${index !== 0 ? 'border-t border-border/30' : ''} ${!notif.is_read ? 'bg-primary/[0.02]' : ''} text-start`}
               >
                 {/* Status Indicator */}
                 <div className="pt-2">
@@ -178,23 +181,23 @@ const EmployeeNotifications = () => {
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 min-w-0 pr-4">
+                <div className={`flex-1 min-w-0 ${isRtl ? 'pl-4 pr-0' : 'pr-4 pl-0'}`}>
                   <div className="flex items-center justify-between mb-1">
-                    <h4 className={`text-sm font-medium truncate ${!notif.is_read ? 'text-foreground' : 'text-muted-foreground'}`}>
-                      {notif.title_en}
+                    <h4 className={`text-sm font-bold truncate ${!notif.is_read ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      {isRtl ? (notif.title_ar || notif.title_en) : notif.title_en}
                     </h4>
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-widest whitespace-nowrap ml-4">
-                      {new Date(notif.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    <span className={`text-[10px] text-muted-foreground uppercase tracking-widest whitespace-nowrap ${isRtl ? 'mr-4 ml-0' : 'ml-4 mr-0'}`}>
+                      {new Date(notif.created_at).toLocaleDateString(isRtl ? 'ar-OM' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground/80 leading-relaxed line-clamp-2">
-                    {notif.body_en}
+                    {isRtl ? (notif.body_ar || notif.body_en) : notif.body_en}
                   </p>
                 </div>
 
                 {/* Quick Action Hover */}
                 <div className="self-center opacity-0 group-hover:opacity-100 transition-opacity pr-2">
-                  <ChevronRight size={16} className="text-muted-foreground" />
+                  <ChevronRight size={16} className={`text-muted-foreground ${isRtl ? 'rotate-180' : ''}`} />
                 </div>
               </motion.div>
             ))}
@@ -209,8 +212,8 @@ const EmployeeNotifications = () => {
               <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-4 text-muted-foreground">
                  <Inbox size={20} />
               </div>
-              <h3 className="text-sm font-bold text-foreground mb-1">Inbox Zero</h3>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">No alerts found in this view.</p>
+              <h3 className="text-sm font-bold text-foreground mb-1">{isRtl ? 'صندوق الوارد فارغ' : 'Inbox Zero'}</h3>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{isRtl ? 'لم يتم العثور على تنبيهات في هذا العرض.' : 'No alerts found in this view.'}</p>
             </motion.div>
           )}
         </div>

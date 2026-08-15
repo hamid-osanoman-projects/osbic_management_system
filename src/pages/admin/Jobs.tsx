@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { useBranch } from '../../contexts/BranchContext';
 import { 
   Search, Filter, LayoutGrid, List as ListIcon,
   CheckCircle2, Clock, PlayCircle, PauseCircle, Plus,
@@ -30,6 +31,7 @@ const COLUMN_DEF = [
 
 const Jobs = () => {
   const navigate = useNavigate();
+  const { selectedBranchId } = useBranch();
   const { data: jobs, isLoading } = useAdminJobs();
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const [mainTab, setMainTab] = useState<'jobs' | 'packages'>('jobs');
@@ -64,6 +66,7 @@ const Jobs = () => {
             status,
             updated_at,
             hold_reason,
+            branch_id,
             service:services!service_id(name_en),
             ops:profiles!ops_employee_id(full_name)
           )
@@ -111,11 +114,17 @@ const Jobs = () => {
     localStorage.setItem('osbic_admin_jobs_view', v);
   };
 
-  // Dynamically compute unique categories and associates from jobs list
-  const categories = Array.from(new Set((jobs || []).map(j => j.service_category).filter(Boolean)));
-  const associates = Array.from(new Set((jobs || []).map(j => j.employee_name).filter(Boolean)));
+  // 1. Filter jobs by branch first
+  const branchJobs = jobs?.filter(j => {
+    if (selectedBranchId) return j.branch_id === selectedBranchId;
+    return true;
+  }) || [];
 
-  const filteredJobs = jobs?.filter(j => {
+  // Dynamically compute unique categories and associates from branch-filtered jobs list
+  const categories = Array.from(new Set(branchJobs.map(j => j.service_category).filter(Boolean)));
+  const associates = Array.from(new Set(branchJobs.map(j => j.employee_name).filter(Boolean)));
+
+  const filteredJobs = branchJobs.filter(j => {
     const matchesSearch = j.client_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           j.job_code.toLowerCase().includes(searchQuery.toLowerCase());
     
@@ -143,14 +152,30 @@ const Jobs = () => {
     return matchesSearch && matchesTab && matchesCategory && matchesAssociate;
   });
 
+  const filteredPackageGroups = (packageGroups || []).map((group: any) => {
+    const groupJobs = selectedBranchId 
+      ? (group.jobs || []).filter((j: any) => j.branch_id === selectedBranchId)
+      : (group.jobs || []);
+    return {
+      ...group,
+      jobs: groupJobs
+    };
+  }).filter((group: any) => {
+    if (selectedBranchId && group.jobs.length === 0) return false;
+    
+    return group.group_code.toLowerCase().includes(searchQuery.toLowerCase()) || 
+           group.client?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           group.package?.name_en?.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
   const counts = {
-    all: jobs?.length || 0,
-    pending: jobs?.filter(j => j.status === 'pending' || j.status === 'draft').length || 0,
-    active: jobs?.filter(j => j.status === 'in_progress' || j.status === 'active').length || 0,
-    awaiting_govt: jobs?.filter(j => j.status === 'awaiting_govt').length || 0,
-    completed: jobs?.filter(j => j.status === 'completed').length || 0,
-    on_hold: jobs?.filter(j => j.status === 'on_hold').length || 0,
-    cancelled: jobs?.filter(j => j.status === 'cancelled').length || 0,
+    all: branchJobs.length,
+    pending: branchJobs.filter(j => j.status === 'pending' || j.status === 'draft').length,
+    active: branchJobs.filter(j => j.status === 'in_progress' || j.status === 'active').length,
+    awaiting_govt: branchJobs.filter(j => j.status === 'awaiting_govt').length,
+    completed: branchJobs.filter(j => j.status === 'completed').length,
+    on_hold: branchJobs.filter(j => j.status === 'on_hold').length,
+    cancelled: branchJobs.filter(j => j.status === 'cancelled').length,
   };
 
   const getStatusBadge = (status: string) => {
@@ -351,7 +376,7 @@ const Jobs = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {packageGroups?.map((group: any) => {
+              {filteredPackageGroups?.map((group: any) => {
                 const childJobs = group.jobs || [];
                 const completedCount = childJobs.filter((j: any) => j.status === 'completed').length;
                 const totalCount = childJobs.length;
@@ -434,7 +459,7 @@ const Jobs = () => {
               })}
             </tbody>
           </table>
-          {(!packageGroups || packageGroups.length === 0) && (
+          {(!filteredPackageGroups || filteredPackageGroups.length === 0) && (
             <div className="py-20 flex flex-col items-center justify-center text-center">
               <h3 className="text-lg font-bold text-foreground">No Package Groups</h3>
               <p className="text-sm text-muted-foreground">There are no multi-job packages registered in the pipeline yet.</p>

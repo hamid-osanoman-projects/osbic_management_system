@@ -2,8 +2,24 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Building2, BookOpen, RefreshCw, Users, FileText, 
-  ChevronLeft, ArrowRight, Zap
+  ChevronLeft, ArrowRight, Zap, Layers, GripVertical, Plus, Trash2
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useAdminService, useSaveService, type Service } from '../../hooks/admin/useAdminServices';
 import toast from 'react-hot-toast';
 import { clsx, type ClassValue } from 'clsx';
@@ -21,6 +37,119 @@ const AVAILABLE_ICONS = [
   { name: 'FileText', icon: FileText }
 ];
 
+const SortableStep = ({ step, onUpdate, onRemove }: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: step.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="p-4 bg-muted/20 border border-border rounded-2xl relative space-y-4 group hover:border-primary/50 transition-colors">
+      <div className="flex items-start gap-3">
+        <div {...attributes} {...listeners} className="cursor-grab p-1 text-muted-foreground/40 hover:text-foreground mt-2">
+          <GripVertical size={18} />
+        </div>
+        <div className="flex-1 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Step Name (EN) *</label>
+              <input
+                type="text"
+                value={step.name_en}
+                onChange={(e) => onUpdate(step.id, { name_en: e.target.value })}
+                className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
+                placeholder="e.g. Document Verification"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right block">Step Name (AR)</label>
+              <input
+                type="text"
+                dir="rtl"
+                value={step.name_ar}
+                onChange={(e) => onUpdate(step.id, { name_ar: e.target.value })}
+                className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all text-right"
+                placeholder="التحقق من المستندات"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Description (EN)</label>
+              <input
+                type="text"
+                value={step.description_en}
+                onChange={(e) => onUpdate(step.id, { description_en: e.target.value })}
+                className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
+                placeholder="Internal instructions for this step..."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Est. Hours</label>
+                <input
+                  type="number"
+                  value={step.estimated_hours}
+                  onChange={(e) => onUpdate(step.id, { estimated_hours: Number(e.target.value) })}
+                  className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
+                  placeholder="24"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Gov. Fee (OMR)</label>
+                <input
+                  type="number"
+                  value={step.estimated_gov_fee || 0}
+                  onChange={(e) => onUpdate(step.id, { estimated_gov_fee: Number(e.target.value) })}
+                  className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6 pt-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={step.is_client_visible}
+                onChange={(e) => onUpdate(step.id, { is_client_visible: e.target.checked })}
+                className="rounded border-border text-primary focus:ring-primary/20"
+              />
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Client Visible</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={step.is_blocking}
+                onChange={(e) => onUpdate(step.id, { is_blocking: e.target.checked })}
+                className="rounded border-border text-primary focus:ring-primary/20"
+              />
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Blocking Step</span>
+            </label>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onRemove(step.id)}
+          className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors mt-6"
+          title="Remove Step"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const ServiceForm = () => {
   const { id } = useParams<{ id: string }>();
   const isNew = !id || id === 'new';
@@ -37,15 +166,72 @@ const ServiceForm = () => {
     requires_pro: false, document_requirements: []
   });
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   useEffect(() => {
     if (initialData) {
       setFormData({
         ...initialData,
         requires_pro: initialData.requires_pro || false,
-        document_requirements: initialData.document_requirements || []
+        document_requirements: initialData.document_requirements || [],
+        steps: initialData.steps || []
       });
     }
   }, [initialData]);
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+    
+    if (active.id !== over.id) {
+      setFormData((prev) => {
+        const oldIndex = prev.steps.findIndex((s) => s.id === active.id);
+        const newIndex = prev.steps.findIndex((s) => s.id === over.id);
+        return {
+          ...prev,
+          steps: arrayMove(prev.steps, oldIndex, newIndex).map((s, idx) => ({ ...s, order_index: idx }))
+        };
+      });
+    }
+  };
+
+  const handleUpdateStep = (id: string, updates: any) => {
+    setFormData(prev => ({
+      ...prev,
+      steps: prev.steps.map(s => s.id === id ? { ...s, ...updates } : s)
+    }));
+  };
+
+  const handleRemoveStep = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      steps: prev.steps.filter(s => s.id !== id)
+    }));
+  };
+
+  const handleAddStep = () => {
+    const newStep = {
+      id: `step-${Date.now()}`,
+      name_en: '',
+      name_ar: '',
+      description_en: '',
+      description_ar: '',
+      required_docs: [],
+      estimated_hours: 24,
+      is_client_visible: true,
+      is_blocking: false,
+      order_index: formData.steps.length,
+      estimated_gov_fee: 0
+    };
+    setFormData(prev => ({
+      ...prev,
+      steps: [...prev.steps, newStep]
+    }));
+  };
 
   const handleSave = () => {
     if (!formData.name_en || !formData.name_ar) {
@@ -244,6 +430,44 @@ const ServiceForm = () => {
                   </div>
                 </div>
              </div>
+           </div>
+
+           {/* Workflow Steps Builder */}
+           <div className="pt-6 border-t border-border/50 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <Layers size={16} className="text-primary" /> Workflow Steps
+                  </h3>
+                  <p className="text-xs text-muted-foreground/80 mt-1">Define the standard sequence of tasks for this service.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddStep}
+                  className="px-4 py-2 bg-primary/10 border border-primary/20 text-primary text-xs font-bold rounded-xl hover:bg-primary/20 transition-colors flex items-center gap-2"
+                >
+                  <Plus size={14} /> Add Step
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={formData.steps.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                    {formData.steps.map((step) => (
+                      <SortableStep
+                        key={step.id}
+                        step={step}
+                        onUpdate={handleUpdateStep}
+                        onRemove={handleRemoveStep}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+                
+                {formData.steps.length === 0 && (
+                  <p className="text-center py-6 text-xs text-muted-foreground italic border border-dashed border-border rounded-2xl">No workflow steps defined. Jobs will be created without default tasks.</p>
+                )}
+              </div>
            </div>
 
            {/* Required Documents Template */}

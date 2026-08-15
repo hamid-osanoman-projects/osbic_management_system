@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { 
   ChevronDown, ChevronUp, Plus, Calendar, MessageSquare, 
   CheckCircle2, AlertCircle, Clock, User, X, Coins,
@@ -89,8 +90,13 @@ const ApplicantCard = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [newStepName, setNewStepName] = useState('');
   const [isAddingStep, setIsAddingStep] = useState(false);
-  const [isUploadingDoc, setIsUploadingDoc] = useState<string | null>(null);
   const { profile } = useAuth();
+  const [isUploadingDoc, setIsUploadingDoc] = useState<string | null>(null);
+  const isClientTrusted = job?.client?.is_trusted === true;
+  const currentMinistryAllocated = js.ministry_fee_allocated || 0;
+  const reqMinistryFee = js.ministry_fee || 0;
+  const isAutoUnlocked = isClientTrusted || (reqMinistryFee > 0 && currentMinistryAllocated >= reqMinistryFee);
+  const isLocked = !js.is_funded && !isAutoUnlocked && (Number(js.total_fee) > 0);
 
   const documentsList = js.documents || [];
   const inputs = documentsList.filter((d: any) => d.document_category !== 'output');
@@ -100,6 +106,10 @@ const ApplicantCard = ({
   const addStepMutation = useAddJobServiceStep();
 
   const handleToggleStep = async (stepId: string, currentStatus: string) => {
+    if (isLocked) {
+      toast.error('This service is locked until funds are allocated by Sales.');
+      return;
+    }
     const newStatus = currentStatus === 'completed' ? 'pending' : 'completed';
     try {
       await updateStepMutation.mutateAsync({
@@ -132,6 +142,10 @@ const ApplicantCard = ({
   };
 
   const handleAddCustomStep = async () => {
+    if (isLocked) {
+      toast.error('This service is locked until funds are allocated by Sales.');
+      return;
+    }
     if (!newStepName.trim()) return;
     setIsAddingStep(true);
     try {
@@ -152,6 +166,10 @@ const ApplicantCard = ({
   };
 
   const handleUploadDoc = async (e: React.ChangeEvent<HTMLInputElement>, docId: string) => {
+    if (isLocked) {
+      toast.error('This service is locked until funds are allocated by Sales.');
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file || !profile) return;
 
@@ -307,17 +325,22 @@ const ApplicantCard = ({
             <p className="text-sm font-bold text-foreground">
               {js.applicant_name || `Applicant ${js.item_number}`}
             </p>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
               <StatusBadge status={js.status} />
               <DeadlineBadge dateStr={js.deadline} status={js.status} />
               {js.ops_employee && (
-                <span className="text-[9px] text-muted-foreground">· Ops: {(js.ops_employee as any).full_name}</span>
+                <span className="text-[9px] text-muted-foreground whitespace-nowrap">· Ops: {(js.ops_employee as any).full_name}</span>
               )}
               {js.pro_agent && (
-                <span className="text-[9px] text-amber-400">· PRO: {(js.pro_agent as any).full_name}</span>
+                <span className="text-[9px] text-amber-400 whitespace-nowrap">· PRO: {(js.pro_agent as any).full_name}</span>
               )}
               {js.government_ref && (
-                <span className="text-[9px] text-cyan-400">· Ref: {js.government_ref}</span>
+                <span className="text-[9px] text-cyan-400 whitespace-nowrap">· Ref: {js.government_ref}</span>
+              )}
+              {isLocked && (
+                <span className="text-[9px] font-bold text-destructive bg-destructive/10 px-2 py-0.5 rounded-full border border-destructive/20 flex items-center gap-1 whitespace-nowrap shrink-0">
+                  🔒 LOCKED (FUNDS REQUIRED)
+                </span>
               )}
             </div>
           </div>
@@ -337,8 +360,15 @@ const ApplicantCard = ({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="border-t border-border px-5 py-5 bg-card/50 space-y-5"
+            className={`border-t border-border px-5 py-5 bg-card/50 space-y-5 relative ${isLocked ? 'opacity-70 pointer-events-none' : ''}`}
           >
+            {isLocked && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/50 backdrop-blur-[1px]">
+                <div className="bg-destructive/10 text-destructive border border-destructive/20 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2">
+                  🔒 Locked Awaiting Sales Allocation
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Left Side: Steps Checklist */}
               <div className="space-y-3">
@@ -592,7 +622,7 @@ const SERVICE_STATUS_OPTIONS: { value: JobServiceStatus; label: string; color: s
 const StatusBadge = ({ status }: { status: JobServiceStatus }) => {
   const opt = SERVICE_STATUS_OPTIONS.find(o => o.value === status);
   return (
-    <span className={`text-[9px] font-bold uppercase tracking-widest ${opt?.color || 'text-white/40'}`}>
+    <span className={`text-[9px] font-bold uppercase tracking-widest whitespace-nowrap shrink-0 ${opt?.color || 'text-white/40'}`}>
       {opt?.label || status}
     </span>
   );
@@ -603,17 +633,17 @@ const DeadlineBadge = ({ dateStr, status }: { dateStr: string | null; status: st
   if (status === 'completed' || status === 'cancelled') return null;
   const days = differenceInDays(parseISO(dateStr), new Date());
   if (days < 0) return (
-    <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20">
+    <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20 whitespace-nowrap shrink-0">
       <AlertCircle size={9} /> {Math.abs(days)}d overdue
     </span>
   );
   if (days <= 2) return (
-    <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded border border-yellow-400/20">
+    <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded border border-yellow-400/20 whitespace-nowrap shrink-0">
       <Clock size={9} /> {days}d left
     </span>
   );
   return (
-    <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/40 px-2 py-0.5 rounded border border-border/50">
+    <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/40 px-2 py-0.5 rounded border border-border/50 whitespace-nowrap shrink-0">
       <Calendar size={9} /> {format(parseISO(dateStr), 'MMM d')}
     </span>
   );
@@ -633,6 +663,8 @@ const ServiceStatusSheet = ({
   onUpdated: () => void;
 }) => {
   const { profile } = useAuth();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
   const [status, setStatus] = useState<JobServiceStatus>(service.status);
   const [proId, setProId] = useState(service.pro_id || '');
   const [proNotes, setProNotes] = useState(service.pro_notes || '');
@@ -652,6 +684,9 @@ const ServiceStatusSheet = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [forwardReason, setForwardReason] = useState('');
+  const [actualFee, setActualFee] = useState('');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [paidByClient, setPaidByClient] = useState(service.notes?.includes('[PAID BY CLIENT CARD]') || false);
 
   const handleAssignSelect = (empId: string) => {
     setSelectedEmployeeId(empId);
@@ -867,6 +902,60 @@ const ServiceStatusSheet = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const feeAmount = parseFloat(actualFee) || 0;
+      if (feeAmount > 0 && !receiptFile) {
+        toast.error('You must upload a payment receipt when recording government fees.');
+        setIsSaving(false);
+        return;
+      }
+
+      // Upload receipt file if government fee is recorded
+      let receiptUrl = '';
+      if (receiptFile) {
+        const fileExt = receiptFile.name.split('.').pop();
+        const fileName = `${jobId}/${service.id}/${Date.now()}_receipt.${fileExt}`;
+        const filePath = `documents/${fileName}`;
+        
+        const { error: storageError } = await supabase.storage.from('documents').upload(filePath, receiptFile);
+        if (storageError) throw storageError;
+        receiptUrl = filePath;
+
+        if (paidByClient) {
+          // If paid by client card, upload it directly as an output deliverable document
+          const { error: docError } = await supabase
+            .from('job_service_documents')
+            .insert({
+              job_service_id: service.id,
+              job_id: jobId,
+              document_name: 'Government Receipt Document',
+              file_name: receiptFile.name,
+              file_path: filePath,
+              file_size: receiptFile.size,
+              file_type: receiptFile.type,
+              document_category: 'output',
+              uploaded_by: profile?.id,
+              status: 'approved',
+              created_at: new Date().toISOString()
+            } as any);
+          if (docError) throw docError;
+        }
+      }
+
+      // Log expense in job_expenses table (only if NOT paid by client card)
+      if (feeAmount > 0 && !paidByClient) {
+        const { error: expenseError } = await supabase.from('job_expenses').insert({
+          job_id: jobId,
+          job_service_id: service.id,
+          amount: feeAmount,
+          expense_type: 'ministry_fee',
+          receipt_url: receiptUrl || null,
+          notes: `Recorded during status update to ${status}`,
+          status: 'pending_approval',
+          created_by: profile?.id
+        });
+        if (expenseError) throw expenseError;
+      }
+
       const payload: any = {
         status,
         applicant_name: applicantName || null,
@@ -893,10 +982,10 @@ const ServiceStatusSheet = ({
       if (status === 'gov_approved' || status === 'gov_rejected') {
         payload.government_ref = govRef || null;
         payload.government_approved_at = status === 'gov_approved' ? new Date().toISOString() : null;
-        if (status === 'gov_approved') {
-          payload.issue_date = issueDate || null;
-          payload.expiry_date = expiryDate || null;
-        }
+      }
+      if (status === 'gov_approved' || status === 'completed') {
+        payload.issue_date = issueDate || null;
+        payload.expiry_date = expiryDate || null;
       }
       if (status === 'on_hold') {
         payload.pending_reason = holdReason || null;
@@ -957,6 +1046,12 @@ const ServiceStatusSheet = ({
         else if (profile?.is_pro) changerRole = 'pro';
         else if (profile?.can_do_sales && !profile?.can_do_ops) changerRole = 'sales';
 
+        const clientPaidNote = paidByClient
+          ? (isRtl 
+             ? `[دفع بواسطة بطاقة العميل] الرسوم الحكومية: ${feeAmount.toFixed(3)} ريال عماني`
+             : `[Paid by Client Card] Government fee: ${feeAmount.toFixed(3)} OMR`)
+          : null;
+
         await (supabase.from('job_service_timeline').insert({
           job_service_id: service.id,
           job_id: jobId,
@@ -967,9 +1062,10 @@ const ServiceStatusSheet = ({
           changed_by_role: changerRole,
           days_in_previous_stage: daysInPrevStage,
           changed_at: new Date().toISOString(),
-          reason: holdReason || rejectionReason || notes || null,
+          reason: clientPaidNote || holdReason || rejectionReason || notes || null,
           government_ref: govRef || null,
-          is_delay_event: status === 'on_hold'
+          is_delay_event: status === 'on_hold',
+          service_name: service.service_name || null,
         } as any) as any);
       }
 
@@ -1115,23 +1211,25 @@ const ServiceStatusSheet = ({
           )}
 
           {/* Government info */}
-          {(status === 'gov_approved' || status === 'gov_rejected') && (
+          {(status === 'gov_approved' || status === 'gov_rejected' || status === 'completed') && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Government Reference No.</label>
-                <input
-                  type="text"
-                  value={govRef}
-                  onChange={(e) => setGovRef(e.target.value)}
-                  placeholder="e.g. MOL/2025/12345"
-                  className="w-full bg-muted/30 border border-border focus:border-primary rounded-xl px-4 py-2.5 text-sm text-foreground outline-none transition-all"
-                />
-              </div>
+              {(status === 'gov_approved' || status === 'gov_rejected') && (
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Government Reference No.</label>
+                  <input
+                    type="text"
+                    value={govRef}
+                    onChange={(e) => setGovRef(e.target.value)}
+                    placeholder="e.g. MOL/2025/12345"
+                    className="w-full bg-muted/30 border border-border focus:border-primary rounded-xl px-4 py-2.5 text-sm text-foreground outline-none transition-all"
+                  />
+                </div>
+              )}
 
-              {status === 'gov_approved' && (
+              {(status === 'gov_approved' || status === 'completed') && (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Issue Date</label>
+                    <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">{isRtl ? 'تاريخ الإصدار' : 'Issue Date'}</label>
                     <input
                       type="date"
                       value={issueDate ? issueDate.split('T')[0] : ''}
@@ -1140,7 +1238,7 @@ const ServiceStatusSheet = ({
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Expiry Date</label>
+                    <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">{isRtl ? 'تاريخ الانتهاء' : 'Expiry Date'}</label>
                     <input
                       type="date"
                       value={expiryDate ? expiryDate.split('T')[0] : ''}
@@ -1328,6 +1426,67 @@ const ServiceStatusSheet = ({
                 </button>
               </div>
             </div>
+
+            {/* Government Fee & Receipt */}
+            <AnimatePresence>
+              {(status === 'gov_approved' || status === 'completed') && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3 pt-3 border-t border-border/40">
+                  {/* Paid by Client Card Checkbox */}
+                  <div className="flex items-center gap-2 py-1.5 bg-primary/5 px-3.5 rounded-xl border border-primary/10">
+                    <input
+                      type="checkbox"
+                      id="details_paid_by_client"
+                      checked={paidByClient}
+                      onChange={(e) => setPaidByClient(e.target.checked)}
+                      className="w-4 h-4 rounded accent-primary bg-muted/20 border-border cursor-pointer"
+                    />
+                    <label htmlFor="details_paid_by_client" className="text-[10px] font-bold text-muted-foreground cursor-pointer select-none uppercase tracking-wider flex-1">
+                      {isRtl ? 'العميل دفع ببطاقته (دفع مباشر)' : 'Paid by Client Card (Direct Pay)'}
+                    </label>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-primary uppercase tracking-widest block">
+                      Actual Government Fee Spent (OMR)
+                    </label>
+                    <input
+                      type="text"
+                      value={actualFee}
+                      onChange={(e) => {
+                        const text = e.target.value;
+                        if (/^\d*\.?\d*$/.test(text)) {
+                          setActualFee(text);
+                        }
+                      }}
+                      placeholder="0.000 OMR"
+                      className="w-full bg-muted/30 border border-border focus:border-primary rounded-xl px-4 py-2.5 text-sm text-foreground outline-none transition-all font-mono"
+                    />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-primary uppercase tracking-widest block">
+                      Government Receipt Document
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        id="details_receipt_file_upload"
+                        className="hidden"
+                        onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                        accept="image/*,.pdf"
+                      />
+                      <label 
+                        htmlFor="details_receipt_file_upload"
+                        className="w-full flex items-center justify-center gap-2 border border-dashed border-border rounded-xl px-4 py-3 text-xs text-muted-foreground hover:bg-muted/50 cursor-pointer transition-colors"
+                      >
+                        <Upload size={14} />
+                        {receiptFile ? receiptFile.name : "Upload Payment Receipt"}
+                      </label>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -1430,25 +1589,42 @@ const ServiceStatusSheet = ({
 const OperationsPanel = ({ job, employees, onDataRefresh }: { job: any; employees: any[]; onDataRefresh: () => void }) => {
   const { data: jobServices, isLoading, refetch } = useJobServices(job?.id);
   const [selectedService, setSelectedService] = useState<JobService | null>(null);
+  const { profile } = useAuth();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
+
+  const isManagerOrAdmin = profile?.role === 'admin' || profile?.is_manager;
+  const isJobSalesOrCreator = job?.sales_employee_id === profile?.id || job?.assigned_by === profile?.id;
+  const filteredServices = (jobServices || []).filter(js => {
+    if (isManagerOrAdmin || isJobSalesOrCreator) return true;
+    return js.ops_employee_id === profile?.id;
+  }).sort((a, b) => {
+    const orderA = a.display_order ?? 1;
+    const orderB = b.display_order ?? 1;
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+    return (a.item_number || 1) - (b.item_number || 1);
+  });
 
   // Group by service_id to show service groups
   const grouped: Record<string, JobService[]> = {};
-  (jobServices || []).forEach((js) => {
+  filteredServices.forEach((js) => {
     const key = js.service_id + '_' + js.service_name;
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(js);
   });
 
   if (isLoading) {
-    return <div className="text-center text-muted-foreground py-12 animate-pulse text-sm">Loading operations...</div>;
+    return <div className="text-center text-muted-foreground py-12 animate-pulse text-sm">{isRtl ? 'جاري تحميل العمليات...' : 'Loading operations...'}</div>;
   }
 
-  if (!jobServices || jobServices.length === 0) {
+  if (filteredServices.length === 0) {
     return (
       <div className="text-center border-2 border-dashed border-border rounded-3xl p-12 bg-card/25">
         <Layers size={32} className="text-muted-foreground mx-auto mb-3" />
-        <p className="font-bold text-foreground mb-1">No operational services yet</p>
-        <p className="text-xs text-muted-foreground">Add services using the Job Builder or template configs.</p>
+        <p className="font-bold text-foreground mb-1">{isRtl ? 'لا توجد خدمات عملياتية بعد' : 'No operational services yet'}</p>
+        <p className="text-xs text-muted-foreground">{isRtl ? 'قم بإضافة خدمات باستخدام منشئ الوظائف أو إعدادات القوالب.' : 'Add services using the Job Builder or template configs.'}</p>
       </div>
     );
   }
@@ -1469,13 +1645,17 @@ const OperationsPanel = ({ job, employees, onDataRefresh }: { job: any; employee
                   {allDone ? <CheckCircle2 size={16} /> : <Activity size={16} />}
                 </div>
                 <div>
-                  <p className="font-syne font-bold text-foreground text-sm">{firstItem.service_name}</p>
-                  <p className="text-[10px] text-muted-foreground">{items.length} applicant{items.length !== 1 ? 's' : ''}</p>
+                  <p className="font-syne font-bold text-foreground text-sm">
+                    {isRtl ? (firstItem.service?.name_ar || firstItem.service_name) : firstItem.service_name}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {isRtl ? `${items.length} طلب` : `${items.length} applicant${items.length !== 1 ? 's' : ''}`}
+                  </p>
                 </div>
               </div>
               {firstItem.service?.requires_pro && (
                 <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Shield size={9} /> PRO Required
+                  <Shield size={9} /> {isRtl ? 'مطلوب مخلص معاملات' : 'PRO Required'}
                 </span>
               )}
             </div>
@@ -1522,7 +1702,7 @@ const OperationsPanel = ({ job, employees, onDataRefresh }: { job: any; employee
 
 // ─── Timeline Panel (Imported from shared components/jobs/JobTimelinePanel) ───
 
-export const JobDetailsView = ({ job }: { job: any }) => {
+export const JobDetailsView = ({ job, onUpdated }: { job: any; onUpdated?: () => void }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'operations' | 'ledger' | 'timeline' | 'documents' | 'messages'>('operations');
   const [steps, setSteps] = useState<any[]>([]);
@@ -1656,6 +1836,51 @@ export const JobDetailsView = ({ job }: { job: any }) => {
   const handleMarkInvoicePaid = async () => {
     if (!existingInvoice) return;
     try {
+      // 1. Fetch latest job data
+      const { data: jobData } = await supabase
+        .from('jobs')
+        .select('id, total_fee, work_fee, ministry_fee, advance_amount, remaining_amount')
+        .eq('id', job.id)
+        .single();
+
+      // 2. Fetch all verified payments
+      const { data: payments } = await supabase
+        .from('job_payments')
+        .select('amount')
+        .eq('job_id', job.id)
+        .eq('status', 'verified');
+
+      const totalPaid = (payments || []).reduce((sum, p) => sum + Number(p.amount), 0);
+      const remainingToPay = Math.max(0, Number(jobData?.total_fee || 0) - totalPaid);
+
+      // 3. Insert a verified payment record in job_payments if balance remains
+      if (remainingToPay > 0) {
+        const { error: payErr } = await supabase.from('job_payments').insert({
+          job_id: job.id,
+          amount: remainingToPay,
+          payment_method: selectedPayMode.toLowerCase(),
+          notes: `Manually marked as paid via invoice actions`,
+          status: 'verified',
+          recorded_by: profile?.id,
+          verified_by: profile?.id,
+          verified_at: new Date().toISOString()
+        });
+        if (payErr) throw payErr;
+      }
+
+      // 4. Update the job details to show fully paid status
+      const { error: jobErr } = await supabase.from('jobs').update({
+        advance_paid: true,
+        advance_paid_at: new Date().toISOString(),
+        remaining_paid: true,
+        remaining_paid_at: new Date().toISOString(),
+        advance_amount: Number(jobData?.total_fee || 0),
+        remaining_amount: 0
+      }).eq('id', job.id);
+      
+      if (jobErr) throw jobErr;
+
+      // 5. Update invoice status to paid
       const { error } = await supabase
         .from('invoices')
         .update({ 
@@ -1671,10 +1896,11 @@ export const JobDetailsView = ({ job }: { job: any }) => {
         });
       } else {
         import('react-hot-toast').then(toast => {
-          toast.default.success(`Invoice marked as Paid via ${selectedPayMode}`);
+          toast.default.success(`Invoice marked as Paid via ${selectedPayMode}. Financial ledger updated.`);
         });
         setIsPayModalOpen(false);
         loadData();
+        if (onUpdated) onUpdated();
       }
     } catch (e: any) {
       import('react-hot-toast').then(toast => {
@@ -1794,10 +2020,35 @@ export const JobDetailsView = ({ job }: { job: any }) => {
       }
     }
 
-    // Optimistic UI update
-    job.status = status;
-    
-    const { error } = await supabase.from('jobs').update({ status: status as any }).eq('id', job.id);
+    const updatePayload: any = { status: status as any };
+    if (status === 'completed') {
+      updatePayload.completed_at = new Date().toISOString();
+      
+      try {
+        const { data: jobServices } = await supabase
+          .from('job_services')
+          .select('expiry_date')
+          .eq('job_id', job.id);
+          
+        if (jobServices && jobServices.length > 0) {
+          const dates = jobServices
+            .map((js: any) => js.expiry_date)
+            .filter(Boolean)
+            .map((d: string) => new Date(d));
+            
+          if (dates.length > 0) {
+            const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+            updatePayload.service_expiry_date = maxDate.toISOString().split('T')[0];
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync master job expiry date:', err);
+      }
+    } else {
+      updatePayload.completed_at = null;
+    }
+
+    const { error } = await supabase.from('jobs').update(updatePayload).eq('id', job.id);
     
     if (error) {
       import('react-hot-toast').then(toast => {
@@ -1808,6 +2059,7 @@ export const JobDetailsView = ({ job }: { job: any }) => {
         toast.default.success('Job status updated');
       });
       loadData(); // Ensure UI is synced
+      if (onUpdated) onUpdated();
     }
   };
 

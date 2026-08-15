@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, CheckCircle } from 'lucide-react';
+import { X, CheckCircle, Camera, Loader2 } from 'lucide-react';
 import { useUpdateEmployee } from '../../hooks/admin/useAdminEmployees';
+import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
+import { useBranch } from '../../contexts/BranchContext';
 
 interface Props {
   isOpen: boolean;
@@ -15,14 +17,19 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
     fullName: '',
     email: '',
     phone: '',
+    department: 'operations' as 'sales' | 'operations' | 'accounts' | 'pro',
     notes: '',
-    services: [] as string[],
     is_manager: false,
     can_do_sales: false,
     can_do_ops: false,
+    can_do_accounts: false,
     is_pro: false,
+    avatarUrl: '',
+    branch_id: '' as string,
   });
 
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const { branches } = useBranch();
   const { mutate: updateEmployee, isPending } = useUpdateEmployee();
 
   useEffect(() => {
@@ -31,15 +38,54 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
         fullName: employee.full_name || '',
         email: employee.email || '',
         phone: employee.phone ? employee.phone.replace('+968 ', '') : '',
+        department: employee.department || 'operations',
         notes: employee.notes || '',
-        services: employee.assigned_services || [],
         is_manager: employee.is_manager || false,
         can_do_sales: employee.can_do_sales || false,
         can_do_ops: employee.can_do_ops || false,
+        can_do_accounts: employee.can_do_accounts || false,
         is_pro: employee.is_pro || false,
+        avatarUrl: employee.avatar_url || '',
+        branch_id: employee.branch_id || '',
       });
     }
   }, [employee]);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !employee?.id) return;
+
+    // Validate size and format
+    if (file.size > 10 * 1024 * 1024) return toast.error('Photo must be under 10MB');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return toast.error('Only JPG, PNG or WebP allowed');
+
+    setUploadingAvatar(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${employee.id}-${Date.now()}.${fileExt}`;
+      const filePath = `user-avatars/${fileName}`;
+
+      // 1. Upload to storage bucket
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get Public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      // 3. Update state
+      setFormData(prev => ({ ...prev, avatarUrl: publicUrl }));
+      toast.success('Photo uploaded! Click Save to apply changes.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload photo');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleSubmit = () => {
     if (!formData.fullName || !formData.email) {
@@ -53,12 +99,14 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
         full_name: formData.fullName,
         email: formData.email,
         phone: formData.phone ? `+968 ${formData.phone}` : null,
+        department: formData.department,
         is_manager: formData.is_manager,
         can_do_sales: formData.can_do_sales,
         can_do_ops: formData.can_do_ops,
+        can_do_accounts: formData.can_do_accounts,
         is_pro: formData.is_pro,
-        // Assuming profiles table has a notes field or it's handled via metadata
-        // assigned_services: formData.services,
+        avatar_url: formData.avatarUrl || null,
+        branch_id: formData.branch_id || null,
       } as any
     }, {
       onSuccess: () => {
@@ -70,14 +118,6 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
       }
     });
   };
-
-  const availableServices = [
-    { id: '1', name: 'CR Registration', category: 'Ministry of Commerce' },
-    { id: '2', name: 'Visas', category: 'ROP' },
-    { id: '3', name: 'Labor Cards', category: 'Ministry of Labor' },
-    { id: '4', name: 'Chamber of Commerce', category: 'Ministry of Commerce' },
-    { id: '5', name: 'General Services', category: 'Other' },
-  ];
 
   return (
     <AnimatePresence>
@@ -101,6 +141,31 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
                <div className="space-y-4">
+                  {/* Profile Image Section */}
+                  <div className="flex flex-col items-center gap-3 pb-4 border-b border-border/40">
+                    <label className="block text-sm font-medium text-muted-foreground self-start">Profile Photo</label>
+                    <div className="relative group">
+                      <div className="w-24 h-24 rounded-2xl bg-primary/5 border border-border/80 flex items-center justify-center text-primary text-3xl font-syne font-bold overflow-hidden shadow-inner">
+                        {uploadingAvatar ? (
+                          <Loader2 className="animate-spin" size={24} />
+                        ) : formData.avatarUrl ? (
+                          <img src={formData.avatarUrl} className="w-full h-full object-cover" alt="Avatar" />
+                        ) : (
+                          formData.fullName?.[0]?.toUpperCase() || 'E'
+                        )}
+                      </div>
+                      <label className="absolute -bottom-2 -right-2 p-2 bg-foreground border border-border rounded-xl text-background hover:scale-105 active:scale-95 transition-all shadow-md cursor-pointer">
+                        <Camera size={14} />
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleAvatarUpload}
+                          disabled={uploadingAvatar}
+                        />
+                      </label>
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-muted-foreground mb-1.5">Full Name *</label>
                     <input
@@ -119,6 +184,34 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
                       className="w-full bg-white/5 border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-gold transition-colors"
                     />
                   </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1.5">Department *</label>
+                    <select
+                      value={formData.department}
+                      onChange={(e) => setFormData({ ...formData, department: e.target.value as any })}
+                      className="w-full bg-white/5 border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-gold transition-colors cursor-pointer"
+                    >
+                      <option value="operations" className="bg-[#0A0F1E]">Operations</option>
+                      <option value="sales" className="bg-[#0A0F1E]">Sales</option>
+                      <option value="accounts" className="bg-[#0A0F1E]">Accounts</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1.5">Branch *</label>
+                    <select
+                      value={formData.branch_id}
+                      onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
+                      className="w-full bg-white/5 border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-gold transition-colors cursor-pointer"
+                    >
+                      <option value="" className="bg-[#0A0F1E]">— Select Branch —</option>
+                      {branches.filter(b => b.is_active).map(b => (
+                        <option key={b.id} value={b.id} className="bg-[#0A0F1E]">{b.name} ({b.code})</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-muted-foreground mb-1.5">Phone Number</label>
                     <div className="flex gap-2">
@@ -181,6 +274,21 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
                       </button>
                     </div>
 
+                    {/* Can do Accounts Toggle */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-border">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Can do Accounts</p>
+                        <p className="text-[10px] text-muted-foreground/60">Enables accounts workflow and verification</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, can_do_accounts: !formData.can_do_accounts })}
+                        className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ${formData.can_do_accounts ? 'bg-primary' : 'bg-white/10'}`}
+                      >
+                        <div className={`bg-card w-4 h-4 rounded-full shadow-md transform duration-200 ease-in-out ${formData.can_do_accounts ? 'translate-x-5' : ''}`} />
+                      </button>
+                    </div>
+
                     {/* Is PRO Toggle */}
                     <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-border">
                       <div>
@@ -197,36 +305,6 @@ const EditEmployeeSlideOver = ({ isOpen, onClose, employee }: Props) => {
                     </div>
                   </div>
                </div>
-
-               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-3">Assign Services</label>
-                <div className="space-y-2">
-                  {availableServices.map((service) => {
-                    const isSelected = formData.services.includes(service.name);
-                    return (
-                      <div
-                        key={service.id}
-                        onClick={() => {
-                          if (isSelected) {
-                            setFormData({ ...formData, services: formData.services.filter(s => s !== service.name) });
-                          } else {
-                            setFormData({ ...formData, services: [...formData.services, service.name] });
-                          }
-                        }}
-                        className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${isSelected ? 'bg-primary/10 border-gold/50' : 'bg-white/5 border-border hover:border-white/20'}`}
-                      >
-                        <div>
-                          <p className={`text-sm font-medium ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>{service.name}</p>
-                          <p className="text-[10px] text-muted-foreground/60">{service.category}</p>
-                        </div>
-                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-gold text-[#0A0F1E]' : 'border-white/20'}`}>
-                          {isSelected && <CheckCircle size={14} />}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
 
             <div className="p-6 border-t border-border flex gap-3">

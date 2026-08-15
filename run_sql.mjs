@@ -15,18 +15,8 @@ env.split('\n').forEach(line => {
 
 const supabase = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY);
 
-const migrationSql = `
-ALTER TABLE public.messages 
-ADD COLUMN IF NOT EXISTS conversation_scope TEXT DEFAULT 'staff_client' 
-CHECK (conversation_scope IN ('staff_client', 'admin_client'));
-
-UPDATE public.messages 
-SET conversation_scope = 'staff_client' 
-WHERE conversation_scope IS NULL;
-
-CREATE INDEX IF NOT EXISTS idx_messages_job_scope 
-ON public.messages(job_id, conversation_scope);
-`;
+const migrationPath = path.resolve(process.cwd(), 'supabase/migrations/20260808_update_service_ministry_fees.sql');
+const migrationSql = fs.readFileSync(migrationPath, 'utf8');
 
 async function run() {
   const { data, error } = await supabase.rpc('execute_sql', { sql: migrationSql });

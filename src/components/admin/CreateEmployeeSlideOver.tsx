@@ -5,6 +5,7 @@ import { useCreateEmployee } from '../../hooks/admin/useAdminEmployees';
 import { generateSecurePassword, generateUsername, copyToClipboard } from '../../lib/credentialUtils';
 import PhotoCropper from '../shared/PhotoCropper';
 import toast from 'react-hot-toast';
+import { useBranch } from '../../contexts/BranchContext';
 
 
 interface Props {
@@ -20,21 +21,24 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
     phone: '',
     countryCode: '+968',
     customCountryCode: '',
+    department: 'operations' as 'sales' | 'operations' | 'accounts' | 'pro',
     notes: '',
     services: [] as string[],
     avatarFile: null as File | null,
     previewUrl: '',
+    branchId: '',
   });
   const [croppingImage, setCroppingImage] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [credentials, setCredentials] = useState({ username: '', password: '', employeeCode: '' });
   const [showPassword, setShowPassword] = useState(false);
 
+  const { branches } = useBranch();
   const { mutate: createEmployee, isPending } = useCreateEmployee();
 
   const handleSubmit = () => {
-    if (!formData.fullName || !formData.email || !formData.phone) {
-      toast.error('Please fill in all required fields');
+    if (!formData.fullName || !formData.email || !formData.phone || !formData.branchId) {
+      toast.error('Please fill in all required fields (Name, Email, Phone, and Branch)');
       return;
     }
 
@@ -48,8 +52,10 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
         email: formData.email,
         phone: formData.phone ? `${finalCountryCode} ${formData.phone}` : undefined,
         password: generatedPassword,
-      avatar_file: formData.avatarFile,
-    }, {
+        department: formData.department,
+        avatar_file: formData.avatarFile,
+        branch_id: formData.branchId || null,
+      }, {
       onSuccess: (data: any) => {
         setCredentials({
           username: username,
@@ -73,7 +79,7 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
 
   const resetForm = () => {
     setStep(1);
-    setFormData({ fullName: '', email: '', phone: '', countryCode: '+968', customCountryCode: '', notes: '', services: [], avatarFile: null, previewUrl: '' });
+    setFormData({ fullName: '', email: '', phone: '', countryCode: '+968', customCountryCode: '', department: 'operations', notes: '', services: [], avatarFile: null, previewUrl: '', branchId: '' });
     setShowSuccess(false);
     setShowPassword(false);
     onClose();
@@ -171,6 +177,35 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
                             placeholder="ahmed@osbic.om"
                           />
                         </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-muted-foreground mb-1.5">Department *</label>
+                          <select
+                            value={formData.department}
+                            onChange={(e) => setFormData({ ...formData, department: e.target.value as any })}
+                            className="w-full bg-white/5 border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-gold transition-colors cursor-pointer"
+                          >
+                            <option value="operations" className="bg-[#0A0F1E]">Operations</option>
+                            <option value="sales" className="bg-[#0A0F1E]">Sales</option>
+                            <option value="accounts" className="bg-[#0A0F1E]">Accounts</option>
+                            <option value="pro" className="bg-[#0A0F1E]">PRO</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-muted-foreground mb-1.5">Branch *</label>
+                          <select
+                            value={formData.branchId}
+                            onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                            className="w-full bg-white/5 border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-gold transition-colors cursor-pointer"
+                          >
+                            <option value="" className="bg-[#0A0F1E]">Select Branch</option>
+                            {branches.filter(b => b.is_active).map(b => (
+                              <option key={b.id} value={b.id} className="bg-[#0A0F1E]">{b.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
                         <div>
                           <label className="block text-sm font-medium text-muted-foreground mb-1.5">Phone Number *</label>
                           <div className="flex gap-2">

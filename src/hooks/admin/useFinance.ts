@@ -12,18 +12,24 @@ export interface FinanceMetrics {
   employeePerformance: { name: string; completed: number; revenue: number }[];
 }
 
-export const useFinanceMetrics = () => {
+export const useFinanceMetrics = (branchId?: string | null) => {
   return useQuery({
-    queryKey: ['admin', 'finance'],
+    queryKey: ['admin', 'finance', branchId],
     refetchInterval: 60000, // Auto-refresh every 60s
     queryFn: async (): Promise<FinanceMetrics> => {
-      const { data: jobs, error } = await supabase
+      let query = supabase
         .from('jobs')
         .select(`
           *,
           services (name_en),
           profiles:employee_id (full_name)
         `);
+
+      if (branchId) {
+        query = query.eq('branch_id', branchId);
+      }
+
+      const { data: jobs, error } = await query;
 
       if (error) throw error;
 

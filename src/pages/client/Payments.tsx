@@ -337,33 +337,31 @@ const Payments = () => {
                           </div>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-white/[0.01] border border-white/[0.03] p-4 rounded-2xl text-[11px] font-mono flex-1">
+                        <div className="grid grid-cols-2 gap-4 bg-white/[0.01] border border-white/[0.03] p-4 rounded-2xl text-[11px] font-mono flex-1">
                           <div className="px-2">
-                            <p className="text-[8px] uppercase tracking-wider text-muted-foreground/30 mb-1">{isRtl ? 'رسوم العمل' : 'Work Fee'}</p>
-                            <p className="text-foreground font-bold">{item.work_fee.toLocaleString()} OMR</p>
-                          </div>
-                          <div className="px-2 border-l border-white/5">
-                            <p className="text-[8px] uppercase tracking-wider text-muted-foreground/30 mb-1">{isRtl ? 'الرسوم الحكومية' : 'Govt Fee'}</p>
-                            <p className="text-foreground font-bold">{item.ministry_fee.toLocaleString()} OMR</p>
-                          </div>
-                          <div className="px-2 border-l border-white/5">
-                            <p className="text-[8px] uppercase tracking-wider text-muted-foreground/30 mb-0.5">{isRtl ? 'الدفعة الأولى' : 'Deposit (50%)'}</p>
+                            <p className="text-[8px] uppercase tracking-wider text-muted-foreground/30 mb-0.5">{isRtl ? 'الدفعة الأولى (50%)' : 'Advance (50%)'}</p>
                             <div className="flex items-center gap-1.5 mt-1">
                               <span className={cn(
                                 "w-2.5 h-2.5 rounded-full",
                                 item.advance_paid ? "bg-emerald-500" : "bg-amber-500"
                               )} />
-                              <span className="text-foreground font-bold">{item.advance_due_amount.toLocaleString()} OMR</span>
+                              <span className={cn("font-bold", item.advance_paid ? "text-emerald-400" : "text-foreground")}>
+                                {item.advance_due_amount.toLocaleString()} OMR
+                              </span>
+                              {item.advance_paid && <span className="text-[8px] text-emerald-500 uppercase font-black tracking-widest">{isRtl ? '✓ مدفوع' : '✓ Paid'}</span>}
                             </div>
                           </div>
                           <div className="px-2 border-l border-white/5">
-                            <p className="text-[8px] uppercase tracking-wider text-muted-foreground/30 mb-0.5">{isRtl ? 'الدفعة النهائية' : 'Balance'}</p>
+                            <p className="text-[8px] uppercase tracking-wider text-muted-foreground/30 mb-0.5">{isRtl ? 'الدفعة النهائية (50%)' : 'Balance (50%)'}</p>
                             <div className="flex items-center gap-1.5 mt-1">
                               <span className={cn(
                                 "w-2.5 h-2.5 rounded-full",
                                 item.remaining_paid ? "bg-emerald-500" : "bg-amber-500"
                               )} />
-                              <span className="text-foreground font-bold">{item.remaining_due_amount.toLocaleString()} OMR</span>
+                              <span className={cn("font-bold", item.remaining_paid ? "text-emerald-400" : "text-foreground")}>
+                                {item.remaining_due_amount.toLocaleString()} OMR
+                              </span>
+                              {item.remaining_paid && <span className="text-[8px] text-emerald-500 uppercase font-black tracking-widest">{isRtl ? '✓ مدفوع' : '✓ Paid'}</span>}
                             </div>
                           </div>
                         </div>

@@ -23,9 +23,11 @@ import Skeleton from '../../components/ui/Skeleton';
 import ExpiryAlerts from '../../components/admin/analytics/ExpiryAlerts';
 import ApprovalHub from '../../components/admin/ApprovalHub';
 import PulseFeed from '../../components/admin/PulseFeed';
+import FinanceHealthMatrix from '../../components/admin/analytics/FinanceHealthMatrix';
 import { useTranslation } from 'react-i18next';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useBranch } from '../../contexts/BranchContext';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -51,16 +53,24 @@ const Dashboard = () => {
   const { i18n } = useTranslation();
   const isRtl = i18n.dir() === 'rtl';
   const navigate = useNavigate();
+  const { selectedBranchId, selectedBranch } = useBranch();
 
-  const { data: stats, isLoading: statsLoading } = useAdminDashboardStats();
-  const { data: revenue } = useRevenueChart();
-  const { data: distribution } = useJobDistribution();
-  const { data: recentJobs, isLoading: jobsLoading } = useRecentJobs();
-  const { data: employees, isLoading: employeesLoading } = useTopEmployees();
-  const { data: salesLeaderboard } = useSalesLeaderboard();
+  const { data: stats, isLoading: statsLoading } = useAdminDashboardStats(selectedBranchId);
+  const { data: revenue } = useRevenueChart(selectedBranchId);
+  const { data: distribution } = useJobDistribution(selectedBranchId);
+  const { data: recentJobs, isLoading: jobsLoading } = useRecentJobs(selectedBranchId);
+  const { data: employees, isLoading: employeesLoading } = useTopEmployees(selectedBranchId);
+  const { data: salesLeaderboard } = useSalesLeaderboard(selectedBranchId);
   
   const { useAllLeadsList } = useAdminLeads();
   const { data: leads } = useAllLeadsList();
+
+  const branchLeads = (leads || []).filter(lead => {
+    if (selectedBranchId) {
+      return lead.assigned_to_profile?.branch_id === selectedBranchId || !lead.assigned_to;
+    }
+    return true;
+  });
 
   const container = {
     hidden: { opacity: 0 },
@@ -106,6 +116,19 @@ const Dashboard = () => {
       animate="show"
       className="space-y-8 pb-16"
     >
+      {/* Branch filter banner */}
+      {selectedBranch && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-primary/5 border border-primary/20 rounded-2xl">
+          <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+            <span className="text-xs font-bold text-primary font-mono">{selectedBranch.code}</span>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-primary">Viewing Branch: {selectedBranch.name}</p>
+            <p className="text-[10px] text-muted-foreground">All stats and data below are filtered to this branch only</p>
+          </div>
+        </div>
+      )}
+
       {/* ── Row 1: KPI Cards ────────────────────────────────── */}
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
         {kpiCards.map((card) => (
@@ -155,7 +178,7 @@ const Dashboard = () => {
           </div>
           
           <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={revenue ?? []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148,163,184,0.12)" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'currentColor', opacity: 0.6, fontSize: 12, fontWeight: 700 }} />
@@ -200,7 +223,7 @@ const Dashboard = () => {
           <p className="text-xs text-muted-foreground mb-6">Real-time Job Status Distribution</p>
           
           <div className="flex-1 w-full min-h-[250px]">
-             <ResponsiveContainer width="100%" height="100%">
+             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                <PieChart>
                  <Pie
                    data={distribution ?? []}
@@ -226,9 +249,8 @@ const Dashboard = () => {
         </motion.div>
       </section>
 
-      {/* ── Row 3: Jobs Table + Top Employees ───────────────── */}
+      {/* ── Row 3: Jobs Table & Health Matrix ───────────────── */}
       <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        {/* Recent Jobs */}
         <motion.div variants={item} className="xl:col-span-8 bg-card border border-border rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h4 className="text-lg font-syne font-bold text-foreground">In-Flight Operations</h4>
@@ -236,7 +258,7 @@ const Dashboard = () => {
               All Jobs <ChevronRight size={14} />
             </Link>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto w-full max-w-full">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-border">
@@ -275,42 +297,13 @@ const Dashboard = () => {
           </div>
         </motion.div>
 
-        {/* Top Employees */}
-        <motion.div variants={item} className="xl:col-span-4 bg-card border border-border rounded-2xl p-6 shadow-sm">
-          <h4 className="text-lg font-syne font-bold text-foreground mb-6">Efficiency Leaders</h4>
-          <div className="space-y-5">
-            {employeesLoading
-              ? [1, 2, 3].map((i) => <Skeleton key={i} height={56} rounded="xl" />)
-              : (employees as any[])?.map((emp, idx) => (
-                <div key={emp.id} className="flex items-center gap-4 group">
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-xl bg-muted border border-border flex items-center justify-center overflow-hidden">
-                      {emp.avatar_url
-                        ? <img src={emp.avatar_url} className="w-full h-full object-cover" alt={emp.full_name} />
-                        : <span className="text-muted-foreground font-bold text-lg">{emp.full_name[0]}</span>}
-                    </div>
-                    {idx < 3 && (
-                      <div className={cn(
-                        'absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center border-2 border-card',
-                        idx === 0 ? 'bg-primary' : idx === 1 ? 'bg-slate-300' : 'bg-orange-400'
-                      )}>
-                        <Trophy size={10} className="text-primary-foreground" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">{emp.full_name}</p>
-                    <p className="text-[10px] text-muted-foreground/60 font-mono uppercase">{emp.employee_code ?? 'EMP'}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-xl font-bold font-mono text-foreground leading-none">{emp.completed_month}</p>
-                    <p className="text-[10px] text-muted-foreground/60 uppercase">Jobs</p>
-                  </div>
-                </div>
-              ))}
-          </div>
+        {/* Finance Health Matrix */}
+        <motion.div variants={item} className="xl:col-span-4">
+          <FinanceHealthMatrix branchId={selectedBranchId} />
         </motion.div>
       </section>
+
+
 
       {/* ── Row 3.5: CRM & Sales Funnel Summary ──────────────── */}
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -337,19 +330,19 @@ const Dashboard = () => {
               <div className="grid grid-cols-3 md:grid-cols-1 gap-4">
                 <div className="p-4 rounded-2xl bg-muted/20 border border-border/40">
                   <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider block">Total Leads</span>
-                  <p className="text-2xl font-bold font-mono text-foreground mt-0.5">{leads?.length || 0}</p>
+                  <p className="text-2xl font-bold font-mono text-foreground mt-0.5">{branchLeads.length}</p>
                 </div>
                 <div className="p-4 rounded-2xl bg-muted/20 border border-border/40">
                   <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-wider block">Converted</span>
                   <p className="text-2xl font-bold font-mono text-emerald-500 mt-0.5">
-                    {leads?.filter(l => l.status === 'converted').length || 0}
+                    {branchLeads.filter(l => l.status === 'converted').length}
                   </p>
                 </div>
                 <div className="p-4 rounded-2xl bg-primary/5 border border-gold/20">
                   <span className="text-[9px] text-primary font-bold uppercase tracking-wider block">Conv. Rate</span>
                   <p className="text-2xl font-bold font-mono text-primary mt-0.5">
-                    {leads && leads.length > 0 
-                      ? Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100)
+                    {branchLeads.length > 0 
+                      ? Math.round((branchLeads.filter(l => l.status === 'converted').length / branchLeads.length) * 100)
                       : 0}%
                   </p>
                 </div>
@@ -360,14 +353,14 @@ const Dashboard = () => {
             <div className="md:col-span-2 h-[200px] flex items-center justify-center">
               {(() => {
                 const funnelData = [
-                  { name: '1. New', value: leads?.filter(l => l.status === 'new').length || 0, fill: '#818CF8' },
-                  { name: '2. Contacted', value: leads?.filter(l => l.status === 'contacted').length || 0, fill: '#60A5FA' },
-                  { name: '3. Quoted', value: leads?.filter(l => ['quoted', 'negotiating'].includes(l.status)).length || 0, fill: '#34D399' },
-                  { name: '4. Converted', value: leads?.filter(l => l.status === 'converted').length || 0, fill: '#059669' },
+                  { name: '1. New', value: branchLeads.filter(l => l.status === 'new').length, fill: '#818CF8' },
+                  { name: '2. Contacted', value: branchLeads.filter(l => l.status === 'contacted').length, fill: '#60A5FA' },
+                  { name: '3. Quoted', value: branchLeads.filter(l => ['quoted', 'negotiating'].includes(l.status)).length, fill: '#34D399' },
+                  { name: '4. Converted', value: branchLeads.filter(l => l.status === 'converted').length, fill: '#059669' },
                 ];
                 
                 return (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <BarChart layout="vertical" data={funnelData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
                       <XAxis type="number" hide />
                       <YAxis dataKey="name" type="category" stroke="#94A3B8" fontSize={9} width={80} axisLine={false} tickLine={false} />
@@ -399,7 +392,7 @@ const Dashboard = () => {
           <div className="flex-1 flex flex-col justify-center">
             {(() => {
               const counts: Record<string, { total: number; converted: number }> = {};
-              (leads || []).forEach((l: any) => {
+              branchLeads.forEach((l: any) => {
                 const source = l.lead_sources?.name || 'Other';
                 if (!counts[source]) counts[source] = { total: 0, converted: 0 };
                 counts[source].total += 1;
@@ -421,7 +414,7 @@ const Dashboard = () => {
               return (
                 <div className="flex items-center justify-between gap-4">
                   <div className="w-[120px] h-[120px] shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                       <PieChart>
                         <Pie data={sourceData} innerRadius={35} outerRadius={50} paddingAngle={3} dataKey="value">
                           {sourceData.map((entry, idx) => (
@@ -501,14 +494,53 @@ const Dashboard = () => {
         </motion.div>
       </section>
 
-      {/* ── Row 4: Approval Hub & Expiry Monitor ──────────────── */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div variants={item} className="h-[500px]">
+      {/* ── Row 4: Approval Hub, Expiry Monitor & Efficiency Leaders ──────────────── */}
+      <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <motion.div variants={item} className="xl:col-span-4 h-[500px]">
            <ApprovalHub />
         </motion.div>
         
-        <motion.div variants={item} className="h-[500px]">
+        <motion.div variants={item} className="xl:col-span-4 h-[500px]">
            <ExpiryAlerts />
+        </motion.div>
+
+        {/* Efficiency Leaders (Top Employees) */}
+        <motion.div variants={item} className="xl:col-span-4 bg-card border border-border rounded-[2rem] p-6 lg:p-8 shadow-sm flex flex-col h-[500px] overflow-y-auto">
+          <h4 className="text-base font-syne font-bold text-foreground mb-6 flex items-center gap-2">
+            <Trophy className="text-amber-400" size={20} />
+            Efficiency Leaders
+          </h4>
+          <div className="space-y-5">
+            {employeesLoading
+              ? [1, 2, 3].map((i) => <Skeleton key={i} height={56} rounded="xl" />)
+              : (employees as any[])?.map((emp, idx) => (
+                <div key={emp.id} className="flex items-center gap-4 group">
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-xl bg-muted border border-border flex items-center justify-center overflow-hidden shrink-0">
+                      {emp.avatar_url
+                        ? <img src={emp.avatar_url} className="w-full h-full object-cover" alt={emp.full_name} />
+                        : <span className="text-muted-foreground font-bold text-sm">{emp.full_name[0]}</span>}
+                    </div>
+                    {idx < 3 && (
+                      <div className={cn(
+                        'absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center border border-card',
+                        idx === 0 ? 'bg-primary text-[#0A0F1E]' : idx === 1 ? 'bg-slate-300 text-slate-800' : 'bg-orange-400 text-orange-950'
+                      )}>
+                        <Trophy size={8} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">{emp.full_name}</p>
+                    <p className="text-[9px] text-muted-foreground/60 font-mono uppercase">{emp.employee_code ?? 'EMP'}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold font-mono text-foreground leading-none">{emp.completed_month}</p>
+                    <p className="text-[9px] text-muted-foreground/60 uppercase">Jobs</p>
+                  </div>
+                </div>
+              ))}
+          </div>
         </motion.div>
       </section>
     </motion.div>

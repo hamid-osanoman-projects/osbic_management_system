@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChatRooms, useChatMessages, useSendChatMessage, useCreateDirectChat, useCreateGroupChat, useMarkChatRead } from '../../hooks/shared/useChat';
 import { useTranslation } from 'react-i18next';
-import { Search, Plus, MessageSquare, Users, User, Send, Hash, Settings, X, Loader2, Paperclip, Image as ImageIcon, Eye, Download } from 'lucide-react';
+import { Search, Plus, MessageSquare, Users, User, Send, Hash, Settings, X, Loader2, Paperclip, Image as ImageIcon, Eye, Download, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
@@ -216,15 +216,15 @@ export default function EmployeeMessages() {
   return (
     <div className="h-full flex overflow-hidden bg-background">
       {/* ── Sidebar: Chat List ── */}
-      <div className="w-[450px] shrink-0 border-r border-border flex flex-col bg-card/50">
+      <div className={`w-full md:w-[450px] shrink-0 border-r border-border flex-col bg-card/50 ${activeChatId || selectedJobId ? 'hidden md:flex' : 'flex'} font-sans`}>
         <div className="p-6 border-b border-border">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-syne font-bold text-foreground">Messages</h1>
+            <h1 className="text-2xl font-syne font-bold text-foreground">{isRtl ? 'الرسائل' : 'Messages'}</h1>
             <div className="flex gap-2">
               <button 
                 onClick={() => setShowNewChat(true)}
                 className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all"
-                title="New Message"
+                title={isRtl ? 'رسالة جديدة' : 'New Message'}
               >
                 <Plus size={16} />
               </button>
@@ -232,13 +232,13 @@ export default function EmployeeMessages() {
           </div>
 
           <div className="relative mb-4">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search size={18} className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-muted-foreground`} />
             <input 
               type="text"
-              placeholder="Search conversations..."
+              placeholder={isRtl ? 'البحث في المحادثات...' : 'Search conversations...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-background border border-border rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-primary/50 transition-colors"
+              className={`w-full bg-background border border-border rounded-xl py-2 ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} text-sm focus:outline-none focus:border-primary/50 transition-colors`}
             />
           </div>
 
@@ -253,7 +253,7 @@ export default function EmployeeMessages() {
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
-                {f}
+                {f === 'all' ? (isRtl ? 'الكل' : 'All') : f === 'team' ? (isRtl ? 'الفريق' : 'Team') : (isRtl ? 'العملاء' : 'Clients')}
               </button>
             ))}
           </div>
@@ -265,7 +265,7 @@ export default function EmployeeMessages() {
               <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
             ) : !sortedJobs || sortedJobs.length === 0 ? (
               <div className="text-center text-muted-foreground text-sm p-8">
-                No active client cases.
+                {isRtl ? 'لا توجد قضايا عملاء نشطة.' : 'No active client cases.'}
               </div>
             ) : (
               sortedJobs.map((jb: any) => {
@@ -279,7 +279,7 @@ export default function EmployeeMessages() {
                       setSelectedJobId(jb.id);
                       setActiveChatId(null);
                     }}
-                    className={`w-full text-left p-3.5 rounded-xl transition-all flex gap-3 border ${
+                    className={`w-full ${isRtl ? 'text-right' : 'text-left'} p-3.5 rounded-xl transition-all flex gap-3 border ${
                       isSelected 
                         ? 'bg-primary/10 border-primary/20 shadow-sm' 
                         : (isUnread ? 'bg-primary/[0.04] border-primary/40 shadow-sm' : 'border-transparent hover:bg-muted/50')
@@ -290,7 +290,7 @@ export default function EmployeeMessages() {
                         <MessageSquare size={20} />
                       </div>
                       {isUnread && (
-                        <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full border border-card flex items-center justify-center">
+                        <div className={`absolute -top-0.5 ${isRtl ? '-left-0.5' : '-right-0.5'} w-3.5 h-3.5 bg-red-500 rounded-full border border-card flex items-center justify-center`}>
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                         </div>
                       )}
@@ -315,18 +315,18 @@ export default function EmployeeMessages() {
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground/60 truncate font-semibold">
-                        Service: {jb.service_name}
+                        {isRtl ? 'الخدمة: ' : 'Service: '}{jb.service_name}
                       </p>
                       
                       {latestJobMessages[jb.id] ? (
                         <p className={cn("text-xs truncate my-1.5 font-medium bg-muted/20 px-2.5 py-1 rounded-lg border", isUnread ? "text-foreground border-primary/20 bg-primary/5 font-semibold animate-pulse" : "text-muted-foreground/60 border-border/30")}>
-                          <span className={cn("mr-1", isUnread ? "font-black text-primary" : "font-bold text-primary")}>
-                            {latestJobMessages[jb.id].sender_id === profile?.id ? 'You' : latestJobMessages[jb.id].sender_name}:
+                          <span className={cn(isRtl ? "ml-1" : "mr-1", isUnread ? "font-black text-primary" : "font-bold text-primary")}>
+                            {latestJobMessages[jb.id].sender_id === profile?.id ? (isRtl ? 'أنت' : 'You') : latestJobMessages[jb.id].sender_name}:
                           </span>
                           {latestJobMessages[jb.id].content}
                         </p>
                       ) : (
-                        <p className="text-xs text-muted-foreground/40 italic my-1.5">No messages yet</p>
+                        <p className="text-xs text-muted-foreground/40 italic my-1.5">{isRtl ? 'لا توجد رسائل بعد' : 'No messages yet'}</p>
                       )}
 
                       <div className="flex items-center gap-1.5">
@@ -336,7 +336,9 @@ export default function EmployeeMessages() {
                           jb.status === 'draft' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
                           'bg-muted text-muted-foreground border-border'
                         }`}>
-                          {jb.status === 'active' ? 'In Progress' : jb.status}
+                          {jb.status === 'completed' ? (isRtl ? 'مكتمل' : 'Completed') :
+                           jb.status === 'active' || jb.status === 'in_progress' ? (isRtl ? 'قيد التنفيذ' : 'In Progress') :
+                           jb.status === 'draft' ? (isRtl ? 'مسودة' : 'Draft') : jb.status}
                         </span>
                       </div>
                     </div>
@@ -349,7 +351,7 @@ export default function EmployeeMessages() {
               <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
             ) : filteredRooms.length === 0 ? (
               <div className="text-center text-muted-foreground text-sm p-8">
-                No conversations found.
+                {isRtl ? 'لم يتم العثور على محادثات.' : 'No conversations found.'}
               </div>
             ) : (
               filteredRooms.map((room: any) => (
@@ -359,7 +361,7 @@ export default function EmployeeMessages() {
                     setActiveChatId(room.id);
                     setSelectedJobId(null);
                   }}
-                  className={`w-full text-left p-3 rounded-xl transition-all flex gap-3 ${
+                  className={`w-full ${isRtl ? 'text-right' : 'text-left'} p-3 rounded-xl transition-all flex gap-3 ${
                     activeChatId === room.id 
                       ? 'bg-primary/10 border border-primary/20' 
                       : 'hover:bg-muted/50 border border-transparent'
@@ -376,7 +378,7 @@ export default function EmployeeMessages() {
                       )}
                     </div>
                     {room.has_unread && (
-                      <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-card"></div>
+                      <div className={`absolute top-0 ${isRtl ? 'left-0' : 'right-0'} w-3 h-3 bg-red-500 rounded-full border-2 border-card`}></div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -390,11 +392,11 @@ export default function EmployeeMessages() {
                     </div>
                     {room.last_message ? (
                       <p className={`text-xs truncate ${room.has_unread ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>
-                        {room.last_message.sender_id === profile?.id ? 'You: ' : ''}
+                        {room.last_message.sender_id === profile?.id ? (isRtl ? 'أنت: ' : 'You: ') : ''}
                         {room.last_message.content}
                       </p>
                     ) : (
-                      <p className="text-xs text-muted-foreground italic">No messages yet</p>
+                      <p className="text-xs text-muted-foreground italic">{isRtl ? 'لا توجد رسائل بعد' : 'No messages yet'}</p>
                     )}
                   </div>
                 </button>
@@ -405,15 +407,27 @@ export default function EmployeeMessages() {
       </div>
 
       {/* ── Main Area: Chat Window ── */}
-      <div className="flex-1 flex flex-col bg-background relative">
+      <div className={`flex-1 flex-col bg-background relative ${activeChatId || selectedJobId ? 'flex' : 'hidden md:flex'} font-sans`}>
         {selectedJobId && jobDetail ? (
           <div className="flex-1 flex flex-col h-full bg-card overflow-hidden">
+            <div className="md:hidden p-4 border-b border-border flex items-center gap-3">
+               <button onClick={() => setSelectedJobId(null)} className={`p-2 ${isRtl ? '-mr-2 ml-0' : '-ml-2 mr-0'} hover:bg-muted rounded-full`}>
+                  <ArrowLeft size={20} className={isRtl ? 'rotate-180' : ''} />
+               </button>
+               <span className="font-bold text-sm">{isRtl ? 'العودة إلى الرسائل' : 'Back to Messages'}</span>
+            </div>
             <MessagesTab jobId={selectedJobId} messages={jobDetail.messages || []} isAdmin={false} currentUserType="employee" scope="staff_client" />
           </div>
         ) : activeChatId && activeRoom ? (
           <>
-            <div className="h-20 border-b border-border bg-card/50 flex items-center justify-between px-8 shrink-0">
-              <div className="flex items-center gap-4">
+            <div className="h-20 border-b border-border bg-card/50 flex items-center justify-between px-4 md:px-8 shrink-0">
+              <div className="flex items-center gap-2 md:gap-4">
+                <button 
+                  onClick={() => setActiveChatId(null)} 
+                  className="md:hidden p-2 -ml-2 rounded-full hover:bg-muted text-muted-foreground"
+                >
+                  <ArrowLeft size={20} className={isRtl ? 'rotate-180' : ''} />
+                </button>
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activeRoom.type === 'group' ? 'bg-primary/10 text-primary' : 'bg-muted text-foreground'}`}>
                    {activeRoom.display_avatar ? (
                       <img src={activeRoom.display_avatar} alt="avatar" className="w-full h-full rounded-full object-cover" />
@@ -424,10 +438,10 @@ export default function EmployeeMessages() {
                     )}
                 </div>
                 <div>
-                  <h2 className="font-bold text-foreground">{activeRoom.display_name}</h2>
-                  <p className="text-xs text-muted-foreground">
+                  <h2 className="font-bold text-foreground text-start">{activeRoom.display_name}</h2>
+                  <p className="text-xs text-muted-foreground text-start">
                     {activeRoom.type === 'group' 
-                      ? `${activeRoom.participants.length} members` 
+                      ? `${activeRoom.participants.length} ${isRtl ? 'أعضاء' : 'members'}` 
                       : activeRoom.other_participants[0]?.profiles?.role}
                   </p>
                 </div>
@@ -445,7 +459,7 @@ export default function EmployeeMessages() {
               ) : messages.length === 0 ? (
                 <div className="m-auto text-center">
                   <MessageSquare size={48} className="mx-auto text-muted-foreground/30 mb-4" />
-                  <p className="text-muted-foreground">Start the conversation</p>
+                  <p className="text-muted-foreground">{isRtl ? 'ابدأ المحادثة' : 'Start the conversation'}</p>
                 </div>
               ) : (
                 messages.map((msg: any) => {
@@ -514,13 +528,13 @@ export default function EmployeeMessages() {
                     type="text" 
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
-                    placeholder="Type a message..."
-                    className="w-full bg-background border border-border rounded-full py-3.5 pl-6 pr-14 text-sm focus:outline-none focus:border-primary/50 transition-colors shadow-sm h-12"
+                    placeholder={isRtl ? 'اكتب رسالة...' : 'Type a message...'}
+                    className={`w-full bg-background border border-border rounded-full py-3.5 ${isRtl ? 'pr-6 pl-14' : 'pl-6 pr-14'} text-sm focus:outline-none focus:border-primary/50 transition-colors shadow-sm h-12`}
                   />
                   <button 
                     type="submit"
                     disabled={(!messageInput.trim() && !attachmentFile) || sendMutation.isPending || isUploading}
-                    className="absolute right-1 top-1 w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:brightness-110 transition-all disabled:opacity-50 disabled:hover:brightness-100"
+                    className={`absolute ${isRtl ? 'left-1' : 'right-1'} top-1 w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:brightness-110 transition-all disabled:opacity-50 disabled:hover:brightness-100`}
                   >
                     {(sendMutation.isPending || isUploading) ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className={isRtl ? 'rotate-180' : ''} />}
                   </button>
@@ -533,8 +547,8 @@ export default function EmployeeMessages() {
             <div className="w-24 h-24 rounded-full bg-primary/5 flex items-center justify-center mx-auto mb-6">
               <MessageSquare size={40} className="text-primary/40" />
             </div>
-            <h2 className="text-2xl font-syne font-bold text-foreground mb-2">Your Messages</h2>
-            <p className="text-muted-foreground">Select a conversation from the sidebar or start a new one to connect with your team and clients.</p>
+            <h2 className="text-2xl font-syne font-bold text-foreground mb-2">{isRtl ? 'رسائلك' : 'Your Messages'}</h2>
+            <p className="text-muted-foreground">{isRtl ? 'اختر محادثة من الشريط الجانبي أو ابدأ محادثة جديدة للتواصل مع فريقك وعملائك.' : 'Select a conversation from the sidebar or start a new one to connect with your team and clients.'}</p>
           </div>
         )}
       </div>
@@ -587,26 +601,26 @@ function NewChatModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-      <div className="bg-card w-full max-w-md rounded-3xl border border-border shadow-2xl flex flex-col" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in" dir={isRtl ? 'rtl' : 'ltr'}>
+      <div className="bg-card w-full max-w-md rounded-3xl border border-border shadow-2xl flex flex-col font-sans" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
         <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20 shrink-0">
-          <h2 className="text-lg font-bold font-syne">New Message</h2>
+          <h2 className="text-lg font-bold font-syne">{isRtl ? 'رسالة جديدة' : 'New Message'}</h2>
           <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors"><X size={20} /></button>
         </div>
 
         <div className="p-6 overflow-y-auto no-scrollbar flex-1 flex flex-col gap-6">
           <div className="flex-1 min-h-[200px] flex flex-col">
-            <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">
-              Select User
+            <label className="block text-xs font-bold text-muted-foreground uppercase mb-2 text-start">
+              {isRtl ? 'اختر المستخدم' : 'Select User'}
             </label>
             <div className="relative mb-3">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search size={16} className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-muted-foreground`} />
               <input 
                 type="text" 
-                placeholder="Search by name..."
+                placeholder={isRtl ? 'البحث بالاسم...' : 'Search by name...'}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full bg-background border border-border rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-primary/50"
+                className={`w-full bg-background border border-border rounded-xl py-2 ${isRtl ? 'pr-9 pl-4' : 'pl-9 pr-4'} text-sm focus:outline-none focus:border-primary/50`}
               />
             </div>
             
@@ -614,7 +628,7 @@ function NewChatModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: 
               {isLoading ? (
                 <div className="flex justify-center p-4"><Loader2 className="animate-spin text-primary" size={20} /></div>
               ) : users.length === 0 ? (
-                <div className="text-center text-muted-foreground text-sm py-4">No users found</div>
+                <div className="text-center text-muted-foreground text-sm py-4">{isRtl ? 'لم يتم العثور على مستخدمين' : 'No users found'}</div>
               ) : (
                 users.map((user: any) => {
                   const isSelected = selectedId === user.id;
@@ -622,7 +636,7 @@ function NewChatModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: 
                     <button
                       key={user.id}
                       onClick={() => setSelectedId(user.id)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border ${isRtl ? 'text-right' : 'text-left'} transition-all ${
                         isSelected ? 'bg-primary/5 border-primary/30' : 'bg-card border-border hover:bg-muted/50'
                       }`}
                     >
@@ -634,8 +648,8 @@ function NewChatModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: 
                         )}
                       </div>
                       <div>
-                        <div className="font-bold text-sm text-foreground">{user.full_name || 'Unnamed User'}</div>
-                        <div className="text-[10px] font-bold uppercase text-muted-foreground">{user.role}</div>
+                        <div className="font-bold text-sm text-foreground">{user.full_name || (isRtl ? 'مستخدم بدون اسم' : 'Unnamed User')}</div>
+                        <div className="text-[10px] font-bold uppercase text-muted-foreground">{user.role === 'admin' ? (isRtl ? 'مسؤول' : 'admin') : user.role === 'employee' ? (isRtl ? 'موظف' : 'employee') : user.role}</div>
                       </div>
                     </button>
                   );
@@ -652,7 +666,7 @@ function NewChatModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: 
             className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-bold hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {createDirect.isPending ? <Loader2 className="animate-spin" size={20} /> : null}
-            Start Conversation
+            {isRtl ? 'بدء المحادثة' : 'Start Conversation'}
           </button>
         </div>
       </div>

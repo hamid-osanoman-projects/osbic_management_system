@@ -5,10 +5,10 @@ import { ChevronLeft, Save, Plus, Trash2, FileText, Printer, Edit, CheckCircle2 
 import { useInvoice, useSaveInvoice, type Invoice, type InvoiceItem } from '../../hooks/employee/useInvoices';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdminClients, useEmployeeClients } from '../../hooks/admin/useAdminClients';
-import { useAdminPackages } from '../../hooks/admin/useAdminPackages';
 import { useAdminJobs, useEmployeeJobs } from '../../hooks/shared/useJobs';
 import { QuotationDocument } from '../../components/employee/QuotationDocument';
 import { useLeads, useAdminLeads } from '../../hooks/shared/useLeads';
+import { useAdminServices } from '../../hooks/admin/useAdminServices';
 import { supabase } from '../../lib/supabase';
 import { useReactToPrint } from 'react-to-print';
 import toast from 'react-hot-toast';
@@ -62,10 +62,12 @@ const QuotationBuilder = () => {
   const { useAllLeadsList } = useAdminLeads();
   const leads = profile?.is_manager ? useAllLeadsList().data : useLeadsList().data;
 
-  const { data: packages } = useAdminPackages();
+  const { data: allServices } = useAdminServices();
+
 
   const printRef = useRef<HTMLDivElement>(null);
   const [isAcceptWizardOpen, setIsAcceptWizardOpen] = useState(false);
+  const [quotationMode, setQuotationMode] = useState<'detailed' | 'simple'>('detailed');
 
   const [formData, setFormData] = useState<Invoice>({
     client_id: '',
@@ -74,7 +76,7 @@ const QuotationBuilder = () => {
     type: 'quotation',
     status: 'draft',
     subtotal: 0,
-    tax_percentage: 5,
+    tax_percentage: 0,
     tax_amount: 0,
     discount_amount: 0,
     total_amount: 0,
@@ -90,6 +92,11 @@ const QuotationBuilder = () => {
   useEffect(() => {
     if (initialData && !isNew) {
       setFormData(initialData);
+      if (initialData.metadata?.isSimple) {
+        setQuotationMode('simple');
+      } else {
+        setQuotationMode('detailed');
+      }
     }
   }, [initialData, isNew]);
 
@@ -265,28 +272,104 @@ const QuotationBuilder = () => {
 
   // Recalculate totals whenever items, tax, or discount changes
   useEffect(() => {
-    if (!formData.items) return;
-    
-    const subtotal = formData.items.reduce((sum, item) => sum + (item.total || 0), 0);
+    if (!formData.items || !allServices) return;
+
+    let subtotal = 0;
+    let itemsChanged = false;
+    const updatedItems = formData.items.map(item => {
+      const matchedService = allServices?.find(
+        s => s.name_en.toLowerCase() === item.description?.toLowerCase() ||
+             s.name_ar === item.description
+      );
+      const dbMinFee = matchedService?.ministry_fee ?? 0;
+      const curMinFee = item.ministry_fee !== undefined ? item.ministry_fee : dbMinFee;
+      
+      const rawSrvFee = item.service_fee !== undefined 
+        ? item.service_fee 
+        : (item.unit_price - curMinFee);
+      const curSrvFee = Math.max(0, parseFloat(rawSrvFee as any) || 0);
+
+      const calculatedUnitPrice = curMinFee + curSrvFee;
+      const calculatedTotal = (item.quantity || 1) * calculatedUnitPrice;
+
+      subtotal += calculatedTotal;
+
+      if (
+        item.ministry_fee !== curMinFee ||
+        item.service_fee !== curSrvFee ||
+        item.unit_price !== calculatedUnitPrice ||
+        item.total !== calculatedTotal
+      ) {
+        itemsChanged = true;
+        return {
+          ...item,
+          ministry_fee: curMinFee,
+          service_fee: curSrvFee,
+          unit_price: calculatedUnitPrice,
+          total: calculatedTotal
+        };
+      }
+      return item;
+    });
+
     const tax_amount = (subtotal - formData.discount_amount) * (formData.tax_percentage / 100);
     const total_amount = subtotal - formData.discount_amount + tax_amount;
 
-    setFormData(prev => ({
-      ...prev,
-      subtotal,
-      tax_amount,
-      total_amount
-    }));
-  }, [formData.items, formData.tax_percentage, formData.discount_amount]);
+    // Check if we need to update state to prevent infinite loop
+    const subtotalDiff = Math.abs((formData.subtotal || 0) - subtotal) > 0.0001;
+    const totalDiff = Math.abs((formData.total_amount || 0) - total_amount) > 0.0001;
 
-  const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
-    const newItems = [...(formData.items || [])];
-    newItems[index] = { ...newItems[index], [field]: value };
-    
-    if (field === 'quantity' || field === 'unit_price') {
-      newItems[index].total = (newItems[index].quantity || 0) * (newItems[index].unit_price || 0);
+    if (itemsChanged || subtotalDiff || totalDiff) {
+      setFormData(prev => ({
+        ...prev,
+        items: updatedItems,
+        subtotal,
+        tax_amount,
+        total_amount
+      }));
     }
-    
+  }, [formData.items, formData.tax_percentage, formData.discount_amount, allServices]);
+
+  const handleItemChange = (index: number, field: string, value: any) => {
+    const newItems = [...(formData.items || [])];
+    const targetItem = { ...newItems[index] } as any;
+
+    if (field === 'description') {
+      targetItem.description = value;
+      // Try to find matching service in db to pre-fill ministry fee
+      const matched = allServices?.find(
+        s => s.name_en.toLowerCase() === value.toLowerCase() ||
+             s.name_ar === value
+      );
+      if (matched) {
+        targetItem.ministry_fee = matched.ministry_fee || 0;
+      }
+    } else if (field === 'service_fee') {
+      targetItem.service_fee = value;
+    } else if (field === 'ministry_fee') {
+      targetItem.ministry_fee = value;
+    } else {
+      targetItem[field] = value;
+    }
+
+    const matchedService = allServices?.find(
+      s => s.name_en.toLowerCase() === targetItem.description?.toLowerCase() ||
+           s.name_ar === targetItem.description
+    );
+    const dbMinFee = matchedService?.ministry_fee ?? 0;
+    const curMinFee = targetItem.ministry_fee !== undefined ? targetItem.ministry_fee : dbMinFee;
+
+    const rawSrvFee = targetItem.service_fee !== undefined 
+      ? targetItem.service_fee 
+      : (targetItem.unit_price - curMinFee);
+    const curSrvFee = Math.max(0, parseFloat(rawSrvFee as any) || 0);
+
+    targetItem.ministry_fee = curMinFee;
+    targetItem.service_fee = curSrvFee;
+    targetItem.unit_price = curMinFee + curSrvFee;
+    targetItem.total = (targetItem.quantity || 1) * targetItem.unit_price;
+
+    newItems[index] = targetItem;
     setFormData({ ...formData, items: newItems });
   };
 
@@ -328,7 +411,11 @@ const QuotationBuilder = () => {
       const quotationPayload = {
         ...formData,
         type: 'quotation', // Force type to quotation
-        employee_id: formData.employee_id || profile?.id
+        employee_id: formData.employee_id || profile?.id,
+        metadata: {
+          ...formData.metadata,
+          isSimple: quotationMode === 'simple'
+        }
       };
       const savedId = await saveQuotation(quotationPayload);
       toast.success('Quotation saved successfully');
@@ -463,63 +550,6 @@ const QuotationBuilder = () => {
                     </select>
                   </div>
                 )}
-
-                 <div className="space-y-2 col-span-2">
-                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Apply Package Template (Optional)</label>
-                   <select 
-                     value=""
-                     onChange={async e => {
-                       const pkgId = e.target.value;
-                       if (!pkgId) return;
-                       const selectedPkg = packages?.find((p: any) => p.id === pkgId);
-                       if (!selectedPkg) return;
-
-                       const loadToast = toast.loading('Applying package template...');
-
-                       try {
-                         const { data: junctionRows, error } = await supabase
-                           .from('package_services')
-                           .select('display_order, services(id, name_en, name_ar)')
-                           .eq('package_id', pkgId) as any;
-
-                         if (error) throw error;
-
-                         const sorted = (junctionRows || [])
-                           .sort((a: any, b: any) => a.display_order - b.display_order)
-                           .map((row: any) => row.services)
-                           .filter(Boolean);
-
-                         if (sorted.length > 0) {
-                           const mapped = sorted.map((srv: any, idx: number) => ({
-                             description: srv.name_en,
-                             quantity: 1,
-                             unit_price: idx === 0 ? 500 : 0,
-                             total: idx === 0 ? 500 : 0
-                           }));
-                           
-                           setFormData(prev => ({
-                             ...prev,
-                             notes: selectedPkg.name_en,
-                             items: mapped,
-                             subtotal: mapped.reduce((acc, curr) => acc + curr.total, 0),
-                             total_amount: mapped.reduce((acc, curr) => acc + curr.total, 0)
-                           }));
-                           toast.success(`Applied template: ${selectedPkg.name_en}`, { id: loadToast });
-                         } else {
-                           toast.error('No services found in this package', { id: loadToast });
-                         }
-                       } catch (err: any) {
-                         toast.error('Failed to load package services: ' + err.message, { id: loadToast });
-                       }
-                     }}
-                     className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
-                   >
-                     <option value="">-- Choose Package Template --</option>
-                     {packages?.map((p: any) => (
-                       <option key={p.id} value={p.id}>{p.name_en}</option>
-                     ))}
-                   </select>
-                 </div>
               </div>
 
              {/* Recipient Details Sync Preview */}
@@ -569,64 +599,98 @@ const QuotationBuilder = () => {
                </div>
              )}
 
-             {/* Line Items */}
-             <div className="space-y-4 border-t border-border pt-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-foreground uppercase tracking-widest">Service Fee Items</h3>
-                  <button 
-                    onClick={addItem}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary/20 text-primary text-xs font-bold hover:bg-primary/5 transition-all"
-                  >
-                    <Plus size={14} /> Add Line Item
-                  </button>
-                </div>
+              {/* Line Items */}
+              <div className="space-y-4 border-t border-border pt-6">
+                 <div className="flex justify-between items-center">
+                   <h3 className="text-xs font-bold text-foreground uppercase tracking-widest">Service Fee Items</h3>
+                   <button 
+                     onClick={addItem}
+                     className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary/20 text-primary text-xs font-bold hover:bg-primary/5 transition-all"
+                   >
+                     <Plus size={14} /> Add Line Item
+                   </button>
+                 </div>
 
                 <div className="space-y-3">
-                  {(formData.items || []).map((item, idx) => (
-                    <div key={idx} className="flex gap-3 items-end bg-muted/10 p-3.5 rounded-xl border border-border/40">
-                      <div className="flex-1 space-y-1.5">
-                        <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Service Description</label>
-                        <input 
-                          type="text" 
-                          placeholder="e.g. Visa Issuance Fee"
-                          value={item.description}
-                          onChange={e => handleItemChange(idx, 'description', e.target.value)}
-                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
-                        />
+                  {(formData.items || []).map((item: any, idx) => {
+                    const matchedService = allServices?.find(
+                      s => s.name_en.toLowerCase() === item.description?.toLowerCase() ||
+                           s.name_ar === item.description
+                    );
+                    const dbMinFee = matchedService?.ministry_fee ?? 0;
+                    const curMinFee = item.ministry_fee !== undefined ? item.ministry_fee : dbMinFee;
+                    // Default service fee to 0, never negative
+                    const rawSrvFee = item.service_fee !== undefined ? item.service_fee : (item.unit_price - curMinFee);
+                    const curSrvFee = Math.max(0, rawSrvFee);
+
+                    return (
+                      <div key={idx} className="bg-muted/10 p-4 rounded-xl border border-border/40 space-y-3">
+                        <div className="flex gap-3 items-end">
+                          <div className="flex-1 space-y-1.5">
+                            <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Service Description</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. Visa Issuance Fee"
+                              value={item.description}
+                              onChange={e => handleItemChange(idx, 'description', e.target.value)}
+                              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
+                            />
+                          </div>
+                          <div className="w-16 space-y-1.5 shrink-0">
+                            <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block text-center">Qty</label>
+                            <input 
+                              type="number" 
+                              min="1"
+                              value={item.quantity}
+                              onChange={e => handleItemChange(idx, 'quantity', parseInt(e.target.value) || 0)}
+                              className="w-full bg-background border border-border rounded-lg px-2 py-2 text-xs text-foreground focus:border-primary outline-none transition-all text-center"
+                            />
+                          </div>
+                          
+                          {formData.items!.length > 1 && (
+                            <button 
+                              onClick={() => removeItem(idx)}
+                              className="p-2 border border-border rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-all shrink-0 mb-0.5"
+                              title="Remove item"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 border-t border-border/30 pt-3">
+                          <div>
+                            <label className="text-[8px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Gov Fee (OMR)</label>
+                            <input 
+                              type="number" 
+                              min="0"
+                              step="0.001"
+                              value={curMinFee}
+                              onChange={e => handleItemChange(idx, 'ministry_fee', parseFloat(e.target.value) || 0)}
+                              className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:border-primary outline-none transition-all font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[8px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Service Fee (OMR)</label>
+                            <input 
+                              type="number" 
+                              min="0"
+                              step="0.001"
+                              value={curSrvFee}
+                              onChange={e => handleItemChange(idx, 'service_fee', parseFloat(e.target.value) || 0)}
+                              className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:border-primary outline-none transition-all font-mono"
+                            />
+                          </div>
+                          <div className="flex flex-col justify-end">
+                            <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Total Unit Price</span>
+                            <div className="h-[34px] flex items-center px-3 bg-muted/30 border border-border/40 rounded-lg text-xs font-bold text-foreground font-mono">
+                              OMR {(curMinFee + curSrvFee).toFixed(3)}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-16 space-y-1.5 shrink-0">
-                        <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block text-center">Qty</label>
-                        <input 
-                          type="number" 
-                          min="1"
-                          value={item.quantity}
-                          onChange={e => handleItemChange(idx, 'quantity', parseInt(e.target.value) || 0)}
-                          className="w-full bg-background border border-border rounded-lg px-2 py-2 text-xs text-foreground focus:border-primary outline-none transition-all text-center"
-                        />
-                      </div>
-                      <div className="w-24 space-y-1.5 shrink-0">
-                        <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Unit (OMR)</label>
-                        <input 
-                          type="number" 
-                          min="0"
-                          step="0.001"
-                          value={item.unit_price}
-                          onChange={e => handleItemChange(idx, 'unit_price', parseFloat(e.target.value) || 0)}
-                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:border-primary outline-none transition-all"
-                        />
-                      </div>
-                      
-                      {formData.items!.length > 1 && (
-                        <button 
-                          onClick={() => removeItem(idx)}
-                          className="p-2 border border-border rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-all shrink-0 mb-0.5"
-                          title="Remove item"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
              </div>
 
@@ -698,6 +762,32 @@ const QuotationBuilder = () => {
 
         {/* RIGHT: DOCUMENT PREVIEW (Visible in Print) */}
         <div className={viewMode ? "w-full max-w-[210mm] mx-auto print:w-full print:block print:static" : "w-full lg:w-[55%] print:w-full print:block print:static"}>
+           {/* Mode Selector (Hidden in Print) */}
+           <div className="flex flex-col sm:flex-row gap-3 p-4 bg-card border border-border rounded-[2rem] mb-6 print:hidden items-center justify-between shadow-xl">
+              <div>
+                <span className="text-xs font-bold text-foreground">Quotation Presentation Mode</span>
+                <p className="text-[9px] text-muted-foreground mt-0.5">Toggle between detailed itemized prices and flat package summary</p>
+              </div>
+              <div className="flex bg-[#0d121f] p-1 border border-border rounded-xl">
+                 <button
+                   onClick={() => setQuotationMode('detailed')}
+                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                     quotationMode === 'detailed' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                   }`}
+                 >
+                   Detailed
+                 </button>
+                 <button
+                   onClick={() => setQuotationMode('simple')}
+                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                     quotationMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                   }`}
+                 >
+                   Simple Summary
+                 </button>
+              </div>
+           </div>
+
            <div className="sticky top-8 rounded-2xl overflow-hidden border border-border shadow-2xl print:shadow-none print:border-none print:overflow-visible print:static">
               <style>{`
                 @media print {
@@ -720,8 +810,10 @@ const QuotationBuilder = () => {
                   invoice={{
                     ...formData,
                     client: clients?.find(c => c.id === formData.client_id),
-                    job: jobs?.find(j => j.id === formData.job_id)
+                    job: jobs?.find(j => j.id === formData.job_id),
+                    metadata: { ...formData.metadata, isSimple: quotationMode === 'simple' }
                   }} 
+                  isSimple={quotationMode === 'simple'}
                 />
               </div>
            </div>

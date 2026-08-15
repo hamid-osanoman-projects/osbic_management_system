@@ -36,6 +36,7 @@ export default function LeadDetailSlideOver({ isOpen, onClose, lead }: Props) {
         .from('invoices')
         .select('*, items:invoice_items(*) ')
         .eq('lead_id', lead!.id)
+        .eq('type', 'quotation')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
+import { useBranch } from '../../contexts/BranchContext';
 import {
   Plus, Search, Filter, Grid, List as ListIcon,
   Check, X as XIcon, AlertCircle
@@ -27,6 +28,7 @@ function cn(...inputs: ClassValue[]) {
 
 const Employees = () => {
   const navigate = useNavigate();
+  const { selectedBranchId } = useBranch();
   const { data: employees, isLoading } = useAdminEmployees();
   const { mutate: toggleStatus, isPending: isToggling } = useToggleEmployeeStatus();
   const { mutate: deleteEmployee, isPending: isDeleting } = useDeleteEmployee();
@@ -42,16 +44,24 @@ const Employees = () => {
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
-  // Derived stats
-  const totalEmployees = employees?.length || 0;
-  const activeEmployees = employees?.filter(e => e.is_active !== false).length || 0;
+  // Filter by branch first
+  const branchEmployees = employees?.filter(emp => {
+    if (selectedBranchId) {
+      return emp.branch_id === selectedBranchId;
+    }
+    return true;
+  }) || [];
+
+  // Derived stats based on branch-filtered list
+  const totalEmployees = branchEmployees.length;
+  const activeEmployees = branchEmployees.filter(e => e.is_active !== false).length;
   const inactiveEmployees = totalEmployees - activeEmployees;
 
-  const topPerformer = employees?.length
-    ? [...employees].sort((a, b) => (b.completed_month || 0) - (a.completed_month || 0))[0]
+  const topPerformer = branchEmployees.length
+    ? [...branchEmployees].sort((a, b) => (b.completed_month || 0) - (a.completed_month || 0))[0]
     : null;
 
-  const filteredEmployees = employees?.filter(emp =>
+  const filteredEmployees = branchEmployees.filter(emp =>
     emp.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     emp.employee_code?.toLowerCase().includes(searchQuery.toLowerCase())
   );

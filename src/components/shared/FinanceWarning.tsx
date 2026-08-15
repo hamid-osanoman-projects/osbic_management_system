@@ -7,11 +7,12 @@ interface Props {
   remainingAmount: number;
   totalFee: number;
   isClient?: boolean;
+  hideActionButton?: boolean;
   jobId?: string;
   onAction?: () => void;
 }
 
-const FinanceWarning: React.FC<Props> = ({ remainingAmount, totalFee, isClient, jobId, onAction }) => {
+const FinanceWarning: React.FC<Props> = ({ remainingAmount, totalFee, isClient, hideActionButton, jobId, onAction }) => {
   const navigate = useNavigate();
 
   if (remainingAmount <= 0) return null;
@@ -44,7 +45,7 @@ const FinanceWarning: React.FC<Props> = ({ remainingAmount, totalFee, isClient, 
         </div>
       </div>
 
-      {!isClient && (
+      {!isClient && !hideActionButton && (
         <div className="flex items-center gap-3 shrink-0 relative z-10 w-full sm:w-auto">
           <div className="hidden lg:block text-right pr-4 border-r border-white/10 mr-2">
              <p className="text-[10px] text-[#475569] font-bold uppercase tracking-widest">Balance Ratio</p>
