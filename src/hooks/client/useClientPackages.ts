@@ -42,30 +42,134 @@ export const useRequestPackage = () => {
   
   return useMutation({
     mutationFn: async ({ packageId, clientId }: { packageId: string; clientId: string }) => {
-      // 1. Get package details
+      // 1. Get package details along with service metadata
       const { data: pkg, error: pError } = await supabase
         .from('service_packages')
-        .select('*, package_services(service_id)')
+        .select(`
+          *,
+          package_services (
+            services (*)
+          )
+        `)
         .eq('id', packageId)
         .single();
       
       if (pError) throw pError;
       
-      const serviceIds = pkg.package_services.map((ps: any) => ps.service_id);
+      const services = (pkg.package_services || [])
+        .map((ps: any) => ps.services)
+        .filter(Boolean);
+
+      if (services.length === 0) {
+        throw new Error("No services found inside the requested package");
+      }
+
+      // Calculate bundle fees
+      const discount = Number(pkg.discount_percentage) || 0;
+      const discountFactor = 1 - (discount / 100);
+
+      let totalWorkFee = 0;
+      let totalMinistryFee = 0;
       
-      // 2. For each service, create a job
-      // Note: In a production app, this should be a DB function/RPC to ensure atomicity.
-      for (const serviceId of serviceIds) {
-        const { error: jError } = await supabase
-          .from('jobs')
-          .insert({
-            client_id: clientId,
-            service_id: serviceId,
+      services.forEach((s: any) => {
+        totalWorkFee += (Number(s.work_fee) || 0);
+        totalMinistryFee += (Number(s.ministry_fee) || 0);
+      });
+
+      const discountedWorkFee = Math.round(totalWorkFee * discountFactor);
+      const totalFee = discountedWorkFee + totalMinistryFee;
+      const advanceAmount = (totalFee * 50) / 100;
+      const remainingAmount = totalFee - advanceAmount;
+
+      // 2. Create the Single Master Job
+      const jobCode = `PKG-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 100)}`;
+      const { data: job, error: jError } = await supabase
+        .from('jobs')
+        .insert({
+          job_code: jobCode,
+          client_id: clientId,
+          service_id: services[0]?.id || null,
+          custom_name: pkg.name_en, // Name of the package
+          total_fee: totalFee,
+          work_fee: discountedWorkFee,
+          ministry_fee: totalMinistryFee,
+          advance_amount: advanceAmount,
+          remaining_amount: remainingAmount,
+          status: 'pending',
+          advance_paid: false,
+          remaining_paid: false,
+          notes: `Requested Package Bundle: ${pkg.name_en}`,
+          started_at: new Date().toISOString()
+        } as any)
+        .select()
+        .single();
+
+      if (jError) throw jError;
+
+      // 3. Create job_services rows
+      const jobServicesRows = services.map((s: any, idx: number) => ({
+        job_id: job.id,
+        service_id: s.id,
+        service_name: s.name_en,
+        display_order: idx + 1,
+        quantity: 1,
+        status: 'pending',
+        work_fee: s.work_fee || 0,
+        ministry_fee: s.ministry_fee || 0,
+        total_fee: (s.work_fee || 0) + (s.ministry_fee || 0),
+        assigned_at: new Date().toISOString()
+      }));
+
+      const { error: jsError } = await supabase
+        .from('job_services')
+        .insert(jobServicesRows as any);
+
+      if (jsError) throw jsError;
+
+      // 4. Create workflow steps roadmap inside job_steps
+      const serviceIds = services.map((s: any) => s.id);
+      const { data: blueprints } = await supabase
+        .from('workflow_steps')
+        .select('*')
+        .in('service_id', serviceIds)
+        .order('service_id', { ascending: true })
+        .order('step_order', { ascending: true });
+
+      if (blueprints && blueprints.length > 0) {
+        const stepsToInsert = blueprints.map((step: any) => {
+          let deadline = null;
+          if (step.estimated_hours) {
+            const date = new Date();
+            date.setHours(date.getHours() + step.estimated_hours);
+            deadline = date.toISOString();
+          }
+
+          return {
+            job_id: job.id,
+            workflow_step_id: step.id,
             status: 'pending',
-            started_date: new Date().toISOString()
-          } as any);
-        
-        if (jError) throw jError;
+            started_at: null,
+            completed_at: null,
+            is_client_visible: step.is_client_visible ?? true,
+            deadline: deadline
+          };
+        });
+
+        const { data: insertedSteps, error: stepsErr } = await supabase
+          .from('job_steps')
+          .insert(stepsToInsert as any)
+          .select();
+
+        if (stepsErr) throw stepsErr;
+
+        // Sync first pending step to current_step_id
+        const firstActive = insertedSteps.find((s: any) => s.status === 'pending');
+        if (firstActive) {
+          await supabase
+            .from('jobs')
+            .update({ current_step_id: firstActive.id })
+            .eq('id', job.id);
+        }
       }
 
       return { success: true };
