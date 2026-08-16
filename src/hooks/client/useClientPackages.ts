@@ -17,7 +17,7 @@ export const useClientPackages = () => {
   return useQuery({
     queryKey: ['client', 'packages'],
     queryFn: async (): Promise<ClientPackage[]> => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase
         .from('service_packages')
         .select(`
           *,
@@ -25,7 +25,7 @@ export const useClientPackages = () => {
             services (*)
           )
         `)
-        .eq('is_active', true);
+        .eq('is_active', true) as any);
 
       if (error) throw error;
 
@@ -43,7 +43,7 @@ export const useRequestPackage = () => {
   return useMutation({
     mutationFn: async ({ packageId, clientId }: { packageId: string; clientId: string }) => {
       // 1. Get package details along with service metadata
-      const { data: pkg, error: pError } = await supabase
+      const { data: pkg, error: pError } = await (supabase
         .from('service_packages')
         .select(`
           *,
@@ -52,11 +52,13 @@ export const useRequestPackage = () => {
           )
         `)
         .eq('id', packageId)
-        .single();
+        .single() as any);
       
       if (pError) throw pError;
       
-      const services = (pkg.package_services || [])
+      const pkgAny = pkg as any;
+
+      const services = (pkgAny?.package_services || [])
         .map((ps: any) => ps.services)
         .filter(Boolean);
 
@@ -65,7 +67,7 @@ export const useRequestPackage = () => {
       }
 
       // Calculate bundle fees
-      const discount = Number(pkg.discount_percentage) || 0;
+      const discount = Number(pkgAny?.discount_percentage) || 0;
       const discountFactor = 1 - (discount / 100);
 
       let totalWorkFee = 0;
@@ -89,7 +91,7 @@ export const useRequestPackage = () => {
           job_code: jobCode,
           client_id: clientId,
           service_id: services[0]?.id || null,
-          custom_name: pkg.name_en, // Name of the package
+          custom_name: pkgAny?.name_en, // Name of the package
           total_fee: totalFee,
           work_fee: discountedWorkFee,
           ministry_fee: totalMinistryFee,
@@ -98,7 +100,7 @@ export const useRequestPackage = () => {
           status: 'pending',
           advance_paid: false,
           remaining_paid: false,
-          notes: `Requested Package Bundle: ${pkg.name_en}`,
+          notes: `Requested Package Bundle: ${pkgAny?.name_en}`,
           started_at: new Date().toISOString()
         } as any)
         .select()

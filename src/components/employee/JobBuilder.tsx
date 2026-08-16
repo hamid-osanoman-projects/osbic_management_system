@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { 
   X, Zap, Search, ChevronRight, User, 
   Building2, Briefcase, Plus, CheckCircle2, ArrowLeft, ArrowRight,
-  Hash, Users, Shield, GitBranch, Layers, LayoutGrid, List
+  Hash, Users, Shield, GitBranch, Layers, LayoutGrid, List, Trash2
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import CreateClientSlideOver from '../shared/clients/CreateClientSlideOver';
@@ -299,10 +299,23 @@ export const JobBuilder = ({
     setIsCreating(true);
 
     try {
+      // Find a valid fallback service_id for any custom services
+      const firstRealService = serviceLines.find(l => !l.isCustom);
+      const fallbackServiceId = firstRealService?.service_id || services?.[0]?.id;
+
+      if (!fallbackServiceId) {
+        throw new Error("No active catalog services available to link custom tasks to.");
+      }
+
       // Calculate totals from service lines
       const totalWork = serviceLines.reduce((s, l) => s + (l.work_fee * l.quantity), 0);
       const totalMin = serviceLines.reduce((s, l) => s + (l.ministry_fee * l.quantity), 0);
       const primaryService = serviceLines[0];
+
+      // If the primary service is custom, associate with fallbackServiceId for database constraint
+      const masterServiceId = (primaryService && !primaryService.isCustom)
+        ? primaryService.service_id
+        : fallbackServiceId;
 
       const jobTitle = selectedPackage 
         ? selectedPackage.name_en 
@@ -314,7 +327,7 @@ export const JobBuilder = ({
         client_id: selectedClient.id,
         employee_id: profile?.id,
         assigned_by: profile?.id,
-        service_id: primaryService.service_id,
+        service_id: masterServiceId,
         status: 'draft',
         custom_name: jobTitle,
         total_fee: totalWork + totalMin,
@@ -338,10 +351,12 @@ export const JobBuilder = ({
       // 2. Create job_services rows — one per applicant per service
       let displayOrder = 1;
       for (const line of serviceLines) {
+        const insertServiceId = line.isCustom ? fallbackServiceId : line.service_id;
+
         // Create quantity copies for this service
         const rows = Array.from({ length: line.quantity }, (_, i) => ({
           job_id: job.id,
-          service_id: line.service_id,
+          service_id: insertServiceId,
           service_name: line.service_name,
           display_order: displayOrder + i,
           quantity: line.quantity,
@@ -746,7 +761,21 @@ export const JobBuilder = ({
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center text-gold text-xs font-bold">{idx + 1}</div>
                       <div className="flex-1">
-                        <p className="font-bold text-white text-sm">{line.service_name}</p>
+                        {line.isCustom ? (
+                          <input
+                            type="text"
+                            value={line.service_name}
+                            onChange={(e) => {
+                              const newLines = [...serviceLines];
+                              newLines[idx].service_name = e.target.value;
+                              setServiceLines(newLines);
+                            }}
+                            className="bg-transparent border-b border-white/20 text-sm font-bold text-white outline-none focus:border-gold py-1 w-full max-w-md"
+                            placeholder="Custom Service Name"
+                          />
+                        ) : (
+                          <p className="font-bold text-white text-sm">{line.service_name}</p>
+                        )}
                         <div className="flex items-center gap-2 mt-0.5">
                           {line.requires_pro && (
                             <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
@@ -761,8 +790,25 @@ export const JobBuilder = ({
                               <GitBranch size={8} /> Parallel
                             </span>
                           )}
+                          {line.isCustom && (
+                            <span className="text-[9px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded uppercase tracking-widest">
+                              Custom Task
+                            </span>
+                          )}
                         </div>
                       </div>
+
+                      {/* Remove Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setServiceLines(prev => prev.filter((_, i) => i !== idx));
+                        }}
+                        className="p-1.5 text-white/40 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors ml-auto"
+                        title="Remove Service"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end mt-4">
@@ -848,6 +894,66 @@ export const JobBuilder = ({
                     )}
                   </div>
                 ))}
+              </div>
+
+              {/* Add Extra Services Bar */}
+              <div className="flex flex-col sm:flex-row gap-3 bg-[#131824]/30 p-4 border border-white/5 rounded-2xl">
+                <div className="flex-1 relative">
+                  <select
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) return;
+                      const srv = services?.find(s => s.id === val);
+                      if (srv) {
+                        setServiceLines(prev => [...prev, {
+                          service_id: srv.id,
+                          service_name: srv.name_en,
+                          service_name_ar: srv.name_ar,
+                          quantity: 1,
+                          work_fee: srv.work_fee || 0,
+                          ministry_fee: srv.ministry_fee || 0,
+                          is_optional: false,
+                          is_parallel: false,
+                          notes: '',
+                          estimated_days_min: srv.estimated_days || 0,
+                          estimated_days_max: srv.estimated_days || 0,
+                          requires_pro: srv.requires_pro || false,
+                        }]);
+                      }
+                      e.target.value = '';
+                    }}
+                    className="w-full bg-[#101524] border border-white/10 focus:border-gold rounded-xl px-4 py-2.5 text-xs text-white font-semibold outline-none cursor-pointer"
+                  >
+                    <option value="">+ Add Catalog Service...</option>
+                    {services?.filter(s => s.is_active && !serviceLines.some(l => l.service_id === s.id)).map(s => (
+                      <option key={s.id} value={s.id}>{s.name_en} ({s.work_fee + s.ministry_fee} OMR)</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setServiceLines(prev => [...prev, {
+                      service_id: `custom-${Date.now()}`,
+                      service_name: 'Custom Service',
+                      service_name_ar: 'خدمة مخصصة',
+                      quantity: 1,
+                      work_fee: 0,
+                      ministry_fee: 0,
+                      is_optional: false,
+                      is_parallel: false,
+                      notes: '',
+                      estimated_days_min: 1,
+                      estimated_days_max: 3,
+                      requires_pro: false,
+                      isCustom: true
+                    }]);
+                  }}
+                  className="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white transition-colors"
+                >
+                  + Add Custom Service
+                </button>
               </div>
 
               {/* Assignment */}

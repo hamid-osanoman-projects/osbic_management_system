@@ -345,36 +345,7 @@ export interface Database {
         created_at: string
       }, 'id' | 'created_at'>
 
-      service_packages: TableDef<{
-        id: string
-        name_en: string
-        name_ar: string
-        description_en: string | null
-        description_ar: string | null
-        icon: string | null
-        discount_percentage: number
-        is_active: boolean
-        created_at: string
-      }, 'id' | 'created_at', 'is_active' | 'discount_percentage'>
 
-      package_services: TableDef<{
-        package_id: string
-        service_id: string
-        display_order: number
-      }, never, 'display_order'>
-
-      package_job_groups: TableDef<{
-        id: string
-        group_code: string
-        quotation_id: string | null
-        client_id: string
-        package_id: string | null
-        sales_employee_id: string | null
-        ops_employee_id: string | null
-        status: string
-        created_at: string
-        updated_at: string
-      }, 'id' | 'created_at' | 'updated_at', 'status'>
 
       quotations: TableDef<{
         id: string
@@ -454,11 +425,12 @@ export interface Database {
         description_en: string | null
         description_ar: string | null
         icon: string | null
+        discount_percentage: number
         is_active: boolean
         notes: string | null
         created_at: string
         updated_at: string
-      }, 'id' | 'created_at' | 'updated_at'>
+      }, 'id' | 'created_at' | 'updated_at', 'is_active' | 'discount_percentage'>
 
       package_services: TableDef<{
         id: string
@@ -489,13 +461,17 @@ export interface Database {
 
       package_job_groups: TableDef<{
         id: string
-        package_id: string
+        group_code: string
+        quotation_id: string | null
         client_id: string
+        package_id: string | null
         sales_employee_id: string | null
-        total_price: number
-        status: 'active' | 'completed' | 'cancelled'
+        ops_employee_id: string | null
+        total_price: number | null
+        status: 'active' | 'completed' | 'cancelled' | string
         created_at: string
-      }, 'id' | 'created_at'>
+        updated_at: string | null
+      }, 'id' | 'created_at' | 'updated_at', 'status'>
 
       job_services: TableDef<{
         id: string
