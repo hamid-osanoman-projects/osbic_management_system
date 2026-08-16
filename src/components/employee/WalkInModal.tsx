@@ -40,6 +40,7 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
         ministryFee: 0,
         quantity: 1,
         paidByClientCard: false,
+        cardAmountPaid: 0,
         isPosPlaceholder: true
       }]);
       setIsDropdownOpen(false);
@@ -61,6 +62,7 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
         ministryFee: s.ministry_fee || 0,
         quantity: 1,
         paidByClientCard: false,
+        cardAmountPaid: 0,
         isPosPlaceholder: false
       });
     }
@@ -79,6 +81,7 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
       ministryFee: 0,
       quantity: 1,
       paidByClientCard: false,
+      cardAmountPaid: 0,
       isCustom: true,
       isPosPlaceholder: false
     });
@@ -592,20 +595,63 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
                         </div>
 
                         {/* Paid using Client Card Option */}
-                        <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                          <label htmlFor={`client_card_${item.id}`} className="text-[9px] font-semibold text-white/45 hover:text-white cursor-pointer select-none flex items-center gap-1">
-                            <CreditCard size={10} className="text-gold" />
-                            Client paid government fee directly using their card
-                          </label>
-                          <input
-                            type="checkbox"
-                            id={`client_card_${item.id}`}
-                            checked={item.paidByClientCard}
-                            onChange={(e) => {
-                              setSelectedServices(prev => prev.map(p => p.id === item.id ? { ...p, paidByClientCard: e.target.checked } : p));
-                            }}
-                            className="rounded border-white/10 bg-black/40 text-gold focus:ring-0 focus:ring-offset-0 cursor-pointer w-3.5 h-3.5"
-                          />
+                        <div className="space-y-2 pt-2 border-t border-white/5">
+                          <div className="flex items-center justify-between">
+                            <label htmlFor={`client_card_${item.id}`} className="text-[9px] font-semibold text-white/45 hover:text-white cursor-pointer select-none flex items-center gap-1">
+                              <CreditCard size={10} className="text-gold" />
+                              Client paid government fee directly using their card
+                            </label>
+                            <input
+                              type="checkbox"
+                              id={`client_card_${item.id}`}
+                              checked={item.paidByClientCard}
+                              onChange={(e) => {
+                                const isChecking = e.target.checked;
+                                if (isChecking) {
+                                  // Validate gov fee is filled in
+                                  if (!item.ministryFee || Number(item.ministryFee) <= 0) {
+                                    toast.error('Please fill in the Gov Fee amount before marking it as paid by client card.');
+                                    return;
+                                  }
+                                  // Pre-fill cardAmountPaid with the gov fee value
+                                  setSelectedServices(prev => prev.map(p => p.id === item.id
+                                    ? { ...p, paidByClientCard: true, cardAmountPaid: item.ministryFee }
+                                    : p
+                                  ));
+                                } else {
+                                  setSelectedServices(prev => prev.map(p => p.id === item.id
+                                    ? { ...p, paidByClientCard: false, cardAmountPaid: 0 }
+                                    : p
+                                  ));
+                                }
+                              }}
+                              className="rounded border-white/10 bg-black/40 text-gold focus:ring-0 focus:ring-offset-0 cursor-pointer w-3.5 h-3.5"
+                            />
+                          </div>
+
+                          {/* Card Amount Input — appears when checkbox is ticked */}
+                          {item.paidByClientCard && (
+                            <div className="flex items-center gap-2 bg-gold/5 border border-gold/20 rounded-xl px-3 py-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                              <CreditCard size={12} className="text-gold shrink-0" />
+                              <div className="flex-1">
+                                <p className="text-[8px] font-bold text-gold/70 uppercase tracking-widest mb-1">Amount paid by client's card (OMR)</p>
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={item.cardAmountPaid || ''}
+                                  onChange={(e) => {
+                                    setSelectedServices(prev => prev.map(p => p.id === item.id
+                                      ? { ...p, cardAmountPaid: Number(e.target.value) }
+                                      : p
+                                    ));
+                                  }}
+                                  placeholder="0.000"
+                                  className="w-full bg-transparent outline-none text-sm text-white font-bold text-right font-mono placeholder:text-white/20"
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
