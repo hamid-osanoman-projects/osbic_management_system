@@ -245,7 +245,6 @@ const QuotationBuilder = () => {
             });
           }
 
-          const employeeRefName = profile?.full_name ? `REF BY: ${profile.full_name}` : 'REF BY: ';
           const autoNotes = `${jobDetail.job_code} - ${serviceName}`;
 
           setFormData(prev => {
@@ -254,15 +253,16 @@ const QuotationBuilder = () => {
               return prev;
             }
             const currentNotes = prev.notes || '';
-            const shouldAutofillNotes = currentNotes === '' || currentNotes === 'BUSINESS SETUP' || currentNotes === autoNotes;
+            const shouldAutofillNotes = currentNotes === '' || currentNotes === 'BUSINESS SETUP' || currentNotes === autoNotes || currentNotes.startsWith('REF BY:');
             return {
               ...prev,
               client_id: autofillClientId || jobDetail.client_id,
               job_id: autofillJobId,
-              notes: shouldAutofillNotes ? employeeRefName : currentNotes,
+              notes: shouldAutofillNotes ? autoNotes : currentNotes,
               items: autoItems.length > 0 ? autoItems : [{ description: '', quantity: 1, unit_price: 0, total: 0 }]
             };
           });
+
         }
       } else if (formData.items?.length === 0) {
         setFormData(prev => ({ ...prev, items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }] }));

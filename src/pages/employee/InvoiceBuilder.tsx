@@ -160,8 +160,7 @@ const InvoiceBuilder = () => {
             });
           }
 
-          // Auto-fill REF NAME with employee name prefix
-          const employeeRefName = profile?.full_name ? `REF BY: ${profile.full_name}` : 'REF BY: ';
+          // Auto-fill REF field with the job code + service name (not the employee name)
           const autoNotes = `${jobDetail.job_code} - ${serviceName}`;
 
           setFormData(prev => {
@@ -171,12 +170,12 @@ const InvoiceBuilder = () => {
               return prev;
             }
             const currentNotes = prev.notes || '';
-            const shouldAutofillNotes = currentNotes === '' || currentNotes === 'Thank you for your business.' || currentNotes === autoNotes;
+            const shouldAutofillNotes = currentNotes === '' || currentNotes === 'Thank you for your business.' || currentNotes.startsWith('REF BY:');
             return {
               ...prev,
               client_id: autofillClientId || jobDetail.client_id,
               job_id: autofillJobId,
-              notes: shouldAutofillNotes ? employeeRefName : currentNotes,
+              notes: shouldAutofillNotes ? autoNotes : currentNotes,
               items: autoItems.length > 0 ? autoItems : [{ description: '', quantity: 1, unit_price: 0, total: 0 }]
             };
           });
