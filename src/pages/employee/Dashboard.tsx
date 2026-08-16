@@ -58,6 +58,14 @@ const EmployeeDashboard = () => {
     }
   }, [profile, canDoSales, canDoOps, isPro]);
 
+  // Redirect accounts-only staff to their dedicated portal
+  const isAccountsOnly = profile?.can_do_accounts && !profile?.is_manager && !profile?.can_do_ops && !profile?.can_do_sales && !profile?.is_pro;
+  useEffect(() => {
+    if (isAccountsOnly) {
+      navigate('/employee/accounts', { replace: true });
+    }
+  }, [isAccountsOnly, navigate]);
+
   const handleModeChange = (newMode: 'sales' | 'ops' | 'pro') => {
     setMode(newMode);
     localStorage.setItem('employee_mode', newMode);

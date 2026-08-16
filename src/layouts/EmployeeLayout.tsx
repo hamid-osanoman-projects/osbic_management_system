@@ -94,8 +94,13 @@ const EmployeeLayout: React.FC = () => {
     ...(profile?.is_manager ? [{ key: 'pipeline', icon: Globe, path: '/employee/pipeline' }] : []),
     ...(profile?.can_do_accounts ? [{ key: 'accounts', icon: FileText, path: '/employee/accounts' }] : []),
   ].filter(item => {
+    // PRO agents: only home, pro queue, and profile
     if (profile?.is_pro) {
       return ['home', 'pro_queue', 'profile'].includes(item.key);
+    }
+    // Accounts-only staff: only Dashboard, Accounts, Invoices, Messages, Profile
+    if (profile?.can_do_accounts && !profile?.is_manager && !profile?.can_do_ops && !profile?.can_do_sales && !profile?.is_pro) {
+      return ['home', 'accounts', 'invoices', 'messages', 'profile'].includes(item.key);
     }
     if (item.key === 'pro_queue') return false;
     return true;
