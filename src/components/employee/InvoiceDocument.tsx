@@ -91,7 +91,9 @@ export const InvoiceDocument = forwardRef<HTMLDivElement, InvoiceDocumentProps>(
             {isSimple ? (
               <tr className="border-b border-gray-300">
                 <td className="py-3 px-2 align-middle print:py-2">1</td>
-                <td className="py-3 px-2 align-middle print:py-2 font-bold">{invoice.notes || 'Business Setup Services Package'}</td>
+                <td className="py-3 px-2 align-middle print:py-2 font-bold">
+                  {invoice.items?.[0]?.description || invoice.metadata?.service_name || 'Professional Services'}
+                </td>
                 <td className="py-3 px-2 align-middle print:py-2 text-center">1</td>
                 <td className="py-3 px-2 align-middle print:py-2 text-right">OMR {invoice.subtotal.toFixed(3)}</td>
                 <td className="py-3 px-2 align-middle print:py-2 text-center">{invoice.tax_percentage}%</td>

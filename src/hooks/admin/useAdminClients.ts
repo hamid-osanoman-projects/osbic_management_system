@@ -59,29 +59,34 @@ export const useEmployeeClients = (employeeId?: string) => {
   return useQuery({
     queryKey: ['employee', 'clients', employeeId],
     enabled: !!employeeId,
+    staleTime: 3 * 60 * 1000,   // 3 min — page shows instantly on revisit
+    gcTime:   10 * 60 * 1000,   // keep in memory 10 min
     queryFn: async (): Promise<Client[]> => {
-      // Step A: Get clients linked via jobs
-      const { data: jobClients } = await db
+      // Step A: Get all client_ids linked to this employee via jobs (sales or ops)
+      const { data: jobLinks } = await db
         .from('jobs')
         .select('client_id')
-        .eq('employee_id', employeeId);
-      
-      const jobClientIds = (jobClients ?? []).map((j: any) => j.client_id);
+        .or(`employee_id.eq.${employeeId},sales_employee_id.eq.${employeeId},ops_employee_id.eq.${employeeId}`);
 
-      // Step B: Fetch profiles
+      const linkedClientIds = Array.from(
+        new Set((jobLinks ?? []).map((j: any) => j.client_id).filter(Boolean))
+      ) as string[];
+
+      // Step B: Single profiles query — clients created by OR assigned via jobs
       let query = db
         .from('profiles')
-        .select('*')
-        .eq('role', 'client');
+        .select('id, client_code, full_name, email, phone, nationality, id_number, id_expiry, is_active, created_at, avatar_url, created_by')
+        .eq('role', 'client')
+        .order('created_at', { ascending: false });
 
-      if (jobClientIds.length > 0) {
-        query = query.or(`created_by.eq.${employeeId},id.in.(${jobClientIds.join(',')})`);
+      if (linkedClientIds.length > 0) {
+        // "created_by me" OR "linked via a job"
+        query = query.or(`created_by.eq.${employeeId},id.in.(${linkedClientIds.join(',')})`);
       } else {
         query = query.eq('created_by', employeeId);
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
-
+      const { data, error } = await query;
       if (error) throw error;
 
       return (data ?? []).map((p: any) => ({
@@ -90,6 +95,9 @@ export const useEmployeeClients = (employeeId?: string) => {
         full_name: p.full_name ?? 'Unknown',
         email: p.email ?? '',
         phone: p.phone,
+        nationality: p.nationality,
+        id_number: p.id_number,
+        id_expiry: p.id_expiry,
         is_active: p.is_active ?? true,
         created_at: p.created_at ?? new Date().toISOString(),
         avatar_url: p.avatar_url,
@@ -102,6 +110,7 @@ export const useEmployeeClients = (employeeId?: string) => {
 };
 
 // ─── Single Client ────────────────────────────────────────────────────────────
+
 export const useAdminClient = (id?: string) => {
   return useQuery({
     queryKey: ['admin', 'client', id],
