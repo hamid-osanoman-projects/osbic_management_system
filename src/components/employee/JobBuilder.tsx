@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { 
   X, Zap, Search, ChevronRight, User, 
   Building2, Briefcase, Plus, CheckCircle2, ArrowLeft, ArrowRight,
-  Hash, Users, Shield, GitBranch, Layers, LayoutGrid, List, Trash2
+  Hash, Users, Shield, GitBranch, Layers, LayoutGrid, List, Trash2, CreditCard
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import CreateClientSlideOver from '../shared/clients/CreateClientSlideOver';
@@ -159,6 +159,7 @@ export const JobBuilder = ({
   const [serviceLines, setServiceLines] = useState<ServiceLineItem[]>([]);
   const [assignedTo, setAssignedTo] = useState<string>('');
   const [entryType, setEntryType] = useState<'lead' | 'walkin' | 'direct' | 'renewal'>('direct');
+  const [clientPaysMinistryFee, setClientPaysMinistryFee] = useState(false);
 
   // Init Data
   useEffect(() => {
@@ -333,7 +334,7 @@ export const JobBuilder = ({
         total_fee: totalWork + totalMin,
         work_fee: totalWork,
         ministry_fee: totalMin,
-        ministry_fee_type: 'fixed',
+        client_pays_ministry_fee: clientPaysMinistryFee,
         advance_percentage: 0,
         advance_amount: 0,
         remaining_amount: totalWork + totalMin,
@@ -894,6 +895,82 @@ export const JobBuilder = ({
                     )}
                   </div>
                 ))}
+              </div>
+
+              {/* Ministry Fee Payment Method Toggle */}
+              <div className={`bg-[#131824] border rounded-2xl p-5 transition-all ${
+                clientPaysMinistryFee ? 'border-blue-500/50 bg-blue-500/5' : 'border-white/10'
+              }`}>
+                <div className="flex items-start gap-3 mb-4">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    clientPaysMinistryFee ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-white/50'
+                  }`}>
+                    <CreditCard size={18} />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-white uppercase tracking-widest">Ministry Fee Payment Routing</h5>
+                    <p className="text-[10px] text-white/40 mt-0.5">How will the Ministry Fee be paid?</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Option A: OSBIC handles */}
+                  <button
+                    type="button"
+                    onClick={() => setClientPaysMinistryFee(false)}
+                    className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
+                      !clientPaysMinistryFee
+                        ? 'border-gold/50 bg-gold/5'
+                        : 'border-white/10 bg-black/20 hover:border-white/20'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      !clientPaysMinistryFee ? 'border-gold' : 'border-white/30'
+                    }`}>
+                      {!clientPaysMinistryFee && <div className="w-2 h-2 rounded-full bg-gold" />}
+                    </div>
+                    <div>
+                      <p className={`text-xs font-bold ${
+                        !clientPaysMinistryFee ? 'text-gold' : 'text-white/60'
+                      }`}>OSBIC Advances & Handles Ministry Fee</p>
+                      <p className="text-[10px] text-white/30 mt-0.5">Standard flow — fund allocation required before ops can proceed</p>
+                    </div>
+                  </button>
+
+                  {/* Option B: Client card */}
+                  <button
+                    type="button"
+                    onClick={() => setClientPaysMinistryFee(true)}
+                    className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
+                      clientPaysMinistryFee
+                        ? 'border-blue-500/60 bg-blue-500/8'
+                        : 'border-white/10 bg-black/20 hover:border-white/20'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      clientPaysMinistryFee ? 'border-blue-400' : 'border-white/30'
+                    }`}>
+                      {clientPaysMinistryFee && <div className="w-2 h-2 rounded-full bg-blue-400" />}
+                    </div>
+                    <div>
+                      <p className={`text-xs font-bold flex items-center gap-1.5 ${
+                        clientPaysMinistryFee ? 'text-blue-300' : 'text-white/60'
+                      }`}>
+                        <CreditCard size={11} /> Client Paying Ministry Fee Directly via Their Card
+                      </p>
+                      <p className="text-[10px] text-white/30 mt-0.5">Bypasses fund allocation lock — Accounts verifies service charge only</p>
+                    </div>
+                  </button>
+                </div>
+
+                {clientPaysMinistryFee && (
+                  <div className="mt-3 flex items-start gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2.5">
+                    <CreditCard size={12} className="text-blue-400 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-blue-300">
+                      Ops team can proceed immediately. Accounts will only need to verify the <strong>Service Charge</strong> — the Ministry Fee portion is excluded from their review.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Add Extra Services Bar */}

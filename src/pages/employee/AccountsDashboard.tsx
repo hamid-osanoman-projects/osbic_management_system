@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Wallet, CheckCircle2, AlertCircle, RefreshCw, FileText, Lock, Building2, ExternalLink, Activity, DollarSign, Users, ChevronRight, BarChart4, LayoutDashboard, History, X, Download, Eye } from 'lucide-react';
+import { Wallet, CheckCircle2, AlertCircle, RefreshCw, FileText, Lock, Building2, ExternalLink, Activity, DollarSign, Users, ChevronRight, BarChart4, LayoutDashboard, History, X, Download, Eye, CreditCard } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -52,7 +52,7 @@ export default function AccountsDashboard() {
         .from('job_payments')
         .select(`
           *,
-          job:jobs(job_code, client:profiles!client_id(full_name, phone)),
+          job:jobs(job_code, work_fee, ministry_fee, client_pays_ministry_fee, client:profiles!client_id(full_name, phone)),
           recorder:profiles!job_payments_recorded_by_fkey(full_name)
         `)
         .eq('status', 'pending')
@@ -528,6 +528,11 @@ export default function AccountsDashboard() {
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-widest">
                               {payment.payment_method}
                             </span>
+                            {payment.job?.client_pays_ministry_fee && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-widest flex items-center gap-1">
+                                <CreditCard size={9} /> Client Card — Service Charge Only
+                              </span>
+                            )}
                           </div>
                           <p className="text-sm text-muted-foreground">
                             Client: <span className="text-foreground">{payment.job?.client?.full_name}</span>
@@ -762,6 +767,20 @@ export default function AccountsDashboard() {
                   </div>
                 )}
               </div>
+
+              {/* Context for client-pays-ministry-fee jobs */}
+              {verifyTarget.job?.client_pays_ministry_fee && (
+                <div className="flex items-start gap-3 bg-blue-500/8 border border-blue-500/30 rounded-xl px-4 py-3 mb-6">
+                  <CreditCard size={16} className="text-blue-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-blue-300 mb-1">Client Pays Ministry Fee via Card</p>
+                    <p className="text-xs text-blue-300/70">
+                      Only verify the <strong className="text-blue-200">Service Charge: {Number(verifyTarget.job?.work_fee || 0).toFixed(3)} OMR</strong>.
+                      The Ministry Fee ({Number(verifyTarget.job?.ministry_fee || 0).toFixed(3)} OMR) is paid directly by the client — no verification needed.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <button

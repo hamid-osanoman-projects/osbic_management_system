@@ -93,10 +93,15 @@ const ApplicantCard = ({
   const { profile } = useAuth();
   const [isUploadingDoc, setIsUploadingDoc] = useState<string | null>(null);
   const isClientTrusted = job?.client?.is_trusted === true;
+  const clientPaysMinistryFee = job?.client_pays_ministry_fee === true;
   const currentMinistryAllocated = js.ministry_fee_allocated || 0;
   const reqMinistryFee = js.ministry_fee || 0;
-  const isAutoUnlocked = isClientTrusted || (reqMinistryFee > 0 && currentMinistryAllocated >= reqMinistryFee);
+  // Auto-unlock if: client is trusted, OR client pays ministry fee directly, OR funds have been allocated
+  const isAutoUnlocked = isClientTrusted 
+    || clientPaysMinistryFee 
+    || (reqMinistryFee > 0 && currentMinistryAllocated >= reqMinistryFee);
   const isLocked = !js.is_funded && !isAutoUnlocked && (Number(js.total_fee) > 0);
+
 
   const documentsList = js.documents || [];
   const inputs = documentsList.filter((d: any) => d.document_category !== 'output');

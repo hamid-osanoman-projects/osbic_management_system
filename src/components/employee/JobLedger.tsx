@@ -775,96 +775,256 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
                     )}
                   </button>
                 </div>
+
+                {/* FUND ALLOCATION / TRANCHE BLOCK */}
+                {job?.client_pays_ministry_fee ? (
+                  /* Client is paying ministry fee directly — no allocation needed */
+                  <div className="mt-8 bg-blue-500/5 border border-blue-500/30 rounded-2xl p-6 flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-400 shrink-0 mt-0.5">
+                      <CreditCard size={18} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-blue-300 flex items-center gap-2 mb-1">
+                        Client Paying Ministry Fee Directly via Card
+                      </h4>
+                      <p className="text-xs text-blue-300/70">
+                        No fund allocation is required for this job. The client is covering the Ministry Fee using their own card.
+                        All services are immediately authorized for the Operations team.
+                      </p>
+                      <div className="flex items-center gap-4 mt-3">
+                        <div className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-xl uppercase tracking-widest">
+                          ✓ {jobServices.length} Services Unlocked
+                        </div>
+                        <div className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl uppercase tracking-widest">
+                          Accounts Verifies Service Charge Only
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-8 bg-card border border-primary/20 rounded-2xl p-6 relative overflow-hidden shadow-sm">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                      <div>
+                        <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                          <Landmark size={16} className="text-primary" /> 
+                          Service Allocation & Authorization
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Select which services Operations is allowed to work on based on funds received. 
+                          <span className="font-bold text-foreground ml-1">Total Paid: {totalPaid.toFixed(3)} OMR</span>
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 bg-muted/40 border border-border px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-wider select-none whitespace-nowrap">
+                        <span className="text-emerald-500 font-extrabold">{fundedCount} Unlocked</span>
+                        <span className="text-muted-foreground/30">•</span>
+                        <span className="text-amber-500 font-extrabold">{lockedCount} Locked</span>
+                      </div>
+                    </div>
+
+                    {jobServices.length === 0 ? (
+                      <div className="text-center py-4 text-xs text-muted-foreground">No services found for this job.</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {(showAllServices ? jobServices : jobServices.slice(0, 3)).map((service, idx) => {
+                          const currentMinistryAllocated = service.ministry_fee_allocated || 0;
+                          const reqMinistryFee = service.ministry_fee || 0;
+                          const isAutoUnlocked = reqMinistryFee > 0 && currentMinistryAllocated >= reqMinistryFee;
+                          const isServiceFunded = service.is_funded || isAutoUnlocked || Number(service.total_fee) === 0 || job?.client_pays_ministry_fee;
+                          const isFree = Number(service.total_fee) === 0;
+                          
+                          return (
+                            <div key={service.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${isServiceFunded ? 'bg-primary/5 border-primary/30' : 'bg-muted/10 border-border opacity-75'}`}>
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isServiceFunded ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                  {idx + 1}
+                                </div>
+                                <div>
+                                  <h5 className={`text-sm font-bold ${isServiceFunded ? 'text-foreground' : 'text-muted-foreground line-through decoration-muted-foreground/30'}`}>
+                                    {service.service_name}
+                                  </h5>
+                                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mt-0.5">
+                                    {isFree ? '⚡ Free Service (Auto-Unlocked)' : (isAutoUnlocked ? '⚡ Funded (Auto-Unlocked)' : (isServiceFunded ? '✅ Authorized for Ops' : '🔒 Locked (Awaiting Funds)'))}
+                                  </p>
+                                </div>
+                              </div>
+                              {isFree ? (
+                                <span className="text-[10px] font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20 uppercase tracking-widest font-mono">Free</span>
+                              ) : (isAutoUnlocked || service.is_funded) ? (
+                                <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 uppercase tracking-widest font-mono">Funded</span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-rose-500 bg-rose-500/10 px-3 py-1.5 rounded-xl border border-rose-500/20 uppercase tracking-widest font-mono">Locked</span>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {jobServices.length > 3 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllServices(!showAllServices)}
+                            className="w-full py-2.5 mt-2 border border-dashed border-border hover:border-primary/50 text-xs font-bold text-muted-foreground hover:text-primary rounded-xl flex items-center justify-center gap-1.5 transition-all bg-card/20 hover:bg-primary/5"
+                          >
+                            {showAllServices ? (
+                              <>
+                                <ChevronUp size={14} /> Show Less
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown size={14} /> Show All Services ({jobServices.length})
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* FUND ALLOCATION / TRANCHE BLOCK */}
-            <div className="mt-8 bg-card border border-primary/20 rounded-2xl p-6 relative overflow-hidden shadow-sm">
-              <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Landmark size={16} className="text-primary" /> 
-                    Service Allocation & Authorization
-                  </h4>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Select which services Operations is allowed to work on based on funds received. 
-                    <span className="font-bold text-foreground ml-1">Total Paid: {totalPaid.toFixed(3)} OMR</span>
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 bg-muted/40 border border-border px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-wider select-none whitespace-nowrap">
-                  <span className="text-emerald-500 font-extrabold">{fundedCount} Unlocked</span>
-                  <span className="text-muted-foreground/30">•</span>
-                  <span className="text-amber-500 font-extrabold">{lockedCount} Locked</span>
-                </div>
+            {/* Payment History Section */}
+            <div className="mt-8 border-t border-border pt-8">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment History</h4>
               </div>
 
-              {jobServices.length === 0 ? (
-                <div className="text-center py-4 text-xs text-muted-foreground">No services found for this job.</div>
-              ) : (
-                <div className="space-y-3">
-                  {(showAllServices ? jobServices : jobServices.slice(0, 3)).map((service, idx) => {
-                    const currentMinistryAllocated = service.ministry_fee_allocated || 0;
-                    const reqMinistryFee = service.ministry_fee || 0;
-                    const isAutoUnlocked = reqMinistryFee > 0 && currentMinistryAllocated >= reqMinistryFee;
-                    const isServiceFunded = service.is_funded || isAutoUnlocked || Number(service.total_fee) === 0;
-                    const isFree = Number(service.total_fee) === 0;
-                    
-                    return (
-                      <div key={service.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${isServiceFunded ? 'bg-primary/5 border-primary/30' : 'bg-muted/10 border-border opacity-75'}`}>
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isServiceFunded ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                            {idx + 1}
-                          </div>
-                          <div>
-                            <h5 className={`text-sm font-bold ${isServiceFunded ? 'text-foreground' : 'text-muted-foreground line-through decoration-muted-foreground/30'}`}>
-                              {service.service_name}
-                            </h5>
-                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mt-0.5">
-                              {isFree ? '⚡ Free Service (Auto-Unlocked)' : (isAutoUnlocked ? '⚡ Funded (Auto-Unlocked)' : (isServiceFunded ? '✅ Authorized for Ops' : '🔒 Locked (Awaiting Funds)'))}
-                            </p>
-                          </div>
-                        </div>
-                        {isFree ? (
-                          <span className="text-[10px] font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20 uppercase tracking-widest font-mono">Free</span>
-                        ) : (isAutoUnlocked || service.is_funded) ? (
-                          <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 uppercase tracking-widest font-mono">Funded</span>
-                        ) : (
-                          <span className="text-[10px] font-bold text-rose-500 bg-rose-500/10 px-3 py-1.5 rounded-xl border border-rose-500/20 uppercase tracking-widest font-mono">Locked</span>
+              <div className="space-y-2">
+                {payments.map(payment => (
+                  <div key={payment.id} className="flex items-center justify-between p-4 bg-primary/5 border border-primary/20 rounded-xl">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        {payment.payment_method === 'cash' && <Banknote size={14} className="text-emerald-500" />}
+                        {payment.payment_method === 'bank_transfer' && <Landmark size={14} className="text-blue-500" />}
+                        {(payment.payment_method === 'pos' || payment.payment_method === 'online') && <CreditCard size={14} className="text-purple-500" />}
+                        <span className="text-sm font-bold text-foreground capitalize">{payment.payment_method.replace('_', ' ')}</span>
+                        
+                        {payment.status === 'pending' && (
+                          <span className="ml-2 text-[9px] font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
+                            <AlertCircle size={10} /> Pending Verification
+                          </span>
+                        )}
+                        {payment.status === 'verified' && (
+                          <span className="ml-2 text-[9px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
+                            <CheckCircle2 size={10} /> Verified
+                          </span>
                         )}
                       </div>
-                    );
-                  })}
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-2">
+                        <span>{new Date(payment.created_at).toLocaleDateString()}</span>
+                        {payment.reference_number && (
+                          <>
+                            <span>•</span>
+                            <span className="font-mono uppercase tracking-wider">Ref: {payment.reference_number}</span>
+                          </>
+                        )}
+                        {payment.profiles?.full_name && (
+                          <>
+                            <span>•</span>
+                            <span>By {payment.profiles.full_name}</span>
+                          </>
+                        )}
+                      </div>
+                      
+                      {(() => {
+                        if (!payment.notes) return null;
+                        const receiptMatch = payment.notes.match(/\[RECEIPT:(.*?)\|(.*?)\]/);
+                        if (receiptMatch) {
+                          const filePath = receiptMatch[1];
+                          const fileName = receiptMatch[2];
+                          return (
+                            <div className="mt-2 flex items-center gap-2">
+                              <button 
+                                onClick={() => handleViewReceipt(filePath)}
+                                className="flex items-center gap-1.5 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-md transition-colors"
+                              >
+                                <Eye size={10} /> View Upload
+                              </button>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                      {(() => {
+                        const totalMinistryBilled = jobServices.reduce((sum, s) => sum + (s.ministry_fee || 0), 0);
+                        const totalMinistryAllocated = jobServices.reduce((sum, s) => sum + (s.ministry_fee_allocated || 0) + (s.ministry_fee_pending || 0), 0);
+                        const remainingMinistryDue = Math.max(0, totalMinistryBilled - totalMinistryAllocated);
 
-                  {jobServices.length > 3 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllServices(!showAllServices)}
-                      className="w-full py-2.5 mt-2 border border-dashed border-border hover:border-primary/50 text-xs font-bold text-muted-foreground hover:text-primary rounded-xl flex items-center justify-center gap-1.5 transition-all bg-card/20 hover:bg-primary/5"
-                    >
-                      {showAllServices ? (
-                        <>
-                          <ChevronUp size={14} /> Show Less
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown size={14} /> Show All Services ({jobServices.length})
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-              )}
+                        const allocatedForThis = paymentAllocations
+                          .filter(a => a.payment_id === payment.id)
+                          .reduce((sum, a) => sum + Number(a.amount), 0);
+                        
+                        // Only show "Allocate Funds" if there are unpaid ministry fees and this payment hasn't already allocated its full amount
+                        const canAllocateMore = !job?.client_pays_ministry_fee && remainingMinistryDue > 0 && allocatedForThis < Number(payment.amount);
+
+                        return payment.status === 'verified' ? (
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <button 
+                              onClick={() => handleGenerateReceipt(payment, 'view')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg transition-colors border border-emerald-500/20"
+                            >
+                              <Eye size={12} /> View Receipt
+                            </button>
+                            <button 
+                              onClick={() => handleGenerateReceipt(payment, 'download')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg transition-colors border border-blue-500/20"
+                            >
+                              <Download size={12} /> Download Receipt
+                            </button>
+                            {canAllocateMore && (
+                              <button 
+                                onClick={() => setAllocatingPayment(payment)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors border border-amber-500/20"
+                              >
+                                <Landmark size={12} /> Allocate Funds
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            {payment.status === 'pending' && (profile?.role === 'admin' || profile?.is_manager || profile?.can_do_accounts) && (
+                              <button 
+                                onClick={() => handleVerifyPayment(payment.id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white bg-emerald-500 hover:bg-emerald-400 rounded-lg transition-colors shadow-lg shadow-emerald-500/15"
+                              >
+                                <CheckCircle2 size={12} /> Verify Payment
+                              </button>
+                            )}
+                            {canAllocateMore && (
+                              <button 
+                                onClick={() => setAllocatingPayment(payment)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors border border-amber-500/20"
+                              >
+                                <Landmark size={12} /> Allocate Funds
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <span className="font-mono text-sm text-emerald-500 font-bold">+{Number(payment.amount).toFixed(3)} OMR</span>
+                  </div>
+                ))}
+
+                {payments.length === 0 && (
+                  <div className="text-center border border-dashed border-border rounded-xl p-6 text-muted-foreground text-xs">
+                    No payments recorded yet.
+                  </div>
+                )}
+              </div>
             </div>
 
-          </div>
-        )}
-
-        {/* Payment History Section */}
+            {/* Total Summaries */}
+            <div className="mt-8 bg-muted/20 border border-border rounded-[1.5rem] p-6 grid grid-cols-2 md:grid-cols-4 gap-y-6 divide-x divide-border">
+              <div className="px-4 text-center">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Billed</p>
+                <p className="text-xl font-mono font-bold text-foreground">{totalBilled.toFixed(3)} <span className="text-xs text-muted-foreground ml-0.5">OMR</span></p>
+              </div>
         <div className="mt-8 border-t border-border pt-8">
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment History</h4>
           </div>
+
 
           <div className="space-y-2">
             {payments.map(payment => (
