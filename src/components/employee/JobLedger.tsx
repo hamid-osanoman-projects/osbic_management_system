@@ -1013,6 +1013,8 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
                 )}
               </div>
             </div>
+          </div>
+        )}
 
         {/* Total Summaries */}
 
