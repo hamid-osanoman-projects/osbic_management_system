@@ -9,6 +9,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useAdminSettings } from './hooks/admin/useAdminSettings';
 import ThemeToggle from './components/ThemeToggle';
 import { supabase } from './lib/supabase';
+import { NetworkStatusBanner } from './components/shared/NetworkStatusBanner';
 
 
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -397,7 +398,37 @@ const LoginPage = () => {
 };
 
 
-const queryClient = new QueryClient();
+// ─── Resilient QueryClient ────────────────────────────────────────────────────
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Only fetch when the browser is online
+      networkMode: 'online',
+      // Retry up to 3 times with exponential back-off (1s, 2s, 4s)
+      retry: 3,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+      // Keep data fresh for 2 min, cached for 10 min
+      staleTime: 2 * 60 * 1000,
+      gcTime:   10 * 60 * 1000,
+    },
+    mutations: {
+      // Queue mutations when offline — they will auto-resume when reconnected
+      networkMode: 'online',
+      retry: 2,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
+      onError: async (error: any) => {
+        // Auto-refresh session on 401 Unauthorized
+        if (error?.status === 401 || error?.message?.includes('JWT')) {
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (!refreshError) {
+            // Session refreshed — caller can retry
+            console.info('[Auth] Session refreshed after 401.');
+          }
+        }
+      },
+    },
+  },
+});
 
 function App() {
   return (
@@ -406,6 +437,8 @@ function App() {
       <AuthProvider>
         <BranchProvider>
         <BrowserRouter>
+          {/* ── Network status banner (all portals) ── */}
+          <NetworkStatusBanner />
           <Toaster 
             position="top-right" 
             containerStyle={{ zIndex: 999999 }}
