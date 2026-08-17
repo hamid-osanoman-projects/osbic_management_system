@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -59,7 +60,8 @@ const Dashboard = () => {
   const { data: revenue } = useRevenueChart(selectedBranchId);
   const { data: distribution } = useJobDistribution(selectedBranchId);
   const { data: recentJobs, isLoading: jobsLoading } = useRecentJobs(selectedBranchId);
-  const { data: employees, isLoading: employeesLoading } = useTopEmployees(selectedBranchId);
+  const [thisMonthOnly, setThisMonthOnly] = useState(true);
+  const { data: employees, isLoading: employeesLoading } = useTopEmployees(selectedBranchId, thisMonthOnly);
   const { data: salesLeaderboard } = useSalesLeaderboard(selectedBranchId);
   
   const { useAllLeadsList } = useAdminLeads();
@@ -505,41 +507,92 @@ const Dashboard = () => {
         </motion.div>
 
         {/* Efficiency Leaders (Top Employees) */}
-        <motion.div variants={item} className="xl:col-span-4 bg-card border border-border rounded-[2rem] p-6 lg:p-8 shadow-sm flex flex-col h-[500px] overflow-y-auto">
-          <h4 className="text-base font-syne font-bold text-foreground mb-6 flex items-center gap-2">
-            <Trophy className="text-amber-400" size={20} />
-            Efficiency Leaders
-          </h4>
-          <div className="space-y-5">
+        <motion.div variants={item} className="xl:col-span-4 bg-card border border-border rounded-[2rem] p-6 lg:p-8 shadow-sm flex flex-col h-[500px]">
+          {/* Header + Toggle */}
+          <div className="flex items-center justify-between mb-6">
+            <h4 className="text-base font-syne font-bold text-foreground flex items-center gap-2">
+              <Trophy className="text-amber-400" size={20} />
+              Efficiency Leaders
+            </h4>
+            <div className="flex items-center gap-1 p-1 bg-muted/50 border border-border rounded-xl">
+              <button
+                onClick={() => setThisMonthOnly(true)}
+                className={`px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest rounded-lg transition-colors ${
+                  thisMonthOnly ? 'bg-card text-foreground shadow-sm border border-border' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                This Month
+              </button>
+              <button
+                onClick={() => setThisMonthOnly(false)}
+                className={`px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest rounded-lg transition-colors ${
+                  !thisMonthOnly ? 'bg-card text-foreground shadow-sm border border-border' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                All Time
+              </button>
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="space-y-4 overflow-y-auto flex-1 pr-1">
             {employeesLoading
               ? [1, 2, 3].map((i) => <Skeleton key={i} height={56} rounded="xl" />)
-              : (employees as any[])?.map((emp, idx) => (
-                <div key={emp.id} className="flex items-center gap-4 group">
-                  <div className="relative">
-                    <div className="w-10 h-10 rounded-xl bg-muted border border-border flex items-center justify-center overflow-hidden shrink-0">
-                      {emp.avatar_url
-                        ? <img src={emp.avatar_url} className="w-full h-full object-cover" alt={emp.full_name} />
-                        : <span className="text-muted-foreground font-bold text-sm">{emp.full_name[0]}</span>}
-                    </div>
-                    {idx < 3 && (
-                      <div className={cn(
-                        'absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center border border-card',
-                        idx === 0 ? 'bg-primary text-[#0A0F1E]' : idx === 1 ? 'bg-slate-300 text-slate-800' : 'bg-orange-400 text-orange-950'
-                      )}>
-                        <Trophy size={8} />
+              : (() => {
+                  const ranked = (employees as any[])?.filter(e => e.completed_count > 0) || [];
+                  const zeros  = (employees as any[])?.filter(e => e.completed_count === 0) || [];
+                  const list   = [...ranked, ...zeros];
+
+                  if (list.length === 0) {
+                    return (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 py-10">
+                        <Trophy className="text-muted-foreground/30" size={32} />
+                        <p className="text-sm text-muted-foreground">No completed jobs yet</p>
+                        <p className="text-[10px] text-muted-foreground/50">{thisMonthOnly ? 'Switch to All Time to see historical data' : ''}</p>
                       </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">{emp.full_name}</p>
-                    <p className="text-[9px] text-muted-foreground/60 font-mono uppercase">{emp.employee_code ?? 'EMP'}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-bold font-mono text-foreground leading-none">{emp.completed_month}</p>
-                    <p className="text-[9px] text-muted-foreground/60 uppercase">Jobs</p>
-                  </div>
-                </div>
-              ))}
+                    );
+                  }
+
+                  return list.map((emp, idx) => (
+                    <div key={emp.id} className={`flex items-center gap-4 group ${
+                      emp.completed_count === 0 ? 'opacity-40' : ''
+                    }`}>
+                      {/* Avatar with rank badge */}
+                      <div className="relative shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-muted border border-border flex items-center justify-center overflow-hidden">
+                          {emp.avatar_url
+                            ? <img src={emp.avatar_url} className="w-full h-full object-cover" alt={emp.full_name} />
+                            : <span className="text-muted-foreground font-bold text-sm">{emp.full_name?.[0]}</span>}
+                        </div>
+                        {idx < 3 && emp.completed_count > 0 && (
+                          <div className={cn(
+                            'absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center border border-card',
+                            idx === 0 ? 'bg-primary text-[#0A0F1E]' : idx === 1 ? 'bg-slate-300 text-slate-800' : 'bg-orange-400 text-orange-950'
+                          )}>
+                            <Trophy size={8} />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Name & code */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">{emp.full_name}</p>
+                        <p className="text-[9px] text-muted-foreground/60 font-mono uppercase">{emp.employee_code ?? 'EMP'}</p>
+                      </div>
+
+                      {/* Count */}
+                      <div className="text-right shrink-0">
+                        <p className={`text-sm font-bold font-mono leading-none ${
+                          emp.completed_count > 0 ? 'text-foreground' : 'text-muted-foreground/40'
+                        }`}>
+                          {emp.completed_count}
+                        </p>
+                        <p className="text-[9px] text-muted-foreground/60 uppercase">Jobs</p>
+                      </div>
+                    </div>
+                  ));
+                })()
+            }
           </div>
         </motion.div>
       </section>

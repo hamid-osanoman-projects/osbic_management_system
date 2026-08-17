@@ -110,37 +110,58 @@ export const useJobDistribution = (branchId: string | null = null) => {
 };
 
 // Top Employees Hook (ranked by completed jobs)
-export const useTopEmployees = (branchId: string | null = null) => {
+export const useTopEmployees = (branchId: string | null = null, thisMonthOnly = false) => {
   return useQuery({
-    queryKey: ['admin', 'top-employees', branchId],
+    queryKey: ['admin', 'top-employees', branchId, thisMonthOnly],
     queryFn: async () => {
-      // 1. Get employees (branch-filtered)
+      // 1. Get all employees (branch-filtered)
       const empQuery = supabase
         .from('profiles')
         .select('id, full_name, avatar_url, employee_code')
         .eq('role', 'employee');
       const { data: employees, error: empError } = await withBranch(empQuery, branchId);
-      
       if (empError) throw empError;
 
-      // 2. Count completed jobs for each (also branch-filtered)
-      const jobQuery = (supabase as any).from('jobs').select('employee_id, id').eq('status', 'completed');
-      const { data: jobCounts, error: jobError } = await withBranch(jobQuery, branchId);
+      // 2. Build completed jobs query — fetch all three assignment columns
+      let jobQuery = (supabase as any)
+        .from('jobs')
+        .select('id, employee_id, sales_employee_id, ops_employee_id, updated_at')
+        .eq('status', 'completed');
 
+      // Optional: restrict to current calendar month
+      if (thisMonthOnly) {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const end   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+        jobQuery = jobQuery.gte('updated_at', start).lte('updated_at', end);
+      }
+
+      const { data: completedJobs, error: jobError } = await withBranch(jobQuery, branchId);
       if (jobError) throw jobError;
 
-      const countsMap = (jobCounts as any[] || []).reduce((acc: any, job: any) => {
-        acc[job.employee_id] = (acc[job.employee_id] || 0) + 1;
-        return acc;
-      }, {});
+      // 3. Build a count map: for each job, credit each unique employee who touched it
+      const countsMap: Record<string, number> = {};
+      (completedJobs as any[] || []).forEach((job: any) => {
+        // Collect distinct employee IDs involved in this job
+        const involved = new Set<string>(
+          [job.employee_id, job.sales_employee_id, job.ops_employee_id].filter(Boolean)
+        );
+        involved.forEach((empId) => {
+          countsMap[empId] = (countsMap[empId] || 0) + 1;
+        });
+      });
 
-      return (employees as any[] || []).map(emp => ({
-        ...emp,
-        completed_month: countsMap[emp.id] || 0,
-      })).sort((a: any, b: any) => b.completed_month - a.completed_month);
+      // 4. Merge counts into employee list, sort descending, drop zeros to bottom
+      return (employees as any[] || [])
+        .map((emp: any) => ({
+          ...emp,
+          completed_count: countsMap[emp.id] || 0,
+        }))
+        .sort((a: any, b: any) => b.completed_count - a.completed_count);
     },
   });
 };
+
 
 // Recent Jobs Hook
 export const useRecentJobs = (branchId: string | null = null) => {
