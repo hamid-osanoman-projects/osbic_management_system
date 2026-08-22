@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+ import React, { useState } from 'react';
 import { User, Mail, Phone, Plus, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Props {
   onSuccess: (client: { id: string; full_name: string }) => void;
 }
 
 const QuickRegisterForm = ({ onSuccess }: Props) => {
+  const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
@@ -68,7 +70,8 @@ const QuickRegisterForm = ({ onSuccess }: Props) => {
           phone: formData.phone,
           role: 'client',
           client_code: clientCode,
-          is_active: true
+          is_active: true,
+          branch_id: profile?.branch_id || null
         }, { onConflict: 'id' })
         .select()
         .single();

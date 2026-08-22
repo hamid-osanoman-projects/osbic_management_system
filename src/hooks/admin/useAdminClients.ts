@@ -75,7 +75,7 @@ export const useEmployeeClients = (employeeId?: string) => {
       // Step B: Single profiles query — clients created by OR assigned via jobs
       let query = db
         .from('profiles')
-        .select('id, client_code, full_name, email, phone, nationality, id_number, id_expiry, is_active, created_at, avatar_url, created_by')
+        .select('*')
         .eq('role', 'client')
         .order('created_at', { ascending: false });
 

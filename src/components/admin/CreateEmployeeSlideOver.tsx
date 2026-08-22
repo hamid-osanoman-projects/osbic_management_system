@@ -27,6 +27,7 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
     avatarFile: null as File | null,
     previewUrl: '',
     branchId: '',
+    companyName: '',
   });
   const [croppingImage, setCroppingImage] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -55,6 +56,7 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
         department: formData.department,
         avatar_file: formData.avatarFile,
         branch_id: formData.branchId || null,
+        company_name: formData.companyName || null,
       }, {
       onSuccess: (data: any) => {
         setCredentials({
@@ -79,7 +81,7 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
 
   const resetForm = () => {
     setStep(1);
-    setFormData({ fullName: '', email: '', phone: '', countryCode: '+968', customCountryCode: '', department: 'operations', notes: '', services: [], avatarFile: null, previewUrl: '', branchId: '' });
+    setFormData({ fullName: '', email: '', phone: '', countryCode: '+968', customCountryCode: '', department: 'operations', notes: '', services: [], avatarFile: null, previewUrl: '', branchId: '', companyName: '' });
     setShowSuccess(false);
     setShowPassword(false);
     onClose();
@@ -204,6 +206,17 @@ const CreateEmployeeSlideOver = ({ isOpen, onClose }: Props) => {
                               <option key={b.id} value={b.id} className="bg-[#0A0F1E]">{b.name}</option>
                             ))}
                           </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-muted-foreground mb-1.5">Company Name (Optional)</label>
+                          <input
+                            type="text"
+                            value={formData.companyName}
+                            onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                            className="w-full bg-white/5 border border-border rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-gold transition-colors"
+                            placeholder="e.g. OSBIC Partners"
+                          />
                         </div>
 
                         <div>

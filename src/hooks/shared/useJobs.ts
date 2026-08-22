@@ -42,6 +42,8 @@ export interface Job {
   sales_employee_name?: string;
   is_operator?: boolean;
   entry_type?: 'lead' | 'walkin' | 'direct' | 'renewal' | null;
+  client_pays_ministry_fee?: boolean;
+  estimated_days?: number | null;
 }
 
 export interface JobStep {
@@ -122,7 +124,7 @@ export const useAdminJobs = () => {
           client:profiles!client_id(full_name, avatar_url),
           employee:profiles!employee_id(full_name, avatar_url),
           sales_employee:profiles!sales_employee_id(full_name),
-          service:services!service_id(name_en, category),
+          service:services!service_id(name_en, category, estimated_days),
           job_steps(status, actual_gov_fee, workflow_step_id, step_def:workflow_steps!workflow_step_id(estimated_gov_fee))
         `)
         .order('created_at', { ascending: false });
@@ -166,6 +168,8 @@ export const useAdminJobs = () => {
           entry_type: j.entry_type,
           branch_id: j.branch_id,
           service_id: j.service_id,
+          client_pays_ministry_fee: j.client_pays_ministry_fee ?? false,
+          estimated_days: j.service?.estimated_days ?? null,
         };
       });
     },
@@ -183,7 +187,7 @@ export const useEmployeeJobs = (employeeId: string) => {
           *,
           assigner:profiles!assigned_by(role),
           client:profiles!client_id(full_name, avatar_url),
-          service:services!service_id(name_en, category),
+          service:services!service_id(name_en, category, estimated_days),
           job_steps(id, status, actual_gov_fee, workflow_step_id, assigned_to, assigned_by),
           job_services(id, ops_employee_id)
         `)
@@ -220,7 +224,7 @@ export const useEmployeeJobs = (employeeId: string) => {
             *,
             assigner:profiles!assigned_by(role),
             client:profiles!client_id(full_name, avatar_url),
-            service:services!service_id(name_en, category),
+            service:services!service_id(name_en, category, estimated_days),
             job_steps(id, status, actual_gov_fee, workflow_step_id, assigned_to, assigned_by),
             job_services(id, ops_employee_id)
           `)
@@ -295,6 +299,8 @@ export const useEmployeeJobs = (employeeId: string) => {
           is_operator: isOperator,
           entry_type: j.entry_type,
           service_id: j.service_id,
+          client_pays_ministry_fee: j.client_pays_ministry_fee ?? false,
+          estimated_days: j.service?.estimated_days ?? null,
         };
       }).sort((a, b) => new Date(b.started_date).getTime() - new Date(a.started_date).getTime());
     },
@@ -312,7 +318,7 @@ export const useClientJobs = (clientId: string) => {
         .select(`
           *,
           employee:profiles!employee_id(full_name, avatar_url),
-          service:services!service_id(name_en, category),
+          service:services!service_id(name_en, category, estimated_days),
           job_steps(status, actual_gov_fee, workflow_step_id)
         `)
         .eq('client_id', clientId)
@@ -351,6 +357,8 @@ export const useClientJobs = (clientId: string) => {
           client_rating: j.client_rating,
           client_feedback: j.client_feedback,
           entry_type: j.entry_type,
+          client_pays_ministry_fee: j.client_pays_ministry_fee ?? false,
+          estimated_days: j.service?.estimated_days ?? null,
         };
       });
     },
@@ -367,7 +375,7 @@ export const useJobDetail = (jobId: string) => {
           *,
           client:profiles!client_id(full_name, avatar_url),
           employee:profiles!employee_id(full_name, avatar_url),
-          service:services!service_id(name_en, category)
+          service:services!service_id(name_en, category, estimated_days)
         `)
         .eq('id', jobId)
         .single();
@@ -440,6 +448,8 @@ export const useJobDetail = (jobId: string) => {
         documents: docsData || [],
         client_rating: j.client_rating,
         client_feedback: j.client_feedback,
+        client_pays_ministry_fee: j.client_pays_ministry_fee ?? false,
+        estimated_days: j.service?.estimated_days ?? null,
       };
 
       const steps: JobStep[] = (stepsData || []).map((s: any) => ({

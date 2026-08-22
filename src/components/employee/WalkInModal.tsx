@@ -216,6 +216,8 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
           }
         }
 
+        const clientPaysMinistryFee = selectedServices.some(item => item.paidByClientCard);
+
         // 2. Create the job record
         const { data: job, error: jErr } = await (supabase.from("jobs").insert({
           job_code: `WI-${Math.floor(Math.random() * 100000)}`,
@@ -228,6 +230,7 @@ export const WalkInModal = ({ isOpen, onClose, onJobCreated }: WalkInModalProps)
           work_fee: totalWorkFee,
           ministry_fee: totalMinistryFee,
           ministry_fee_type: "fixed",
+          client_pays_ministry_fee: clientPaysMinistryFee,
           advance_percentage: 0,
           advance_amount: 0,
           remaining_amount: totalFeeToOsan,

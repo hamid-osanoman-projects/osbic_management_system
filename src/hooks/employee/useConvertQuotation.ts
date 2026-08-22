@@ -10,6 +10,7 @@ export interface QuotationConversionData {
   totalAmount: number;
   subtotal: number;
   taxAmount: number;
+  client_pays_ministry_fee?: boolean;
   assignments: {
     serviceId: string | null;
     serviceName: string;
@@ -25,7 +26,7 @@ export const useConvertQuotation = () => {
 
   return useMutation({
     mutationFn: async (data: QuotationConversionData) => {
-      const { quotationId, clientId, leadId, salesEmployeeId, totalAmount, subtotal, taxAmount, assignments } = data;
+      const { quotationId, clientId, leadId, salesEmployeeId, totalAmount, subtotal, taxAmount, client_pays_ministry_fee, assignments } = data;
 
       // 1. Generate unique Job code
       const yearPrefix = `JOB-${new Date().getFullYear()}-`;
@@ -53,6 +54,26 @@ export const useConvertQuotation = () => {
         .single();
 
       // 2. Insert master Client Job
+      let mainServiceId = assignments[0]?.serviceId || null;
+      if (!mainServiceId) {
+        const { data: fallbackS } = await supabase
+          .from('services')
+          .select('id')
+          .eq('name_en', 'Quick Task (POS)')
+          .maybeSingle();
+        
+        if (fallbackS) {
+          mainServiceId = fallbackS.id;
+        } else {
+          const { data: anyS } = await supabase
+            .from('services')
+            .select('id')
+            .limit(1)
+            .maybeSingle();
+          mainServiceId = anyS?.id || null;
+        }
+      }
+
       const { data: newJob, error: jobErr } = await supabase
         .from('jobs')
         .insert([{
@@ -63,15 +84,17 @@ export const useConvertQuotation = () => {
           employee_id: assignments[0]?.opsEmployeeId || profile?.id || salesEmployeeId || '',
           sales_employee_id: salesEmployeeId || null,
           ops_employee_id: assignments[0]?.opsEmployeeId || null,
-          service_id: assignments[0]?.serviceId || null,
+          service_id: mainServiceId,
           status: 'active',
           total_fee: totalAmount,
           work_fee: subtotal,
           custom_name: quotation?.notes || 'Business Setup Package',
           ministry_fee: taxAmount,
+          client_pays_ministry_fee: client_pays_ministry_fee || false,
           advance_percentage: 100,
           started_at: new Date().toISOString(),
-          entry_type: leadId ? 'lead' : 'direct'
+          entry_type: leadId ? 'lead' : 'direct',
+          branch_id: profile?.branch_id || null
         }])
         .select()
         .single();

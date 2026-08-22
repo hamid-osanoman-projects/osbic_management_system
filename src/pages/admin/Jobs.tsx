@@ -211,7 +211,8 @@ const Jobs = () => {
           <tbody className="divide-y divide-border/50">
             {filteredJobs?.map((job) => {
               const progressRaw = job.total_steps > 0 ? (job.completed_steps / job.total_steps) * 100 : 0;
-              const isOverdue = job.days_active > 15;
+              const estLimit = job.estimated_days || 7;
+              const isOverdue = job.days_active > estLimit;
               
               return (
                 <tr key={job.id} onClick={() => navigate(`/admin/jobs/${job.id}`)} className="group hover:bg-primary/[0.02] transition-all cursor-pointer">
@@ -255,9 +256,22 @@ const Jobs = () => {
                   </td>
                   <td className="py-5 px-6">
                     <div className="flex flex-col gap-1.5 items-start">
-                       {getStatusBadge(job.status)}
+                       <div className="flex items-center gap-1.5">
+                         {getStatusBadge(job.status)}
+                         {job.status !== 'completed' && job.status !== 'cancelled' && (() => {
+                           const est = job.estimated_days || 7;
+                           const act = job.days_active || 0;
+                           if (act > est) {
+                             return <span className="text-[9px] font-bold text-rose-400 px-1.5 py-0.5 bg-rose-500/10 rounded border border-rose-500/20 animate-pulse">Overdue ({act - est}d)</span>;
+                           } else if (est - act <= 1) {
+                             return <span className="text-[9px] font-bold text-amber-400 px-1.5 py-0.5 bg-amber-500/10 rounded border border-amber-500/20">Due Soon</span>;
+                           } else {
+                             return <span className="text-[9px] font-bold text-emerald-400 px-1.5 py-0.5 bg-emerald-500/10 rounded border border-emerald-500/20">On Track</span>;
+                           }
+                         })()}
+                       </div>
                        <span className={cn("text-[9px] uppercase font-bold tracking-tight", isOverdue ? "text-red-400" : "text-muted-foreground/40")}>
-                         Clocked {job.days_active}D
+                         Clocked {job.days_active}/{estLimit}D Active
                        </span>
                     </div>
                   </td>
@@ -323,7 +337,20 @@ const Jobs = () => {
                        <p className="text-[10px] font-mono text-muted-foreground/60 shrink-0">{job.job_code}</p>
                     </div>
 
-                    <p className="text-[11px] text-muted-foreground mb-3 line-clamp-1">{job.service_name}</p>
+                    <p className="text-[11px] text-muted-foreground mb-2 line-clamp-1">{job.service_name}</p>
+                    
+                    {/* SLA Badge */}
+                    {job.status !== 'completed' && job.status !== 'cancelled' && (() => {
+                      const est = job.estimated_days || 7;
+                      const act = job.days_active || 0;
+                      if (act > est) {
+                        return <div className="text-[9px] font-extrabold text-rose-400 mb-3 px-1.5 py-0.5 bg-rose-500/10 border border-rose-500/20 rounded w-fit animate-pulse">🔴 Overdue ({act - est}d)</div>;
+                      } else if (est - act <= 1) {
+                        return <div className="text-[9px] font-extrabold text-amber-400 mb-3 px-1.5 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded w-fit">🟡 Due Soon</div>;
+                      } else {
+                        return <div className="text-[9px] font-extrabold text-emerald-400 mb-3 px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded w-fit">🟢 On Track ({act}/{est}d)</div>;
+                      }
+                    })()}
 
                     <div className="flex items-center justify-between mt-auto">
                        <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, CheckCircle2, UserPlus, Users, Sparkles, Loader2, FileText, AlertTriangle } from 'lucide-react';
+import { X, CheckCircle2, UserPlus, Users, Sparkles, Loader2, FileText, AlertTriangle, CreditCard } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useConvertQuotation } from '../../hooks/employee/useConvertQuotation';
@@ -29,6 +29,7 @@ export default function QuotationAcceptWizard({ isOpen, onClose, quotation }: Pr
   const [clientId, setClientId] = useState<string>('');
   const [clientName, setClientName] = useState<string>('');
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
+  const [clientPaysMinistryFee, setClientPaysMinistryFee] = useState(false);
 
   // Hold mappings of { [itemIndex]: { serviceId: string, serviceName: string, opsEmployeeId: string } }
   const [taskAssignments, setTaskAssignments] = useState<any[]>([]);
@@ -124,6 +125,12 @@ export default function QuotationAcceptWizard({ isOpen, onClose, quotation }: Pr
   };
 
   const handleLaunch = async () => {
+    const unmappedIndex = taskAssignments.findIndex(a => !a.serviceId);
+    if (unmappedIndex !== -1) {
+      toast.error(`Please select a Service Category Mapping for item #${unmappedIndex + 1}: "${taskAssignments[unmappedIndex].serviceName}"`);
+      return;
+    }
+
     const assignmentsPayload = taskAssignments.map(a => ({
       serviceId: a.serviceId || null,
       serviceName: a.serviceName,
@@ -141,6 +148,7 @@ export default function QuotationAcceptWizard({ isOpen, onClose, quotation }: Pr
         totalAmount: quotation.total_amount,
         subtotal: quotation.subtotal,
         taxAmount: quotation.tax_amount,
+        client_pays_ministry_fee: clientPaysMinistryFee,
         assignments: assignmentsPayload
       });
 
@@ -240,6 +248,73 @@ export default function QuotationAcceptWizard({ isOpen, onClose, quotation }: Pr
                 <span className="font-bold text-emerald-400 flex items-center gap-1">
                   <CheckCircle2 size={14} /> {clientName}
                 </span>
+              </div>
+
+              {/* Ministry Fee Payment Method Selector */}
+              <div className={cn(
+                "bg-[#131824]/40 border rounded-2xl p-5 transition-all",
+                clientPaysMinistryFee ? 'border-blue-500/30 bg-blue-500/5' : 'border-border/60'
+              )}>
+                <div className="flex items-start gap-3 mb-4">
+                  <div className={cn(
+                    "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
+                    clientPaysMinistryFee ? 'bg-blue-500/20 text-blue-400' : 'bg-muted text-muted-foreground'
+                  )}>
+                    <CreditCard size={18} />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-foreground uppercase tracking-widest">Ministry Fee Payment Routing</h5>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">How will the Ministry Fee be paid?</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Option A: OSBIC handles */}
+                  <button
+                    type="button"
+                    onClick={() => setClientPaysMinistryFee(false)}
+                    className={cn(
+                      "flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all",
+                      !clientPaysMinistryFee
+                        ? 'border-primary/50 bg-primary/5'
+                        : 'border-border/60 bg-black/10 hover:border-border'
+                    )}
+                  >
+                    <div className={cn(
+                      "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                      !clientPaysMinistryFee ? 'border-primary' : 'border-muted-foreground/30'
+                    )}>
+                      {!clientPaysMinistryFee && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">OSBIC Advances & Handles</p>
+                      <p className="text-[9px] text-muted-foreground mt-0.5">Subject to standard locks & fund allocation.</p>
+                    </div>
+                  </button>
+
+                  {/* Option B: Client Card directly */}
+                  <button
+                    type="button"
+                    onClick={() => setClientPaysMinistryFee(true)}
+                    className={cn(
+                      "flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all",
+                      clientPaysMinistryFee
+                        ? 'border-blue-500/50 bg-blue-500/10'
+                        : 'border-border/60 bg-black/10 hover:border-border'
+                    )}
+                  >
+                    <div className={cn(
+                      "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                      clientPaysMinistryFee ? 'border-blue-400' : 'border-muted-foreground/30'
+                    )}>
+                      {clientPaysMinistryFee && <div className="w-2 h-2 rounded-full bg-blue-400" />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Client Paying Directly via Card</p>
+                      <p className="text-[9px] text-muted-foreground mt-0.5">Bypass fund allocation. Immediate unlock for Ops.</p>
+                    </div>
+                  </button>
+                </div>
               </div>
 
               {/* Service Assignments */}

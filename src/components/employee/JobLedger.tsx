@@ -31,9 +31,11 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
   const [loading, setLoading] = useState(true);
 
   // Derived Financial Metrics
+  const clientPaysMinistryFee = job.client_pays_ministry_fee === true;
+  const billedMinistryFee = clientPaysMinistryFee ? 0 : job.ministry_fee;
   const totalAdditional = additionalCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
   const totalSubTasks = subTasks.reduce((sum, st) => sum + Number(st.ministry_fee), 0);
-  const totalBilled = job.work_fee + job.ministry_fee + totalAdditional + totalSubTasks;
+  const totalBilled = job.work_fee + billedMinistryFee + totalAdditional + totalSubTasks;
   const totalPaid = payments.reduce((sum, pay) => sum + Number(pay.amount), 0);
   const totalVerified = payments.filter(p => p.status === 'verified').reduce((sum, pay) => sum + Number(pay.amount), 0);
   const totalSpent = expenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
@@ -141,9 +143,10 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
       setIsAddingCharge(false);
 
       // Update job totals in DB
+      const billedMinistryFee = clientPaysMinistryFee ? 0 : job.ministry_fee;
       const newTotalAdditional = updatedCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
       const totalSubTasks = subTasks.reduce((sum, st) => sum + Number(st.ministry_fee), 0);
-      const newTotalBilled = job.work_fee + job.ministry_fee + newTotalAdditional + totalSubTasks;
+      const newTotalBilled = job.work_fee + billedMinistryFee + newTotalAdditional + totalSubTasks;
       const totalPaid = payments.reduce((sum, pay) => sum + Number(pay.amount), 0);
       const newRemaining = Math.max(0, newTotalBilled - totalPaid);
       
@@ -163,9 +166,10 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
     setAdditionalCharges(updatedCharges);
 
     // Update job totals in DB
+    const billedMinistryFee = clientPaysMinistryFee ? 0 : job.ministry_fee;
     const newTotalAdditional = updatedCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
     const totalSubTasks = subTasks.reduce((sum, st) => sum + Number(st.ministry_fee), 0);
-    const newTotalBilled = job.work_fee + job.ministry_fee + newTotalAdditional + totalSubTasks;
+    const newTotalBilled = job.work_fee + billedMinistryFee + newTotalAdditional + totalSubTasks;
     const totalPaid = payments.reduce((sum, pay) => sum + Number(pay.amount), 0);
     const newRemaining = Math.max(0, newTotalBilled - totalPaid);
     
@@ -296,9 +300,10 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
         .eq('status', 'verified');
 
       const totalPaid = (verifiedList || []).reduce((sum, p) => sum + Number(p.amount), 0);
+      const billedMinistryFee = clientPaysMinistryFee ? 0 : job.ministry_fee;
       const totalAdditional = additionalCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
       const totalSubTasks = subTasks.reduce((sum, st) => sum + Number(st.ministry_fee), 0);
-      const totalBilled = job.work_fee + job.ministry_fee + totalAdditional + totalSubTasks;
+      const totalBilled = job.work_fee + billedMinistryFee + totalAdditional + totalSubTasks;
       const remaining = Math.max(0, totalBilled - totalPaid);
 
       const isAdvancePaid = totalPaid >= (totalBilled * 0.5);
@@ -411,8 +416,20 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
             <span className="font-mono text-sm">{job.work_fee.toFixed(3)} OMR</span>
           </div>
           <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-xl">
-            <span className="text-sm font-bold text-foreground">Ministry Fee (Fixed)</span>
-            <span className="font-mono text-sm">{job.ministry_fee.toFixed(3)} OMR</span>
+            <div>
+              <span className="text-sm font-bold text-foreground block">Ministry Fee (Fixed)</span>
+              {clientPaysMinistryFee && (
+                <span className="text-[9px] font-bold text-blue-400 uppercase tracking-wider mt-0.5 block">
+                  💳 Paid Directly via Client Card
+                </span>
+              )}
+            </div>
+            <span className={cn(
+              "font-mono text-sm",
+              clientPaysMinistryFee ? "line-through text-muted-foreground" : "text-foreground"
+            )}>
+              {job.ministry_fee.toFixed(3)} OMR
+            </span>
           </div>
         </div>
 
@@ -1050,6 +1067,7 @@ export const JobLedger = ({ job, onPaymentReceived }: { job: any, onPaymentRecei
           <AllocationModal 
             payment={allocatingPayment}
             jobServices={jobServices}
+            clientPaysMinistryFee={job.client_pays_ministry_fee === true}
             onClose={() => setAllocatingPayment(null)}
             onSuccess={() => {
               setAllocatingPayment(null);

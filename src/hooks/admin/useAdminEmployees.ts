@@ -46,6 +46,7 @@ export interface Employee {
   is_pro?: boolean;
   is_manager?: boolean;
   branch_id?: string | null;
+  company_name?: string | null;
 }
 
 // ─── List All Employees ──────────────────────────────────────────────────────
@@ -217,6 +218,7 @@ export const useCreateEmployee = () => {
       department?: 'sales' | 'operations' | 'accounts' | 'pro';
       avatar_file?: File | null;
       branch_id?: string | null;
+      company_name?: string | null;
     }) => {
       // Step B: Create the auth user
       const { data: authData, error: authError } = await guestClient.auth.signUp({
@@ -241,7 +243,6 @@ export const useCreateEmployee = () => {
       if (!authData.user) throw new Error('User creation failed');
 
       const userId = authData.user.id;
-      const empCode = `EMP-${Date.now().toString().slice(-6)}`;
       let avatarUrl = null;
 
       // New Step: Upload avatar if provided
@@ -274,10 +275,11 @@ export const useCreateEmployee = () => {
           phone: newEmployee.phone ?? null,
           role: 'employee',
           department: newEmployee.department ?? 'operations',
-          employee_code: empCode,
+          employee_code: null,
           avatar_url: avatarUrl,
           is_active: true,
           branch_id: newEmployee.branch_id || null,
+          company_name: newEmployee.company_name || null,
         }, { onConflict: 'id' })
         .select()
         .single();

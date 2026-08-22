@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, CheckCircle2, ShieldAlert, Landmark, Briefcase } from 'lucide-react';
+import { X, CheckCircle2, ShieldAlert, Landmark, Briefcase, CreditCard } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export const AllocationModal = ({ 
   payment, 
   jobServices, 
+  clientPaysMinistryFee = false,
   onClose,
   onSuccess
 }: { 
   payment: any; 
   jobServices: any[]; 
+  clientPaysMinistryFee?: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) => {
@@ -270,7 +272,17 @@ export const AllocationModal = ({
         </div>
 
         <div className="p-6 overflow-y-auto space-y-4 flex-1">
-          {jobServices.filter(s => (s.ministry_fee || 0) > 0).length === 0 ? (
+          {clientPaysMinistryFee ? (
+            <div className="text-center py-8 text-muted-foreground text-xs space-y-3">
+              <div className="w-12 h-12 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto">
+                <CreditCard size={24} />
+              </div>
+              <p className="font-bold text-foreground">Direct Card Payment Enabled</p>
+              <p className="px-4 text-[11px] leading-relaxed">
+                The client is paying the ministry fees directly via their own card. Fund allocation is bypassed and not required for this job.
+              </p>
+            </div>
+          ) : jobServices.filter(s => (s.ministry_fee || 0) > 0).length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-xs">
               <CheckCircle2 className="mx-auto text-emerald-500 mb-2" size={24} />
               No ministry fees require allocation for this job.
@@ -327,9 +339,9 @@ export const AllocationModal = ({
                           
                           if (val - prevVal <= remainingToAllocate) {
                             if (parsed > totalRemaining) {
-                              handleAllocate(service.id, totalRemaining.toString());
+                               handleAllocate(service.id, totalRemaining.toString());
                             } else {
-                              handleAllocate(service.id, text);
+                               handleAllocate(service.id, text);
                             }
                           }
                         }}
@@ -357,16 +369,27 @@ export const AllocationModal = ({
         </div>
 
         <div className="p-6 border-t border-border bg-muted/10 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-xs font-bold text-muted-foreground hover:text-foreground uppercase tracking-widest transition-colors">
-            Skip for Now
-          </button>
-          <button 
-            onClick={handleSave}
-            disabled={isSaving || (jobServices.filter(s => (s.ministry_fee || 0) > 0).length > 0 && totalAllocated === 0)}
-            className="px-6 py-2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md flex items-center gap-2 disabled:opacity-50"
-          >
-            {isSaving ? 'Saving...' : <><CheckCircle2 size={14} /> Confirm Allocation</>}
-          </button>
+          {clientPaysMinistryFee ? (
+            <button 
+              onClick={onClose}
+              className="px-6 py-2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md"
+            >
+              Got It
+            </button>
+          ) : (
+            <>
+              <button onClick={onClose} className="px-4 py-2 text-xs font-bold text-muted-foreground hover:text-foreground uppercase tracking-widest transition-colors">
+                Skip for Now
+              </button>
+              <button 
+                onClick={handleSave}
+                disabled={isSaving || (jobServices.filter(s => (s.ministry_fee || 0) > 0).length > 0 && totalAllocated === 0)}
+                className="px-6 py-2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md flex items-center gap-2 disabled:opacity-50"
+              >
+                {isSaving ? 'Saving...' : <><CheckCircle2 size={14} /> Confirm Allocation</>}
+              </button>
+            </>
+          )}
         </div>
       </motion.div>
     </div>

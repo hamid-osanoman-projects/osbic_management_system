@@ -55,8 +55,19 @@ type TableDef<
 export interface Database {
   public: { // Osbic Public Schema
     Tables: {
+      branches: TableDef<{
+        id: string
+        name: string
+        code: string
+        address: string | null
+        phone: string | null
+        is_active: boolean
+        created_at: string
+      }, 'id' | 'created_at', 'is_active'>
+
       profiles: TableDef<{
         id: string
+        branch_id: string | null
         full_name: string | null
         email: string | null
         phone: string | null
@@ -119,6 +130,7 @@ export interface Database {
 
       jobs: TableDef<{
         id: string
+        branch_id: string | null
         job_code: string
         client_id: string
         employee_id: string
@@ -297,6 +309,7 @@ export interface Database {
 
       leads: TableDef<{
         id: string
+        branch_id: string | null
         lead_code: string | null
         client_id: string | null
         contact_name: string

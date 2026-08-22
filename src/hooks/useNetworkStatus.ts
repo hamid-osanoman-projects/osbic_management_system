@@ -15,8 +15,7 @@ const SLOW_THRESHOLD_MS = 2500;
 const PING_TIMEOUT_MS   = 5_000;
 
 const pingEndpoint = async (): Promise<{ rtt: number; ok: boolean }> => {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const target = supabaseUrl ? `${supabaseUrl}/rest/v1/` : 'https://www.google.com/generate_204';
+  const target = 'https://clients3.google.com/generate_204';
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);

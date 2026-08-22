@@ -363,10 +363,36 @@ const MyJobs = () => {
                        {!job.remaining_paid && job.remaining_due_amount > 0 && (
                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-amber-500 border border-amber-500/20">Balance Due</span>
                        )}
+
+                       {job.status !== 'completed' && job.status !== 'cancelled' && (() => {
+                         const est = job.estimated_days || 7;
+                         const act = job.days_active || 0;
+                         if (act > est) {
+                           return (
+                             <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-red-500/10 text-rose-400 border border-red-500/20 animate-pulse">
+                               🔴 Overdue ({act - est}d late)
+                             </span>
+                           );
+                         } else if (est - act <= 1) {
+                           return (
+                             <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                               🟡 Due Soon
+                             </span>
+                           );
+                         } else {
+                           return (
+                             <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                               🟢 On Track
+                             </span>
+                           );
+                         }
+                       })()}
                     </div>
 
                     <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between text-muted-foreground group-hover:text-foreground transition-colors">
-                       <span className="text-xs font-bold text-muted-foreground/60 flex items-center gap-1.5"><Clock size={12} /> {job.days_active} Days Active</span>
+                       <span className="text-xs font-bold text-muted-foreground/60 flex items-center gap-1.5">
+                         <Clock size={12} /> {job.days_active} of {job.estimated_days || 7} Days Active
+                       </span>
                        <span className="text-xs font-medium flex items-center gap-1">Open Job <ChevronRight size={14} /></span>
                     </div>
                  </motion.div>

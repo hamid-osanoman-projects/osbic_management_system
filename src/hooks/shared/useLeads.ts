@@ -22,6 +22,7 @@ export interface Lead {
   converted_job_id?: string;
   notes?: string;
   interested_services?: any[] | null;
+  branch_id?: string | null;
   created_at: string;
   updated_at: string;
   lead_sources?: {
@@ -126,6 +127,7 @@ export const useCreateLead = () => {
         lead_code,
         assigned_to: profile?.id,
         assigned_by: profile?.id,
+        branch_id: profile?.branch_id || null,
         status: 'new',
         updated_at: new Date().toISOString()
       };
