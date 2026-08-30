@@ -103,28 +103,10 @@ export const useCreateLead = () => {
       notes?: string;
       next_follow_up_at?: string;
     }) => {
-      // 1. Auto-generate lead_code
-      const yearPrefix = `LEAD-${new Date().getFullYear()}-`;
-      const { data: latestLead } = await supabase
-        .from('leads')
-        .select('lead_code')
-        .like('lead_code', `${yearPrefix}%`)
-        .order('lead_code', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      let nextSeq = 1;
-      if (latestLead && latestLead.lead_code) {
-        const parts = latestLead.lead_code.split('-');
-        const lastSeq = parseInt(parts[parts.length - 1], 10);
-        if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
-      }
-      const lead_code = `${yearPrefix}${nextSeq.toString().padStart(4, '0')}`;
-
       const { services, ...leadPayload } = leadData;
       const finalPayload = {
         ...leadPayload,
-        lead_code,
+        lead_code: null, // Let database trigger generate LD-[BRANCH]-[YY]-[0000] safely
         assigned_to: profile?.id,
         assigned_by: profile?.id,
         branch_id: profile?.branch_id || null,
