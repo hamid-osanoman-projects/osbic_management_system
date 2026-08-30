@@ -126,3 +126,50 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- 4. INVOICES & QUOTATIONS CODE GENERATOR (QT-[Client Suffix]-[00] & INV-[Client Suffix]-[00])
+CREATE OR REPLACE FUNCTION public.generate_invoice_number()
+RETURNS TRIGGER AS $$
+DECLARE
+    c_code TEXT;
+    c_seq TEXT;
+    prefix TEXT;
+    seq_number INT;
+BEGIN
+    -- Resolve reference code (from client or lead)
+    IF NEW.client_id IS NOT NULL THEN
+        SELECT client_code INTO c_code FROM public.profiles WHERE id = NEW.client_id;
+    ELSIF NEW.lead_id IS NOT NULL THEN
+        SELECT lead_code INTO c_code FROM public.leads WHERE id = NEW.lead_id;
+    END IF;
+    
+    -- Extract digits from reference code (suffix sequence)
+    c_seq := right(regexp_replace(coalesce(c_code, ''), '[^0-9]', '', 'g'), 4);
+    IF c_seq = '' OR length(c_seq) < 4 THEN
+        c_seq := '0000';
+    END IF;
+    
+    -- Set prefix depending on document type
+    IF NEW.type = 'quotation' THEN
+        prefix := 'QT-' || c_seq || '-';
+    ELSE
+        prefix := 'INV-' || c_seq || '-';
+    END IF;
+    
+    -- Lock sequence for this client + prefix to prevent collision
+    PERFORM pg_advisory_xact_lock(hashtext('invoice_' || prefix));
+    
+    -- Calculate next sequence for this client/lead with safe null-checks
+    SELECT COALESCE(MAX(NULLIF(regexp_replace(invoice_number, '^' || prefix, ''), '')::INT), 0) + 1 INTO seq_number
+    FROM public.invoices
+    WHERE (client_id = NEW.client_id OR (client_id IS NULL AND NEW.client_id IS NULL))
+      AND (lead_id = NEW.lead_id OR (lead_id IS NULL AND NEW.lead_id IS NULL))
+      AND type = NEW.type 
+      AND invoice_number LIKE prefix || '%';
+    
+    NEW.invoice_number := prefix || lpad(seq_number::TEXT, 2, '0');
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
