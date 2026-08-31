@@ -141,16 +141,37 @@ export const QuotationDocument = forwardRef<HTMLDivElement, QuotationDocumentPro
         <div className="py-1 px-3 mb-2 font-bold text-white uppercase tracking-widest text-[10px]" style={{ backgroundColor: themeColor }}>
           Payment Schedule
         </div>
-        <div className="grid grid-cols-2 px-2 text-[10px]">
-          <div>
-            <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mb-0.5">Advance Payment</p>
-            <p className="text-gray-500">Upon signing the quotation: 50%</p>
-          </div>
-          <div>
-            <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mb-0.5">Balance Payment</p>
-            <p className="text-gray-500">Upon completion of Visa: 50%</p>
-          </div>
-        </div>
+        {(() => {
+          const scheduleType = invoice.metadata?.paymentScheduleType || '50_50';
+          const advPercent = invoice.metadata?.advancePercentage !== undefined ? invoice.metadata.advancePercentage : 50;
+          const balPercent = invoice.metadata?.balancePercentage !== undefined ? invoice.metadata.balancePercentage : 50;
+          const advMilestone = invoice.metadata?.advanceMilestone || 'Upon signing the quotation';
+          const balMilestone = invoice.metadata?.balanceMilestone || 'Upon completion of Visa';
+
+          if (scheduleType === 'full_advance' || advPercent === 100) {
+            return (
+              <div className="px-2 text-[10px]">
+                <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mb-0.5">Advance Payment (100%)</p>
+                <p className="text-gray-500">{advMilestone}: 100%</p>
+              </div>
+            );
+          }
+
+          return (
+            <div className="grid grid-cols-2 px-2 text-[10px]">
+              <div>
+                <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mb-0.5">Advance Payment</p>
+                <p className="text-gray-500">{advMilestone}: {advPercent}%</p>
+              </div>
+              {balPercent > 0 && (
+                <div>
+                  <p className="font-bold text-gray-800 uppercase tracking-widest text-[9px] mb-0.5">Balance Payment</p>
+                  <p className="text-gray-500">{balMilestone}: {balPercent}%</p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Important Notes */}

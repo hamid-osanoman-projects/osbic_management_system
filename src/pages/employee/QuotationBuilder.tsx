@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Save, Plus, Trash2, FileText, Printer, Edit, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, Save, Plus, Trash2, FileText, Printer, Edit, CheckCircle2, CreditCard } from 'lucide-react';
 import { useInvoice, useSaveInvoice, type Invoice, type InvoiceItem } from '../../hooks/employee/useInvoices';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdminClients, useEmployeeClients } from '../../hooks/admin/useAdminClients';
@@ -744,6 +744,145 @@ const QuotationBuilder = () => {
                      />
                    </div>
                 </div>
+
+                 {/* Payment Schedule Selector */}
+                 <div className="space-y-4 border-t border-border pt-6">
+                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                     <CreditCard size={16}/> Payment Schedule
+                   </h3>
+                   
+                   <div className="space-y-2">
+                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment Schedule Mode</label>
+                     <select
+                       value={formData.metadata?.paymentScheduleType || '50_50'}
+                       onChange={e => {
+                         const val = e.target.value;
+                         let adv = 50;
+                         let bal = 50;
+                         let advM = 'Upon signing the quotation';
+                         let balM = 'Upon completion of Visa';
+                         
+                         if (val === 'full_advance') {
+                           adv = 100;
+                           bal = 0;
+                         } else if (val === '50_50') {
+                           adv = 50;
+                           bal = 50;
+                         } else { // custom
+                           adv = formData.metadata?.advancePercentage !== undefined ? formData.metadata.advancePercentage : 50;
+                           bal = formData.metadata?.balancePercentage !== undefined ? formData.metadata.balancePercentage : 50;
+                           advM = formData.metadata?.advanceMilestone || 'Upon signing the quotation';
+                           balM = formData.metadata?.balanceMilestone || 'Upon completion of Visa';
+                         }
+
+                         setFormData({
+                           ...formData,
+                           metadata: {
+                             ...formData.metadata,
+                             paymentScheduleType: val,
+                             advancePercentage: adv,
+                             balancePercentage: bal,
+                             advanceMilestone: advM,
+                             balanceMilestone: balM
+                           }
+                         });
+                       }}
+                       className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all"
+                     >
+                       <option value="50_50">50/50 Split (Default)</option>
+                       <option value="full_advance">100% Advance Payment</option>
+                       <option value="custom">Custom Split & Milestones</option>
+                     </select>
+                   </div>
+
+                   {/* Show percentage configurations for custom mode */}
+                   {(formData.metadata?.paymentScheduleType === 'custom') && (
+                     <div className="grid grid-cols-2 gap-4">
+                       <div className="space-y-2">
+                         <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Advance %</label>
+                         <input
+                           type="number"
+                           min="0"
+                           max="100"
+                           value={formData.metadata?.advancePercentage !== undefined ? formData.metadata.advancePercentage : 50}
+                           onChange={e => {
+                             const adv = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                             const bal = 100 - adv;
+                             setFormData({
+                               ...formData,
+                               metadata: {
+                                 ...formData.metadata,
+                                 advancePercentage: adv,
+                                 balancePercentage: bal
+                               }
+                             });
+                           }}
+                           className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all font-mono"
+                         />
+                       </div>
+                       <div className="space-y-2">
+                         <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Balance %</label>
+                         <input
+                           type="number"
+                           min="0"
+                           max="100"
+                           value={formData.metadata?.balancePercentage !== undefined ? formData.metadata.balancePercentage : 50}
+                           onChange={e => {
+                             const bal = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                             const adv = 100 - bal;
+                             setFormData({
+                               ...formData,
+                               metadata: {
+                                 ...formData.metadata,
+                                 advancePercentage: adv,
+                                 balancePercentage: bal
+                               }
+                             });
+                           }}
+                           className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-all font-mono"
+                         />
+                       </div>
+                     </div>
+                   )}
+
+                   {/* Milestone description fields */}
+                   {(formData.metadata?.paymentScheduleType === 'custom' || formData.metadata?.paymentScheduleType === 'full_advance') && (
+                     <div className="space-y-3 bg-muted/10 p-4 rounded-xl border border-border/40">
+                       <div className="space-y-1">
+                         <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Advance Milestone</label>
+                         <input
+                           type="text"
+                           value={formData.metadata?.advanceMilestone || 'Upon signing the quotation'}
+                           onChange={e => setFormData({
+                             ...formData,
+                             metadata: {
+                               ...formData.metadata,
+                               advanceMilestone: e.target.value
+                             }
+                           })}
+                           className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:border-primary outline-none transition-all"
+                         />
+                       </div>
+                       {(formData.metadata?.paymentScheduleType === 'custom') && (
+                         <div className="space-y-1">
+                           <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Balance Milestone</label>
+                           <input
+                             type="text"
+                             value={formData.metadata?.balanceMilestone || 'Upon completion of Visa'}
+                             onChange={e => setFormData({
+                               ...formData,
+                               metadata: {
+                                 ...formData.metadata,
+                                 balanceMilestone: e.target.value
+                               }
+                             })}
+                             className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:border-primary outline-none transition-all"
+                           />
+                         </div>
+                       )}
+                     </div>
+                   )}
+                 </div>
 
                 <div className="space-y-2 border-t border-border pt-6">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Remarks / Notes</label>
