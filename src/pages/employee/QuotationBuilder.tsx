@@ -431,6 +431,21 @@ const QuotationBuilder = () => {
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: formData.invoice_number || 'Quotation',
+    pageStyle: `
+      @page {
+        size: A4 portrait;
+        margin: 0mm !important;
+      }
+      @media print {
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: white !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+      }
+    `,
   });
 
   if (isLoadingQuotation) return <div className="p-8 text-center text-muted-foreground">Loading quotation data...</div>;
@@ -930,13 +945,13 @@ const QuotationBuilder = () => {
            <div className="sticky top-8 rounded-2xl overflow-hidden border border-border shadow-2xl print:shadow-none print:border-none print:overflow-visible print:static">
               <style>{`
                 @media print {
-                  @page { margin: 10mm; size: A4 portrait; }
+                  @page { margin: 0mm !important; size: A4 portrait; }
                   html, body {
                     width: auto;
                     height: auto;
-                    margin: 0;
-                    padding: 0;
-                    background: white;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: white !important;
                   }
                   .print-section {
                     -webkit-print-color-adjust: exact !important;

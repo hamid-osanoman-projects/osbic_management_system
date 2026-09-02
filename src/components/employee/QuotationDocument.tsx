@@ -87,6 +87,12 @@ export const QuotationDocument = forwardRef<HTMLDivElement, QuotationDocumentPro
             <p className="text-gray-400 italic">No package items added.</p>
           )}
         </div>
+
+        {/* Total Package Value directly under service items */}
+        <div className="mt-3 p-3 flex justify-between items-center rounded-lg" style={{ backgroundColor: lightBg }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: themeColor }}>Total Package Value</p>
+          <p className="text-base font-bold text-gray-900 uppercase font-mono">OMR {invoice.total_amount.toFixed(3)}</p>
+        </div>
       </div>
 
       {/* Documents Required Section */}
@@ -185,12 +191,6 @@ export const QuotationDocument = forwardRef<HTMLDivElement, QuotationDocumentPro
           <li>Industrial activity fees will be charged based on the specific activity selected.</li>
           <li>This quotation is issued based on a general business activity. The final price may be subject to change depending on the specific activity. Any variation in cost will be communicated before proceeding.</li>
         </ul>
-      </div>
-
-      {/* Total Package Value */}
-      <div className="mt-8 mb-16 p-4 flex flex-col items-start" style={{ backgroundColor: lightBg }}>
-        <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: themeColor }}>Total Package Value</p>
-        <p className="text-xl font-bold text-gray-900 uppercase">OMR {invoice.total_amount.toFixed(3)}</p>
       </div>
 
       {/* Footer */}
