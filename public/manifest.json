@@ -1,20 +1,30 @@
 {
-  "short_name": "OSBIC",
   "name": "OSBIC Client Portal",
+  "short_name": "OSBIC Portal",
+  "description": "Access your OSBIC projects and services.",
+  "start_url": "/login",
+  "display": "standalone",
+  "background_color": "#0A0F1E",
+  "theme_color": "#0A0F1E",
+  "lang": "en",
+  "scope": "/",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "/osbic_logo.ico",
+      "src": "/logo-192.png.png",
       "sizes": "192x192",
-      "type": "image/x-icon"
+      "type": "image/png"
     },
     {
-      "src": "/osbic_logo.ico",
+      "src": "/logo-512.png.png",
       "sizes": "512x512",
-      "type": "image/x-icon"
+      "type": "image/png"
+    },
+    {
+      "src": "/logo-512.png.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ],
-  "start_url": "/portal",
-  "display": "standalone",
-  "theme_color": "#0A0F1E",
-  "background_color": "#0A0F1E"
+  ]
 }
