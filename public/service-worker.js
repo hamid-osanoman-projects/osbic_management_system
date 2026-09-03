@@ -1,15 +1,8 @@
-self.addEventListener("install", (event) => {
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.open("osbic-client-cache").then((cache) => {
-      return cache.addAll(["/portal"]);
-    })
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .then(() => self.registration.unregister())
   );
 });
 
-self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
-    })
-  );
-});
